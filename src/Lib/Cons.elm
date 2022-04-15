@@ -2,9 +2,23 @@ module Lib.Cons exposing (..)
 
 
 type Cons a
-    = Nil
+    = Nil -- also acts as the Nil pointer in the SECD VM
     | Val a
     | Cons (Cons a) (Cons a) -- can be deeply nested cons
+
+
+
+-- constructors
+
+
+single : a -> Cons a
+single =
+    Val
+
+
+cons : Cons a -> Cons a -> Cons a
+cons =
+    Cons
 
 
 fromList : List a -> Cons a
@@ -44,13 +58,13 @@ toString c aToString =
         Val a ->
             aToString a
 
-        cons ->
-            "(" ++ toStringHelper cons aToString ++ ")"
+        ct ->
+            "(" ++ toStringHelper ct aToString ++ ")"
 
 
 toStringHelper : Cons a -> (a -> String) -> String
-toStringHelper cons aToString =
-    case cons of
+toStringHelper c aToString =
+    case c of
         Nil ->
             "Nil"
 

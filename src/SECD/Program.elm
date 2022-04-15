@@ -7,6 +7,10 @@ type Program
     = Program (List Op)
 
 
+
+-- possible operands in the SECD "language"
+
+
 type Op
     = NIL
     | LD ( Int, Int ) -- Loads a value from context
@@ -18,14 +22,15 @@ type Op
     | JOIN -- rejoin main control
     | RAP -- recursive apply
     | DUM -- Create a dummy env
-    | Func Func
-    | Nested (List Op)
+    | FUNC Func
+    | NESTED (List Op)
 
 
 type Func
-    = Add
-    | Mult
-    | Atom -- true if the element is an atom (integer or boolean)
+    = ADD
+    | MULT
+    | ATOM -- true if the element is an atom (integer or boolean)
+    | CONS
 
 
 

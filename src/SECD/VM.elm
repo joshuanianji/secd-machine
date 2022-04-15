@@ -1,5 +1,6 @@
 module SECD.VM exposing (..)
 
+import Lib.Cons as Cons exposing (Cons)
 import SECD.Error exposing (Error)
 import SECD.Program as Program exposing (Func(..), Op(..), Program)
 
@@ -47,13 +48,21 @@ type alias Dump =
 
 
 -- types of values we can return from the VM
--- TODO: add list
 
 
 type Value
     = Integer Int
     | Boolean Bool
-    | Nil
+    | Array (Cons Value)
+
+
+
+-- for brevity, we merge the Nil pointer with the Cons array definition
+
+
+nil : Value
+nil =
+    Array Cons.Nil
 
 
 
@@ -83,14 +92,35 @@ vmMultiply va vb =
 vmAtom : Value -> Result String Value
 vmAtom v =
     case v of
-        Nil ->
-            Ok <| Boolean False
-
         Boolean _ ->
             Ok <| Boolean True
 
         Integer _ ->
             Ok <| Boolean True
+
+        -- nil is the only thing that is both an atom and a list
+        Array Cons.Nil ->
+            Ok <| Boolean True
+
+        Array _ ->
+            Ok <| Boolean False
+
+
+
+-- joins a head and tail list
+
+
+vmCons : Value -> Value -> Result String Value
+vmCons head tail =
+    case ( head, tail ) of
+        ( Array ch, Array ct ) ->
+            Ok <| Array (Cons.Cons ch ct)
+
+        ( h, Array ct ) ->
+            Ok <| Array (Cons.cons (Cons.single h) ct)
+
+        _ ->
+            Err <| "cons: Expecting an array and a value, got " ++ valueToString head ++ " and " ++ valueToString tail
 
 
 valueToString : Value -> String
@@ -105,8 +135,8 @@ valueToString val =
         Boolean False ->
             "false"
 
-        Nil ->
-            "Nil"
+        Array arr ->
+            Cons.toString arr valueToString
 
 
 
@@ -149,14 +179,14 @@ step vm =
 
         -- evaluate Nil
         ( _, _, NIL :: c_ ) ->
-            Unfinished (VM (Nil :: s) e c_ d)
+            Unfinished (VM (nil :: s) e c_ d)
 
         -- evaluate Load Constant
         ( _, _, (LDC x) :: c_ ) ->
             Unfinished (VM (Integer x :: s) e c_ d)
 
         -- Binary or unary operator
-        ( _, _, (Func f) :: c_ ) ->
+        ( _, _, (FUNC f) :: c_ ) ->
             evalFunc f (VM s e c_ d)
 
         -- IF/THEN/ELSE
@@ -187,14 +217,17 @@ finishEval stack vm =
 evalFunc : Func -> VM -> State
 evalFunc f vm =
     case f of
-        Add ->
+        ADD ->
             evalBinary vmAdd vm
 
-        Mult ->
+        MULT ->
             evalBinary vmMultiply vm
 
-        Atom ->
+        ATOM ->
             evalUnary vmAtom vm
+
+        CONS ->
+            evalBinary vmCons vm
 
 
 evalBinary : (Value -> Value -> Result String Value) -> VM -> State
@@ -251,7 +284,7 @@ evalIfElse (VM s e c d) =
         ( [], _ ) ->
             Error vm "VM: evalIfElse: Stack is empty! Expecting boolean value"
 
-        ( (Boolean b) :: s_, (Nested ct) :: (Nested cf) :: c_ ) ->
+        ( (Boolean b) :: s_, (NESTED ct) :: (NESTED cf) :: c_ ) ->
             let
                 newC =
                     if b then
