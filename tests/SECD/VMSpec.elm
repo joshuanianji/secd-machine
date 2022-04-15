@@ -12,6 +12,8 @@ suite =
     Test.describe "Test VM"
         [ testBasics
         , testBuiltIns
+
+        -- , testIfElse
         ]
 
 
@@ -63,7 +65,22 @@ testBuiltIns =
                         Prog.fromList [ NIL, LDC 5, Func Add ]
                 in
                 Expect.err (VM.evaluate <| VM.init program)
+        , Test.test "Atom function correctly identifies a number as an atom" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ LDC 5, Func Atom ]
+                in
+                Expect.equal (VM.evaluate <| VM.init program) (Ok <| VM.Boolean True)
         ]
+
+
+
+-- if/else control flow
+-- testIfElse : Test
+-- testIfElse =
+--     Test.describe "Tests if/else control flow"
+--         []
 
 
 fuzzIntPair : Fuzzer ( Int, Int )

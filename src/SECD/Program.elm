@@ -19,11 +19,13 @@ type Op
     | RAP -- recursive apply
     | DUM -- Create a dummy env
     | Func Func
+    | Nested (List Op)
 
 
 type Func
     = Add
     | Mult
+    | Atom -- true if the element is an atom (integer or boolean)
 
 
 
