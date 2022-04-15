@@ -1,6 +1,6 @@
 module Lib.ConsSpec exposing (..)
 
-import Expect exposing (Expectation)
+import Expect
 import Fuzz exposing (Fuzzer)
 import Lib.Cons exposing (..)
 import Test exposing (Test)
@@ -40,6 +40,16 @@ testFromList =
 
                     expectedCons =
                         Cons (Val "a") (Cons (Val "b") (Cons (Val "c") (Cons (Val "d") (Cons (Val "e") Nil))))
+                in
+                Expect.equal actual expectedCons
+        , Test.fuzz (Fuzz.list Fuzz.int) "Random integer lists" <|
+            \xs ->
+                let
+                    actual =
+                        fromList xs
+
+                    expectedCons =
+                        List.foldr (\x acc -> Cons (Val x) acc) Nil xs
                 in
                 Expect.equal actual expectedCons
         ]
