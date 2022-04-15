@@ -1,7 +1,7 @@
 module Lib.ConsSpec exposing (..)
 
 import Expect
-import Fuzz exposing (Fuzzer)
+import Fuzz
 import Lib.Cons exposing (..)
 import Test exposing (Test)
 
