@@ -18,19 +18,32 @@ type Op
     | JOIN -- rejoin main control
     | RAP -- recursive apply
     | DUM -- Create a dummy env
+    | Func Func
+
+
+type Func
+    = Add
+    | Mult
+
 
 
 -- consumable by the SECD VM
 
+
 toList : Program -> List Op
-toList (Program ops) = ops
+toList (Program ops) =
+    ops
 
 
 fromList : List Op -> Program
-fromList = Program 
+fromList =
+    Program
+
 
 
 -- useful in testing
 
+
 fromSingleton : Op -> Program
-fromSingleton op = Program [op]
+fromSingleton op =
+    Program [ op ]

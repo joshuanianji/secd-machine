@@ -1,7 +1,7 @@
 module SECD.VM exposing (..)
 
 import SECD.Error exposing (Error)
-import SECD.Program as Program exposing (Op(..), Program)
+import SECD.Program as Program exposing (Func(..), Op(..), Program)
 
 
 
@@ -55,6 +55,22 @@ type Value
     | Nil
 
 
+valueToString : Value -> String
+valueToString val =
+    case val of
+        Integer i ->
+            String.fromInt i
+
+        Boolean True ->
+            "true"
+
+        Boolean False ->
+            "false"
+
+        Nil ->
+            "Nil"
+
+
 
 -- types of values we can store in the dump stack
 
@@ -84,10 +100,14 @@ type State
 
 
 step : VM -> State
-step (VM s e c d) =
+step vm =
+    let
+        (VM s e c d) =
+            vm
+    in
     case ( s, e, c ) of
         ( _, _, [] ) ->
-            finishEval s (VM s e c d)
+            finishEval s vm
 
         -- evaluate Nil
         ( _, _, NIL :: c_ ) ->
@@ -97,8 +117,12 @@ step (VM s e c d) =
         ( _, _, (LDC x) :: c_ ) ->
             Unfinished (VM (Integer x :: s) e c_ d)
 
+        -- Binary or unary operator
+        ( _, _, (Func f) :: c_ ) ->
+            evalFunc f s (VM s e c_ d)
+
         _ ->
-            Error (VM s e c d) "VM: step: VM is in an invalid state"
+            Error vm "VM: step: VM is in an invalid state"
 
 
 
@@ -113,6 +137,36 @@ finishEval stack vm =
 
         val :: _ ->
             Finished vm val
+
+
+evalFunc : Func -> Stack -> VM -> State
+evalFunc f stack vm =
+    case f of
+        Add ->
+            evalBinary (+) stack vm
+
+        Mult ->
+            evalBinary (*) stack vm
+
+
+evalBinary : (Int -> Int -> Int) -> Stack -> VM -> State
+evalBinary op stack vm =
+    let
+        (VM s e c d) =
+            vm
+    in
+    case stack of
+        (Integer x) :: (Integer y) :: s_ ->
+            Unfinished (VM (Integer (op y x) :: s_) e c d)
+
+        a :: b :: _ ->
+            Error vm <| "VM: evalBinary: Expected two integers to add, got " ++ valueToString a ++ " and " ++ valueToString b
+
+        _ ->
+            Error vm <|
+                "VM: evalBinary: Stack of size "
+                    ++ (String.fromInt <| List.length s)
+                    ++ " does not have two elements!"
 
 
 evaluate : VM -> Result Error Value
