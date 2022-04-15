@@ -79,21 +79,35 @@ testNumeric =
 
 testAtom : Test
 testAtom =
-    Test.describe "Tests the atom function (returns true when the value is ATOMic)"
-        [ Test.test "Atom function correctly identifies a number as an Atom" <|
+    Test.describe "Tests the atom function (returns true when the value is atomic)"
+        [ Test.test "True on a number" <|
             \_ ->
                 let
                     program =
                         Prog.fromList [ LDC 5, FUNC ATOM ]
                 in
                 vmExpectSuccess program (VM.Boolean True)
-        , Test.test "Atom function fails on empty stack" <|
+        , Test.test "True on a boolean" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ LDC 5, FUNC ATOM, FUNC ATOM ]
+                in
+                vmExpectSuccess program (VM.Boolean True)
+        , Test.test "Fails on an empty stack" <|
             \_ ->
                 let
                     program =
                         Prog.fromList [ FUNC ATOM ]
                 in
                 vmExpectFailure program
+        , Test.test "False on a list" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, LDC 5, FUNC CONS, FUNC ATOM ]
+                in
+                vmExpectSuccess program (VM.Boolean False)
         ]
 
 
@@ -138,6 +152,13 @@ testIfElse =
                         Prog.fromList [ LDC 5, FUNC ATOM, SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
                 in
                 vmExpectSuccess program (VM.Integer 1)
+        , Test.test "Correctly chooses the right side" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, LDC 5, FUNC CONS, FUNC ATOM, SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
+                in
+                vmExpectSuccess program (VM.Integer 2)
         ]
 
 
