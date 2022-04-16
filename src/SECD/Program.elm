@@ -34,13 +34,17 @@ type Func
     | COMPARE Cmp
 
 
+
+-- prepending with CMP so we don't clash with the predefined comparison types
+
+
 type Cmp
-    = EQ
-    | NE
-    | LT
-    | GT
-    | LEQ
-    | GEQ
+    = CMP_EQ
+    | CMP_NE
+    | CMP_LT
+    | CMP_GT
+    | CMP_LEQ
+    | CMP_GEQ
 
 
 
@@ -50,44 +54,44 @@ type Cmp
 cmpFunc : Cmp -> (comparable -> comparable -> Bool)
 cmpFunc cmp =
     case cmp of
-        EQ ->
+        CMP_EQ ->
             (==)
 
-        NE ->
+        CMP_NE ->
             (/=)
 
-        LT ->
+        CMP_LT ->
             (<)
 
-        GT ->
+        CMP_GT ->
             (>)
 
-        LEQ ->
+        CMP_LEQ ->
             (<=)
 
-        GEQ ->
+        CMP_GEQ ->
             (>=)
 
 
 cmpToString : Cmp -> String
 cmpToString cmp =
     case cmp of
-        EQ ->
+        CMP_EQ ->
             "=="
 
-        NE ->
+        CMP_NE ->
             "!="
 
-        LT ->
+        CMP_LT ->
             "<"
 
-        GT ->
+        CMP_GT ->
             ">"
 
-        LEQ ->
+        CMP_LEQ ->
             "<="
 
-        GEQ ->
+        CMP_GEQ ->
             ">="
 
 

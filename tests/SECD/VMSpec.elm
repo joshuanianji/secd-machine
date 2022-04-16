@@ -3,7 +3,7 @@ module SECD.VMSpec exposing (..)
 import Expect exposing (Expectation)
 import Fuzz
 import Lib.Cons as Cons
-import SECD.Program as Prog exposing (Cmp, Func(..), Op(..), Program)
+import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..), Program)
 import SECD.VM as VM exposing (Value)
 import Test exposing (Test)
 
@@ -153,7 +153,7 @@ testCompare =
                         in
                         vmExpectSuccess program (VM.Boolean <| Prog.cmpFunc cmp b a)
             )
-            [ Prog.EQ, Prog.NE, Prog.LT, Prog.GT, Prog.LEQ, Prog.GEQ ]
+            [ CMP_EQ, CMP_NE, CMP_LT, CMP_GT, CMP_LEQ, CMP_GEQ ]
 
 
 
@@ -217,6 +217,17 @@ testFuncs =
                         Prog.fromList <| createList ++ [ LDF, NESTED funcBody, AP ]
                 in
                 vmExpectSuccess program <| VM.Array <| Cons.fromList [ VM.Integer a, VM.Integer b, VM.Integer c ]
+        , Test.fuzz2 Fuzz.int Fuzz.int "2-ary function that returns the larger element" <|
+            \a b ->
+                let
+                    -- ((lambda (x y) (if (< x y) y x)) a b)
+                    funcBody =
+                        [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC (COMPARE CMP_LT), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ LD ( 0, 0 ), JOIN ], RTN ]
+
+                    program =
+                        Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED funcBody, AP ]
+                in
+                vmExpectSuccess program (VM.Integer (max a b))
         ]
 
 
