@@ -1,7 +1,7 @@
 module SECD.VM exposing (..)
 
 import Lib.Cons as Cons exposing (Cons)
-import SECD.Environment as Environment exposing (Environment)
+import SECD.Environment as Env exposing (Environment)
 import SECD.Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
@@ -158,7 +158,7 @@ type DumpValue
 
 init : Program -> VM
 init prog =
-    VM [] Environment.init (Program.toList prog) []
+    VM [] Env.init (Program.toList prog) []
 
 
 
@@ -238,7 +238,7 @@ loadFromEnv ( x, y ) (VM s e c d) =
         vm =
             VM s e c d
     in
-    case Environment.locate ( x, y ) e of
+    case Env.locate ( x, y ) e of
         Err errStr ->
             Error vm <| "VM: loadFromEnv: Variable not found from coords (" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")\n" ++ errStr
 
@@ -383,7 +383,7 @@ applyFunction (VM s e c d) =
                     Error vm "VM: applyFunction: badly formatted closure!"
 
                 Just values ->
-                    Unfinished (VM [] (values :: env) funcBody (EntireState s_ e c :: d_))
+                    Unfinished (VM [] (Env.push values env) funcBody (EntireState s_ e c :: d_))
 
         _ ->
             Error vm "VM: applyFunction: cannot find function body!"

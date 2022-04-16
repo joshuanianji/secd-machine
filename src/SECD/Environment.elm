@@ -4,7 +4,12 @@ module SECD.Environment exposing (..)
 
 
 type alias Environment a =
-    List (List a)
+    List (EnvItem a)
+
+
+type EnvItem a
+    = ListItem (List a)
+    | Dummy -- with doing recursion
 
 
 
@@ -14,6 +19,16 @@ type alias Environment a =
 init : Environment a
 init =
     []
+
+
+fromList : List (List a) -> Environment a
+fromList =
+    List.map ListItem
+
+
+push : List a -> Environment a -> Environment a
+push xs env =
+    ListItem xs :: env
 
 
 
@@ -30,8 +45,11 @@ locate ( x, y ) environment =
             ( _, [] ) ->
                 Err "Locate: out of bounds!"
 
-            ( 0, h :: _ ) ->
+            ( 0, (ListItem h) :: _ ) ->
                 locateRow y h
+
+            ( 0, Dummy :: _ ) ->
+                Err "Locate: attempt to access Dummy Env value!"
 
             ( _, _ :: t ) ->
                 locate ( x - 1, y ) t
@@ -51,14 +69,17 @@ locateRow y row =
 
 
 
--- replace the first row
+-- replace the first row, IFF it is a dummy value
 
 
-rplaca : List a -> Environment a -> Environment a
-rplaca newRow env =
+replaceDummy : List a -> Environment a -> Result String (Environment a)
+replaceDummy newRow env =
     case env of
         [] ->
-            List.singleton newRow
+            Err "replaceDummy: empty environment!"
 
-        _ :: t ->
-            newRow :: t
+        Dummy :: t ->
+            Ok <| ListItem newRow :: t
+
+        _ ->
+            Err ""
