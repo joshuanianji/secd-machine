@@ -31,6 +31,64 @@ type Func
     | MULT
     | ATOM -- true if the element is an atom (integer or boolean)
     | CONS
+    | COMPARE Cmp
+
+
+type Cmp
+    = EQ
+    | NE
+    | LT
+    | GT
+    | LEQ
+    | GEQ
+
+
+
+-- turns a Compare to an Elm function that we can use.
+
+
+cmpFunc : Cmp -> (comparable -> comparable -> Bool)
+cmpFunc cmp =
+    case cmp of
+        EQ ->
+            (==)
+
+        NE ->
+            (/=)
+
+        LT ->
+            (<)
+
+        GT ->
+            (>)
+
+        LEQ ->
+            (<=)
+
+        GEQ ->
+            (>=)
+
+
+cmpToString : Cmp -> String
+cmpToString cmp =
+    case cmp of
+        EQ ->
+            "=="
+
+        NE ->
+            "!="
+
+        LT ->
+            "<"
+
+        GT ->
+            ">"
+
+        LEQ ->
+            "<="
+
+        GEQ ->
+            ">="
 
 
 

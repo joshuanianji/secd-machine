@@ -1,9 +1,9 @@
 module SECD.VMSpec exposing (..)
 
 import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer)
+import Fuzz
 import Lib.Cons as Cons
-import SECD.Program as Prog exposing (Func(..), Op(..), Program)
+import SECD.Program as Prog exposing (Cmp, Func(..), Op(..), Program)
 import SECD.VM as VM exposing (Value)
 import Test exposing (Test)
 
@@ -48,21 +48,22 @@ testBuiltIns =
         [ testNumeric
         , testAtom
         , testCons
+        , testCompare
         ]
 
 
 testNumeric : Test
 testNumeric =
     Test.describe "Tests numeric functions"
-        [ Test.fuzz fuzzIntPair "Adds two numbers correctly" <|
-            \( a, b ) ->
+        [ Test.fuzz2 Fuzz.int Fuzz.int "Adds two numbers correctly" <|
+            \a b ->
                 let
                     program =
                         Prog.fromList [ LDC a, LDC b, FUNC ADD ]
                 in
                 vmExpectSuccess program (VM.Integer (a + b))
-        , Test.fuzz fuzzIntPair "Multiplies two numbers correctly" <|
-            \( a, b ) ->
+        , Test.fuzz2 Fuzz.int Fuzz.int "Multiplies two numbers correctly" <|
+            \a b ->
                 let
                     program =
                         Prog.fromList [ LDC a, LDC b, FUNC MULT ]
@@ -139,6 +140,22 @@ testCons =
         ]
 
 
+testCompare : Test
+testCompare =
+    Test.describe "Test comparing elements" <|
+        List.map
+            (\cmp ->
+                Test.fuzz2 Fuzz.int Fuzz.int ("Compare OP: " ++ Prog.cmpToString cmp) <|
+                    \a b ->
+                        let
+                            program =
+                                Prog.fromList [ LDC a, LDC b, FUNC <| COMPARE cmp ]
+                        in
+                        vmExpectSuccess program (VM.Boolean <| Prog.cmpFunc cmp b a)
+            )
+            [ Prog.EQ, Prog.NE, Prog.LT, Prog.GT, Prog.LEQ, Prog.GEQ ]
+
+
 
 -- if/else control flow
 
@@ -170,24 +187,24 @@ testIfElse =
 testFuncs : Test
 testFuncs =
     Test.describe "Test Non-Recursive Functions"
-        [ Test.fuzz fuzzIntPair "Function that adds two numbers" <|
-            \( a, b ) ->
+        [ Test.fuzz2 Fuzz.int Fuzz.int "Function that adds two numbers" <|
+            \a b ->
                 let
                     -- ((lambda (x y) (+ x y)) a b)
                     program =
                         Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ], AP ]
                 in
                 vmExpectSuccess program (VM.Integer (a + b))
-        , Test.fuzz fuzzIntPair "Function that multiplies two numbers" <|
-            \( a, b ) ->
+        , Test.fuzz2 Fuzz.int Fuzz.int "Function that multiplies two numbers" <|
+            \a b ->
                 let
                     -- ((lambda (x y) (* x y)) a b)
                     program =
                         Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, RTN ], AP ]
                 in
                 vmExpectSuccess program (VM.Integer (a * b))
-        , Test.fuzz fuzzIntTriple "3-ary function that returns a list containing its arguments" <|
-            \( a, b, c ) ->
+        , Test.fuzz3 Fuzz.int Fuzz.int Fuzz.int "3-ary function that returns a list containing its arguments" <|
+            \a b c ->
                 let
                     createList =
                         [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDC c, FUNC CONS ]
@@ -215,13 +232,3 @@ vmExpectSuccess prog expected =
 vmExpectFailure : Program -> Expectation
 vmExpectFailure prog =
     Expect.err (VM.evaluate <| VM.init prog)
-
-
-fuzzIntPair : Fuzzer ( Int, Int )
-fuzzIntPair =
-    Fuzz.tuple ( Fuzz.int, Fuzz.int )
-
-
-fuzzIntTriple : Fuzzer ( Int, Int, Int )
-fuzzIntTriple =
-    Fuzz.map3 (\x y z -> ( x, y, z )) Fuzz.int Fuzz.int Fuzz.int

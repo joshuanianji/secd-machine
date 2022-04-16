@@ -3,7 +3,7 @@ module SECD.VM exposing (..)
 import Lib.Cons as Cons exposing (Cons)
 import SECD.Environment as Environment exposing (Environment)
 import SECD.Error exposing (Error)
-import SECD.Program as Program exposing (Func(..), Op(..), Program)
+import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
 
 
@@ -114,6 +114,16 @@ vmCons head tail =
 
         _ ->
             Err <| "cons: Expecting an array and a value, got " ++ valueToString head ++ " and " ++ valueToString tail
+
+
+vmCompare : Cmp -> Value -> Value -> Result String Value
+vmCompare cmp va vb =
+    case ( va, vb ) of
+        ( Integer a, Integer b ) ->
+            Ok <| Boolean <| Program.cmpFunc cmp a b
+
+        _ ->
+            Err <| "compare: Expecting two integers, got " ++ valueToString va ++ " and " ++ valueToString vb
 
 
 valueToString : Value -> String
@@ -250,6 +260,9 @@ evalFunc f vm =
 
         CONS ->
             evalBinary vmCons vm
+
+        COMPARE cmp ->
+            evalBinary (vmCompare cmp) vm
 
 
 evalBinary : (Value -> Value -> Result String Value) -> VM -> State
