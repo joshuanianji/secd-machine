@@ -48,3 +48,17 @@ locateRow y row =
 
         ( _, _ :: t ) ->
             locateRow (y - 1) t
+
+
+
+-- replace the first row
+
+
+rplaca : List a -> Environment a -> Environment a
+rplaca newRow env =
+    case env of
+        [] ->
+            List.singleton newRow
+
+        _ :: t ->
+            newRow :: t

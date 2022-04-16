@@ -9,7 +9,9 @@ import Test exposing (Test)
 suite : Test
 suite =
     Test.describe "Environment Stack"
-        [ testLocate ]
+        [ testLocate
+        , testRplaca
+        ]
 
 
 testLocate : Test
@@ -57,6 +59,26 @@ testLocate =
                         [ [ 1, 2 ], [ 3, 4 ] ]
                 in
                 Expect.err (locate ( x, y ) env)
+        ]
+
+
+testRplaca : Test
+testRplaca =
+    Test.describe "Environment.rplaca"
+        [ Test.test "Replaces the first row in a nonempty env" <|
+            \_ ->
+                let
+                    env =
+                        [ [ 1, 2 ], [ 3, 4 ] ]
+                in
+                Expect.equal (rplaca [ 5, 6 ] env) [ [ 5, 6 ], [ 3, 4 ] ]
+        , Test.test "Adds the first row in an empty env" <|
+            \_ ->
+                let
+                    env =
+                        []
+                in
+                Expect.equal (rplaca [ 5, 6 ] env) [ [ 5, 6 ] ]
         ]
 
 
