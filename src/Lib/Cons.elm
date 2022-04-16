@@ -32,6 +32,25 @@ fromList l =
 
 
 
+-- deconstructors
+-- can only return a list if the Cons ends in a NIL
+-- and if the list is not deeply nested ()
+
+
+toList : Cons a -> Maybe (List a)
+toList c =
+    case c of
+        Nil ->
+            Just []
+
+        Cons (Val a) xs ->
+            Maybe.map ((::) a) (toList xs)
+
+        _ ->
+            Nothing
+
+
+
 -- usually for testing
 
 

@@ -1,6 +1,7 @@
 module SECD.VM exposing (..)
 
 import Lib.Cons as Cons exposing (Cons)
+import SECD.Environment as Environment exposing (Environment)
 import SECD.Error exposing (Error)
 import SECD.Program as Program exposing (Func(..), Op(..), Program)
 
@@ -12,12 +13,13 @@ import SECD.Program as Program exposing (Func(..), Op(..), Program)
 
 type VM
     = VM
-        Stack
         -- Stack used for evaluation of expressions
-        Environment
+        Stack
         --  Environment used to store the current value list
-        Control
+        (Environment Value)
         -- Control used to store the current instruction pointer
+        Control
+        -- Dump to store anything else
         Dump
 
 
@@ -27,15 +29,6 @@ type VM
 
 type alias Stack =
     List Value
-
-
-
--- holds the context during closures
--- i should optimize it
-
-
-type alias Environment =
-    List (List Value)
 
 
 type alias Control =
@@ -145,7 +138,8 @@ valueToString val =
 
 type DumpValue
     = Control (List Op) -- in Sel, we want to dump the contents of the control stack
-    | EntireState Stack Environment Control -- When applying a function, we want to dump the state of the VM
+    | EntireState Stack (Environment Value) Control -- When applying a function, we want to dump the state of the VM
+    | Closure (List Op) (Environment Value) -- When loading a function, dump the closure of the function (i think?)
 
 
 
@@ -154,7 +148,7 @@ type DumpValue
 
 init : Program -> VM
 init prog =
-    VM [] [] (Program.toList prog) []
+    VM [] Environment.init (Program.toList prog) []
 
 
 
@@ -175,7 +169,7 @@ step vm =
     in
     case ( s, e, c ) of
         ( _, _, [] ) ->
-            finishEval s vm
+            endProgram s vm
 
         -- evaluate Nil
         ( _, _, NIL :: c_ ) ->
@@ -196,6 +190,16 @@ step vm =
         ( _, _, JOIN :: c_ ) ->
             endIfElse (VM s e c_ d)
 
+        -- Load and evaluating functions
+        ( _, _, LDF :: c_ ) ->
+            loadFunction (VM s e c_ d)
+
+        ( _, _, AP :: c_ ) ->
+            applyFunction (VM s e c_ d)
+
+        ( _, _, RTN :: c_ ) ->
+            returnFromFunction (VM s e c_ d)
+
         _ ->
             Error vm "VM: step: VM is in an invalid state"
 
@@ -204,8 +208,8 @@ step vm =
 -- finished an evaluation when the Control stack is empty
 
 
-finishEval : Stack -> VM -> State
-finishEval stack vm =
+endProgram : Stack -> VM -> State
+endProgram stack vm =
     case stack of
         [] ->
             Error vm "Stack is empty on program exit"
@@ -318,6 +322,54 @@ endIfElse (VM s e c d) =
 
         _ ->
             Error vm "VM: endIfElse: Dump stack does not hold control values"
+
+
+loadFunction : VM -> State
+loadFunction (VM s e c d) =
+    let
+        vm =
+            VM s e c d
+    in
+    case c of
+        (NESTED funcBody) :: c_ ->
+            -- Note: in class, we dump the closure in the stack, but I think it's more consistent to move it to the dump.
+            Unfinished (VM s e c_ (Closure funcBody e :: d))
+
+        _ ->
+            Error vm "VM: loadFunction: cannot find function body!"
+
+
+applyFunction : VM -> State
+applyFunction (VM s e c d) =
+    let
+        vm =
+            VM s e c d
+    in
+    case ( s, d ) of
+        ( (Array arr) :: s_, (Closure funcBody env) :: d_ ) ->
+            case Cons.toList arr of
+                Nothing ->
+                    Error vm "VM: applyFunction: badly formatted closure!"
+
+                Just values ->
+                    Unfinished (VM [ nil ] (values :: env) funcBody (EntireState s_ e c :: d_))
+
+        _ ->
+            Error vm "VM: applyFunction: cannot find function body!"
+
+
+returnFromFunction : VM -> State
+returnFromFunction (VM s e c d) =
+    let
+        vm =
+            VM s e c d
+    in
+    case d of
+        (EntireState s_ e_ c_) :: d_ ->
+            Unfinished (VM s_ e_ c_ d_)
+
+        _ ->
+            Error vm "VM: returnFromFunction: Dump stack does not hold correct values!"
 
 
 evaluate : VM -> Result Error Value

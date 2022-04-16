@@ -22,7 +22,7 @@ type Op
     | JOIN -- rejoin main control
     | RAP -- recursive apply
     | DUM -- Create a dummy env
-    | FUNC Func
+    | FUNC Func -- builtin functions
     | NESTED (List Op)
 
 
