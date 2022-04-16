@@ -179,6 +179,10 @@ step vm =
         ( _, _, (LDC x) :: c_ ) ->
             Unfinished (VM (Integer x :: s) e c_ d)
 
+        -- evaluate load variable
+        ( _, _, (LD ( x, y )) :: c_ ) ->
+            loadFromEnv ( x, y ) (VM s e c_ d)
+
         -- Binary or unary operator
         ( _, _, (FUNC f) :: c_ ) ->
             evalFunc f (VM s e c_ d)
@@ -216,6 +220,20 @@ endProgram stack vm =
 
         val :: _ ->
             Finished vm val
+
+
+loadFromEnv : ( Int, Int ) -> VM -> State
+loadFromEnv ( x, y ) (VM s e c d) =
+    let
+        vm =
+            VM s e c d
+    in
+    case Environment.locate ( x, y ) e of
+        Err errStr ->
+            Error vm <| "VM: loadFromEnv: Variable not found from coords (" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")\n" ++ errStr
+
+        Ok val ->
+            Unfinished (VM (val :: s) e c d)
 
 
 evalFunc : Func -> VM -> State
@@ -352,7 +370,7 @@ applyFunction (VM s e c d) =
                     Error vm "VM: applyFunction: badly formatted closure!"
 
                 Just values ->
-                    Unfinished (VM [ nil ] (values :: env) funcBody (EntireState s_ e c :: d_))
+                    Unfinished (VM [] (values :: env) funcBody (EntireState s_ e c :: d_))
 
         _ ->
             Error vm "VM: applyFunction: cannot find function body!"
@@ -364,9 +382,12 @@ returnFromFunction (VM s e c d) =
         vm =
             VM s e c d
     in
-    case d of
-        (EntireState s_ e_ c_) :: d_ ->
-            Unfinished (VM s_ e_ c_ d_)
+    case ( s, d ) of
+        ( x :: _, (EntireState s_ e_ c_) :: d_ ) ->
+            Unfinished (VM (x :: s_) e_ c_ d_)
+
+        ( _, (EntireState _ _ _) :: _ ) ->
+            Error vm "VM: returnFromFunction: Cannot find function return value!"
 
         _ ->
             Error vm "VM: returnFromFunction: Dump stack does not hold correct values!"

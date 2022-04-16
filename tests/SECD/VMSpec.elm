@@ -14,6 +14,7 @@ suite =
         [ testBasics
         , testBuiltIns
         , testIfElse
+        , testFuncs
         ]
 
 
@@ -163,7 +164,47 @@ testIfElse =
 
 
 
--- runs the VM on the program, and expect the result to succeed and be the expected value
+-- non recursive functions
+
+
+testFuncs : Test
+testFuncs =
+    Test.describe "Test Non-Recursive Functions"
+        [ Test.fuzz fuzzIntPair "Function that adds two numbers" <|
+            \( a, b ) ->
+                let
+                    -- ((lambda (x y) (+ x y)) a b)
+                    program =
+                        Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ], AP ]
+                in
+                vmExpectSuccess program (VM.Integer (a + b))
+        , Test.fuzz fuzzIntPair "Function that multiplies two numbers" <|
+            \( a, b ) ->
+                let
+                    -- ((lambda (x y) (* x y)) a b)
+                    program =
+                        Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, RTN ], AP ]
+                in
+                vmExpectSuccess program (VM.Integer (a * b))
+        , Test.fuzz fuzzIntTriple "3-ary function that returns a list containing its arguments" <|
+            \( a, b, c ) ->
+                let
+                    createList =
+                        [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDC c, FUNC CONS ]
+
+                    funcBody =
+                        [ NIL, LD ( 0, 0 ), FUNC CONS, LD ( 0, 1 ), FUNC CONS, LD ( 0, 2 ), FUNC CONS, RTN ]
+
+                    -- ((lambda (x y z) (cons x (cons y (cons z nil))) a b c)
+                    program =
+                        Prog.fromList <| createList ++ [ LDF, NESTED funcBody, AP ]
+                in
+                vmExpectSuccess program <| VM.Array <| Cons.fromList [ VM.Integer a, VM.Integer b, VM.Integer c ]
+        ]
+
+
+
+-- Helpers
 
 
 vmExpectSuccess : Program -> Value -> Expectation
@@ -179,3 +220,8 @@ vmExpectFailure prog =
 fuzzIntPair : Fuzzer ( Int, Int )
 fuzzIntPair =
     Fuzz.tuple ( Fuzz.int, Fuzz.int )
+
+
+fuzzIntTriple : Fuzzer ( Int, Int, Int )
+fuzzIntTriple =
+    Fuzz.map3 (\x y z -> ( x, y, z )) Fuzz.int Fuzz.int Fuzz.int
