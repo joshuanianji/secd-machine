@@ -76,6 +76,13 @@ testNumeric =
                         Prog.fromList [ NIL, LDC 5, FUNC ADD ]
                 in
                 vmExpectFailure program
+        , Test.test "(+ (* 3 5) (* 6 8)) = 63" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ LDC 8, LDC 6, FUNC MULT, LDC 5, LDC 3, FUNC MULT, FUNC ADD ]
+                in
+                vmExpectSuccess program (VM.Integer 63)
         ]
 
 
