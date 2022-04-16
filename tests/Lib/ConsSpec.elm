@@ -6,10 +6,6 @@ import Lib.Cons exposing (..)
 import Test exposing (Test)
 
 
-
--- test cons print
-
-
 suite : Test
 suite =
     Test.describe "Test Cons"
@@ -171,11 +167,11 @@ nested =
                         fromConsList [ fromConsList [ fromConsList [ fromList [ "a" ] ] ] ]
                 in
                 Expect.equal (toString cons identity) "((((a))))"
-        , Test.test "Cons.toString ((a . b))" <|
+        , Test.test "Cons.toString (((a . b)))" <|
             \_ ->
                 let
                     cons =
-                        Cons (Cons (Val "a") (Val "b")) Nil
+                        Cons (Cons (Cons (Val "a") (Val "b")) Nil) Nil
                 in
-                Expect.equal (toString cons identity) "((a . b))"
+                Expect.equal (toString cons identity) "(((a . b)))"
         ]
