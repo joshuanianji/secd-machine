@@ -1,4 +1,4 @@
-module SECD.EnvironmentSpec exposing (..)
+module SECD.EnvironmentSpec exposing (suite)
 
 import Expect
 import Fuzz exposing (Fuzzer)
@@ -11,6 +11,7 @@ suite =
     Test.describe "Environment Stack"
         [ testLocate
         , testPush
+        , testPushDummy
         , testReplaceDummy
         ]
 
@@ -66,7 +67,7 @@ testLocate =
 testPush : Test
 testPush =
     Test.describe "Environment.push"
-        [ Test.test "PUsh on an empty stack" <|
+        [ Test.test "Push on an empty stack" <|
             \_ ->
                 let
                     env =
@@ -80,6 +81,26 @@ testPush =
                         Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
                 in
                 Expect.equal (Env.push [ 0, 0 ] env) (Env.fromList [ [ 0, 0 ], [ 1, 2 ], [ 3, 4 ] ])
+        ]
+
+
+testPushDummy : Test
+testPushDummy =
+    Test.describe "Environment.pushDummy"
+        [ Test.test "Push on an empty stack" <|
+            \_ ->
+                let
+                    env =
+                        Env.fromList []
+                in
+                Expect.equal (Env.pushDummy env) [ Env.Dummy ]
+        , Test.test "Push on a non-empty stack" <|
+            \_ ->
+                let
+                    env =
+                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
+                in
+                Expect.equal (Env.pushDummy env) [ Env.Dummy, Env.ListItem [ 1, 2 ], Env.ListItem [ 3, 4 ] ]
         ]
 
 

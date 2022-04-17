@@ -29,8 +29,12 @@ type Op
 type Func
     = ADD
     | MULT
-    | ATOM -- true if the element is an atom (integer or boolean)
+    | SUB
+    | ATOM -- true if the element is an atom (integer or boolean), NIL otherwise
     | CONS
+    | CAR
+    | CDR
+    | NULL -- Returns true on Nil
     | COMPARE Cmp
 
 

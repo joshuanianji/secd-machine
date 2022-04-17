@@ -1,4 +1,4 @@
-module Lib.ConsSpec exposing (..)
+module Lib.ConsSpec exposing (suite)
 
 import Expect
 import Fuzz

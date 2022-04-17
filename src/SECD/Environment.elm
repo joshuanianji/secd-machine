@@ -1,6 +1,7 @@
 module SECD.Environment exposing (..)
 
 -- Environment stack needs to be a list of lists, so it's a little more complicated.alias
+-- But, I'm not wrapping the environment in a newtype because I want to be able to pattern match on it
 
 
 type alias Environment a =
@@ -29,6 +30,11 @@ fromList =
 push : List a -> Environment a -> Environment a
 push xs env =
     ListItem xs :: env
+
+
+pushDummy : Environment a -> Environment a
+pushDummy env =
+    Dummy :: env
 
 
 

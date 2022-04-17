@@ -1,4 +1,4 @@
-module SECD.VMSpec exposing (..)
+module SECD.VMSpec exposing (suite)
 
 import Expect exposing (Expectation)
 import Fuzz
@@ -15,6 +15,7 @@ suite =
         , testBuiltIns
         , testIfElse
         , testFuncs
+        , testRecursiveFuncs
         ]
 
 
@@ -49,6 +50,7 @@ testBuiltIns =
         , testAtom
         , testCons
         , testCompare
+        , testCarCdr
         ]
 
 
@@ -95,14 +97,14 @@ testAtom =
                     program =
                         Prog.fromList [ LDC 5, FUNC ATOM ]
                 in
-                vmExpectSuccess program (VM.Boolean True)
+                vmExpectSuccess program VM.Truthy
         , Test.test "True on a boolean" <|
             \_ ->
                 let
                     program =
                         Prog.fromList [ LDC 5, FUNC ATOM, FUNC ATOM ]
                 in
-                vmExpectSuccess program (VM.Boolean True)
+                vmExpectSuccess program VM.Truthy
         , Test.test "Fails on an empty stack" <|
             \_ ->
                 let
@@ -110,13 +112,13 @@ testAtom =
                         Prog.fromList [ FUNC ATOM ]
                 in
                 vmExpectFailure program
-        , Test.test "False on a list" <|
+        , Test.test "Nil on a list" <|
             \_ ->
                 let
                     program =
                         Prog.fromList [ NIL, LDC 5, FUNC CONS, FUNC ATOM ]
                 in
-                vmExpectSuccess program (VM.Boolean False)
+                vmExpectSuccess program VM.nil
         ]
 
 
@@ -144,6 +146,66 @@ testCons =
                         Prog.fromList [ NIL, LDC 5, FUNC CONS, LDC 6, FUNC CONS ]
                 in
                 vmExpectSuccess program (VM.Array <| Cons.fromList [ VM.Integer 6, VM.Integer 5 ])
+        , Test.test "Cons nested list - ((1 2) 3)" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, LDC 3, FUNC CONS, NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS ]
+                in
+                case VM.evaluate <| VM.init program of
+                    Result.Ok (VM.Array cons) ->
+                        Expect.equal (Cons.toString cons VM.valueToString) "((1 2) 3)"
+
+                    _ ->
+                        Expect.fail "Failed to evaluate program"
+        ]
+
+
+testCarCdr : Test
+testCarCdr =
+    Test.describe "Test Car and Cdr"
+        [ Test.test "Car on NIL returns NIL" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, FUNC CAR ]
+                in
+                vmExpectSuccess program VM.nil
+        , Test.test "Car on a list returns the first element" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, LDC 5, FUNC CONS, LDC 6, FUNC CONS, FUNC CAR ]
+                in
+                vmExpectSuccess program (VM.Integer 6)
+        , Test.test "Car on an integer fails" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ LDC 5, FUNC CAR ]
+                in
+                vmExpectFailure program
+        , Test.test "Cdr on a list returns the rest of the list" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, LDC 5, FUNC CONS, LDC 6, FUNC CONS, LDC 7, FUNC CONS, FUNC CDR ]
+                in
+                vmExpectSuccess program (VM.Array <| Cons.fromList [ VM.Integer 6, VM.Integer 5 ])
+        , Test.test "Cdr on an integer fails" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ LDC 5, FUNC CDR ]
+                in
+                vmExpectFailure program
+        , Test.test "Cdr on NIL returns NIL" <|
+            \_ ->
+                let
+                    program =
+                        Prog.fromList [ NIL, FUNC CDR ]
+                in
+                vmExpectSuccess program VM.nil
         ]
 
 
@@ -158,7 +220,7 @@ testCompare =
                             program =
                                 Prog.fromList [ LDC a, LDC b, FUNC <| COMPARE cmp ]
                         in
-                        vmExpectSuccess program (VM.Boolean <| Prog.cmpFunc cmp b a)
+                        vmExpectSuccess program (VM.boolToValue <| Prog.cmpFunc cmp b a)
             )
             [ CMP_EQ, CMP_NE, CMP_LT, CMP_GT, CMP_LEQ, CMP_GEQ ]
 
@@ -235,6 +297,52 @@ testFuncs =
                         Prog.fromList [ NIL, LDC a, FUNC CONS, LDC b, FUNC CONS, LDF, NESTED funcBody, AP ]
                 in
                 vmExpectSuccess program (VM.Integer (max a b))
+        , Test.test "Constant function that returns an int" <|
+            \_ ->
+                let
+                    -- ((lambda (x) 3) 5)
+                    program =
+                        Prog.fromList [ NIL, LDC 5, FUNC CONS, LDF, NESTED [ LDC 3 ], AP ]
+                in
+                vmExpectSuccess program (VM.Integer 3)
+        , Test.test "Function inside a function" <|
+            \_ ->
+                let
+                    -- (lambda (x y) (+ (- x y) z)
+                    innerFunc =
+                        [ LD ( 1, 0 ), LD ( 0, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC ADD, RTN ]
+
+                    -- (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5)
+                    outerFunc =
+                        [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED innerFunc, AP, RTN ]
+
+                    -- ((lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5)) 6)
+                    program =
+                        Prog.fromList [ NIL, LDC 6, FUNC CONS, LDF, NESTED outerFunc, AP ]
+                in
+                vmExpectSuccess program (VM.Integer 4)
+        ]
+
+
+testRecursiveFuncs : Test
+testRecursiveFuncs =
+    Test.describe "Recursive Functions"
+        [ Test.test "Recursive sum function" <|
+            \_ ->
+                let
+                    -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
+                    func =
+                        [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+                    -- (f '(1 2 3) 0)
+                    funcApply =
+                        [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+
+                    program =
+                        Prog.fromList
+                            [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
+                in
+                vmExpectSuccess program (VM.Integer 6)
         ]
 
 

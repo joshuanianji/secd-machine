@@ -11,6 +11,11 @@ type Cons a
 -- constructors
 
 
+nil : Cons a
+nil =
+    Nil
+
+
 single : a -> Cons a
 single =
     Val

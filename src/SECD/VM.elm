@@ -8,6 +8,7 @@ import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
 
 -- | SECD Virtual Machine
+-- | Runs an SECD program
 ---- Types ----
 
 
@@ -45,8 +46,17 @@ type alias Dump =
 
 type Value
     = Integer Int
-    | Boolean Bool
+    | Truthy -- false is represented by Nil
     | Array (Cons Value)
+
+
+boolToValue : Bool -> Value
+boolToValue b =
+    if b then
+        Truthy
+
+    else
+        nil
 
 
 
@@ -82,21 +92,31 @@ vmMultiply va vb =
             Err <| "multiply: Expecting two integers, got " ++ valueToString va ++ " and " ++ valueToString vb
 
 
+vmSub : Value -> Value -> Result String Value
+vmSub va vb =
+    case ( va, vb ) of
+        ( Integer a, Integer b ) ->
+            Ok <| Integer (a - b)
+
+        _ ->
+            Err <| "subtract: Expecting two integers, got " ++ valueToString va ++ " and " ++ valueToString vb
+
+
 vmAtom : Value -> Result String Value
 vmAtom v =
     case v of
-        Boolean _ ->
-            Ok <| Boolean True
+        Truthy ->
+            Ok Truthy
 
         Integer _ ->
-            Ok <| Boolean True
+            Ok Truthy
 
         -- nil is the only thing that is both an atom and a list
         Array Cons.Nil ->
-            Ok <| Boolean True
+            Ok Truthy
 
         Array _ ->
-            Ok <| Boolean False
+            Ok nil
 
 
 
@@ -116,14 +136,62 @@ vmCons head tail =
             Err <| "cons: Expecting an array and a value, got " ++ valueToString head ++ " and " ++ valueToString tail
 
 
+vmCar : Value -> Result String Value
+vmCar v =
+    case v of
+        Array (Cons.Cons (Cons.Val a) _) ->
+            Ok a
+
+        Array (Cons.Cons Cons.Nil _) ->
+            Ok nil
+
+        Array (Cons.Cons a _) ->
+            Ok <| Array a
+
+        Array Cons.Nil ->
+            Ok <| nil
+
+        -- nil is the only thing that is both an atom and a list
+        _ ->
+            Err <| "car: Expecting an array, got " ++ valueToString v
+
+
+vmCdr : Value -> Result String Value
+vmCdr v =
+    case v of
+        Array (Cons.Cons _ (Cons.Val a)) ->
+            Ok a
+
+        Array (Cons.Cons _ a) ->
+            Ok <| Array a
+
+        -- this is honestly just not right. But lisp does this anyway..
+        Array Cons.Nil ->
+            Ok nil
+
+        -- nil is the only thing that is both an atom and a list
+        _ ->
+            Err <| "cdr: Expecting an array, got " ++ valueToString v
+
+
 vmCompare : Cmp -> Value -> Value -> Result String Value
 vmCompare cmp va vb =
     case ( va, vb ) of
         ( Integer a, Integer b ) ->
-            Ok <| Boolean <| Program.cmpFunc cmp a b
+            Ok <| boolToValue <| Program.cmpFunc cmp a b
 
         _ ->
             Err <| "compare: Expecting two integers, got " ++ valueToString va ++ " and " ++ valueToString vb
+
+
+vmNull : Value -> Result String Value
+vmNull v =
+    case v of
+        Array Cons.Nil ->
+            Ok Truthy
+
+        _ ->
+            Ok nil
 
 
 valueToString : Value -> String
@@ -132,11 +200,8 @@ valueToString val =
         Integer i ->
             String.fromInt i
 
-        Boolean True ->
+        Truthy ->
             "true"
-
-        Boolean False ->
-            "false"
 
         Array arr ->
             Cons.toString arr valueToString
@@ -177,42 +242,49 @@ step vm =
         (VM s e c d) =
             vm
     in
-    case ( s, e, c ) of
-        ( _, _, [] ) ->
+    case c of
+        [] ->
             endProgram s vm
 
         -- evaluate Nil
-        ( _, _, NIL :: c_ ) ->
+        NIL :: c_ ->
             Unfinished (VM (nil :: s) e c_ d)
 
         -- evaluate Load Constant
-        ( _, _, (LDC x) :: c_ ) ->
+        (LDC x) :: c_ ->
             Unfinished (VM (Integer x :: s) e c_ d)
 
         -- evaluate load variable
-        ( _, _, (LD ( x, y )) :: c_ ) ->
+        (LD ( x, y )) :: c_ ->
             loadFromEnv ( x, y ) (VM s e c_ d)
 
         -- Binary or unary operator
-        ( _, _, (FUNC f) :: c_ ) ->
+        (FUNC f) :: c_ ->
             evalFunc f (VM s e c_ d)
 
         -- IF/THEN/ELSE
-        ( _, _, SEL :: c_ ) ->
+        SEL :: c_ ->
             evalIfElse (VM s e c_ d)
 
-        ( _, _, JOIN :: c_ ) ->
+        JOIN :: c_ ->
             endIfElse (VM s e c_ d)
 
         -- Load and evaluating functions
-        ( _, _, LDF :: c_ ) ->
+        LDF :: c_ ->
             loadFunction (VM s e c_ d)
 
-        ( _, _, AP :: c_ ) ->
+        AP :: c_ ->
             applyFunction (VM s e c_ d)
 
-        ( _, _, RTN :: c_ ) ->
+        RTN :: c_ ->
             returnFromFunction (VM s e c_ d)
+
+        -- Recursive functions
+        DUM :: c_ ->
+            Unfinished (VM s (Env.pushDummy e) c_ d)
+
+        RAP :: c_ ->
+            recursiveApply (VM s e c_ d)
 
         _ ->
             Error vm "VM: step: VM is in an invalid state"
@@ -255,11 +327,23 @@ evalFunc f vm =
         MULT ->
             evalBinary vmMultiply vm
 
+        SUB ->
+            evalBinary vmSub vm
+
         ATOM ->
             evalUnary vmAtom vm
 
         CONS ->
             evalBinary vmCons vm
+
+        CAR ->
+            evalUnary vmCar vm
+
+        CDR ->
+            evalUnary vmCdr vm
+
+        NULL ->
+            evalUnary vmNull vm
 
         COMPARE cmp ->
             evalBinary (vmCompare cmp) vm
@@ -319,26 +403,32 @@ evalIfElse (VM s e c d) =
         ( [], _ ) ->
             Error vm "VM: evalIfElse: Stack is empty! Expecting boolean value"
 
-        ( (Boolean b) :: s_, (NESTED ct) :: (NESTED cf) :: c_ ) ->
+        ( Truthy :: s_, (NESTED ct) :: (NESTED _) :: c_ ) ->
             let
-                newC =
-                    if b then
-                        ct
-
-                    else
-                        cf
-
                 -- update dump value to hold the control stack after the if/else
                 newD =
                     Control c_ :: d
             in
-            Unfinished (VM s_ e newC newD)
+            Unfinished (VM s_ e ct newD)
 
-        ( (Boolean _) :: _, _ ) ->
-            Error vm "VM: evalIfElse: Failure to complete if/else: Control stack is not Nested"
+        ( (Array Cons.Nil) :: s_, (NESTED _) :: (NESTED cf) :: c_ ) ->
+            let
+                -- update dump value to hold the control stack after the if/else
+                newD =
+                    Control c_ :: d
+            in
+            Unfinished (VM s_ e cf newD)
 
         ( a :: _, _ ) ->
-            Error vm <| "VM: evalIfElse: Expected boolean value, got " ++ valueToString a
+            case a of
+                Truthy ->
+                    Error vm "VM: evalIfElse: Failure to complete if/else: Control stack is not Nested (Can't find case branch)"
+
+                Array Cons.Nil ->
+                    Error vm "VM: evalIfElse: Failure to complete if/else: Control stack is not Nested (Can't find case branches)"
+
+                _ ->
+                    Error vm <| "VM: evalIfElse: Expected boolean-ish value, got " ++ valueToString a
 
 
 endIfElse : VM -> State
@@ -377,8 +467,9 @@ applyFunction (VM s e c d) =
             VM s e c d
     in
     case ( s, d ) of
-        ( (Array arr) :: s_, (Closure funcBody env) :: d_ ) ->
-            case Cons.toList arr of
+        -- vals is a list of the values of the arguments
+        ( (Array vals) :: s_, (Closure funcBody env) :: d_ ) ->
+            case Cons.toList vals of
                 Nothing ->
                     Error vm "VM: applyFunction: badly formatted closure!"
 
@@ -406,6 +497,30 @@ returnFromFunction (VM s e c d) =
             Error vm "VM: returnFromFunction: Dump stack does not hold correct values!"
 
 
+recursiveApply : VM -> State
+recursiveApply (VM s e c d) =
+    let
+        vm =
+            VM s e c d
+    in
+    case ( s, e, d ) of
+        ( (Array vals) :: s_, Env.Dummy :: e_, (Closure funcBody env) :: d_ ) ->
+            case Cons.toList vals of
+                Nothing ->
+                    Error vm "VM: applyFunction: badly formatted closure!"
+
+                Just values ->
+                    case Env.replaceDummy values env of
+                        Ok newEnv ->
+                            Unfinished (VM [] newEnv funcBody (EntireState s_ e_ c :: d_))
+
+                        Err errStr ->
+                            Error vm ("VM: recursiveApply: " ++ errStr)
+
+        _ ->
+            Error vm "VM: recursiveApply: Cannot find function body!"
+
+
 evaluate : VM -> Result Error Value
 evaluate oldVm =
     case step oldVm of
@@ -415,5 +530,5 @@ evaluate oldVm =
         Finished _ val ->
             Ok val
 
-        Error _ err ->
-            Err err
+        Error vm err ->
+            Err <| err ++ Debug.toString vm
