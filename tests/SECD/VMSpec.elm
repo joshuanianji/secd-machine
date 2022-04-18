@@ -356,6 +356,24 @@ testRecursiveFuncs =
                             [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
                 in
                 vmExpectSuccess program (VM.Integer 3)
+        , Test.test "Factorial function" <|
+            \_ ->
+                let
+                    -- this is the number we want to create a factorial of
+                    n =
+                        6
+
+                    fact =
+                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+                    -- I actually don't really know what this does
+                    factCreateClosure =
+                        [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+
+                    program =
+                        Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+                in
+                vmExpectSuccess program (VM.Integer 720)
         ]
 
 

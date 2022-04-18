@@ -35,7 +35,7 @@ init : ( Model, Cmd Msg )
 init =
     let
         vm =
-            VM.initRaw recLength
+            VM.initRaw factorial
 
         currState =
             VM.initState vm
@@ -140,29 +140,17 @@ recLength =
         [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
 
 
-squareNamed : Prog.Program
-squareNamed =
-    let
-        square =
-            [ LD ( 0, 0 ), LD ( 0, 0 ), FUNC MULT, RTN ]
-
-        squareApply =
-            [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-    in
-    Prog.fromList [ NIL, LDF, NESTED square, FUNC CONS, LDF, NESTED squareApply, AP ]
-
-
 factorial : Prog.Program
 factorial =
     let
         fact =
-            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LDC 1, JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
 
         -- I actually don't really know what this does
         factCreateClosure =
             [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
     in
-    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 6, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
 
 
 
