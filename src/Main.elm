@@ -175,5 +175,5 @@ view model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.map KeyMsg Keyboard.subscriptions

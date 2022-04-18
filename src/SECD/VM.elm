@@ -3,7 +3,6 @@ module SECD.VM exposing (..)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
-import Lib.Util as Util
 import SECD.Environment as Env exposing (EnvItem(..), Environment)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
@@ -229,7 +228,7 @@ valueToString val =
         Array arr ->
             Cons.toString valueToString arr
 
-        Closure f env ->
+        Closure _ _ ->
             "Closure"
 
 
@@ -642,7 +641,7 @@ viewState lookahead st =
 
 
 viewVM : Int -> VM -> Html msg
-viewVM lookahead (VM ctx s e c d) =
+viewVM _ (VM ctx s e c d) =
     Html.div
         [ Attr.class "vm" ]
         [ Html.p [ Attr.class "vm-title ctx-title" ] [ Html.text "Context" ]
