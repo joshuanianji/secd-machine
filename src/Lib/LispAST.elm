@@ -2,7 +2,7 @@ module Lib.LispAST exposing (..)
 
 import Char
 import Lib.Cons as Cons exposing (Cons)
-import Parser exposing ((|.), (|=), DeadEnd, Parser, Trailing(..))
+import Parser exposing ((|.), (|=), DeadEnd, Parser, Step(..))
 import Set
 
 
@@ -11,7 +11,7 @@ import Set
 
 
 type AST
-    = Lambda (List Token) AST
+    = Lambda (List Token) AST -- parameters and the body
     | BinaryOp BinaryOp AST AST -- builtin binary op
     | UnaryOp UnaryOp AST -- builtin unary op
     | If AST AST AST -- if-then-else
@@ -49,6 +49,11 @@ type UnaryOp
     | NULL -- Returns true on Nil
 
 
+
+-- constructors
+-- mainly for writing tests
+
+
 nil : AST
 nil =
     Quote Cons.Nil
@@ -57,6 +62,16 @@ nil =
 var : String -> AST
 var =
     Token >> Var
+
+
+token : String -> Token
+token =
+    Token
+
+
+int : Int -> AST
+int =
+    Integer
 
 
 
@@ -110,9 +125,9 @@ parseBinaryOp =
 parseToken : Parser Token
 parseToken =
     Parser.variable
-        { start = \_ -> True
+        { start = Char.isAlpha
         , inner = \c -> Char.isAlphaNum c || c == '_'
-        , reserved = Set.fromList [ "lambda", "let" ]
+        , reserved = Set.fromList [ "lambda", "let", "letrec" ]
         }
         |> Parser.map Token
 
@@ -123,24 +138,13 @@ parseToken =
 
 parseLambda : Parser AST
 parseLambda =
-    let
-        parseArgs =
-            Parser.sequence
-                { start = "("
-                , separator = " "
-                , end = ")"
-                , spaces = spaces
-                , item = parseToken
-                , trailing = Forbidden -- No trailing characters allowed
-                }
-    in
     Parser.succeed Lambda
         |. Parser.symbol "("
         |. Parser.spaces
         |. Parser.symbol "lambda"
-        |. Parser.spaces
-        |= parseArgs
-        |. Parser.spaces
+        |. spaces
+        |= parseTokens
+        |. spaces
         |= Parser.lazy (\_ -> parser)
         |. Parser.spaces
         |. Parser.symbol ")"
@@ -179,3 +183,26 @@ spaces =
     Parser.succeed ()
         |. Parser.token " "
         |. Parser.spaces
+
+
+
+-- parse a list of tokens, for a lambda expression arguments
+
+
+parseTokens : Parser (List Token)
+parseTokens =
+    Parser.succeed identity
+        |. Parser.token "("
+        |. Parser.spaces
+        |= Parser.loop [] tokensHelp
+
+
+tokensHelp : List Token -> Parser (Step (List Token) (List Token))
+tokensHelp revStmts =
+    Parser.oneOf
+        [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
+            |= parseToken
+            |. Parser.spaces
+        , Parser.token ")"
+            |> Parser.map (\_ -> Done (List.reverse revStmts))
+        ]
