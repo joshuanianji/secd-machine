@@ -1,5 +1,8 @@
 module Lib.Cons exposing (..)
 
+import Html exposing (Html)
+import Html.Attributes as Attr
+
 
 type Cons a
     = Nil -- also acts as the Nil pointer in the SECD VM
@@ -39,16 +42,15 @@ fromList l =
 
 -- deconstructors
 -- can only return a list if the Cons ends in a NIL
--- and if the list is not deeply nested ()
 
 
-toList : Cons a -> Maybe (List a)
+toList : Cons a -> Maybe (List (Cons a))
 toList c =
     case c of
         Nil ->
             Just []
 
-        Cons (Val a) xs ->
+        Cons a xs ->
             Maybe.map ((::) a) (toList xs)
 
         _ ->
@@ -73,8 +75,8 @@ fromConsList l =
 -- displays the cons array similar to how Lisp does it
 
 
-toString : Cons a -> (a -> String) -> String
-toString c aToString =
+toString : (a -> String) -> Cons a -> String
+toString aToString c =
     case c of
         Nil ->
             "Nil"
@@ -83,11 +85,11 @@ toString c aToString =
             aToString a
 
         ct ->
-            "(" ++ toStringHelper ct aToString ++ ")"
+            "(" ++ toStringHelper aToString ct ++ ")"
 
 
-toStringHelper : Cons a -> (a -> String) -> String
-toStringHelper c aToString =
+toStringHelper : (a -> String) -> Cons a -> String
+toStringHelper aToString c =
     case c of
         Nil ->
             "Nil"
@@ -97,12 +99,66 @@ toStringHelper c aToString =
 
         -- end of list
         Cons a Nil ->
-            toString a aToString
+            toString aToString a
 
         -- add a dot
         Cons ca (Val a) ->
-            toString ca aToString ++ " . " ++ aToString a
+            toString aToString ca ++ " . " ++ aToString a
 
         -- run toStringHelper on the remaining, because we don't need parentheses
         Cons ca rest ->
-            toString ca aToString ++ " " ++ toStringHelper rest aToString
+            toString aToString ca ++ " " ++ toStringHelper aToString rest
+
+
+
+-- toString but instead, it returns it as an HTML element
+
+
+view : (a -> Html msg) -> Cons a -> Html msg
+view viewA c =
+    case c of
+        Nil ->
+            Html.div [ Attr.class "vm-cons cons-nil" ] [ Html.text "Nil" ]
+
+        Val a ->
+            Html.div [ Attr.class "vm-cons cons-val" ] [ viewA a ]
+
+        ct ->
+            Html.div
+                [ Attr.class "vm-cons row cons-cons" ]
+                [ Html.text "("
+                , viewHelper viewA ct
+                , Html.text ")"
+                ]
+
+
+viewHelper : (a -> Html msg) -> Cons a -> Html msg
+viewHelper viewA c =
+    case c of
+        Nil ->
+            Html.div [ Attr.class "vm-cons cons-nil" ] [ Html.text "Nil" ]
+
+        Val a ->
+            Html.div [ Attr.class "vm-cons cons-val" ] [ viewA a ]
+
+        -- end of list
+        Cons a Nil ->
+            view viewA a
+
+        -- add a dot
+        Cons ca (Val a) ->
+            Html.div
+                [ Attr.class "vm-cons row cons-val" ]
+                [ view viewA ca
+                , Html.text "."
+                , viewA a
+                ]
+
+        -- run toStringHelper on the remaining, because we don't need parentheses
+        Cons ca rest ->
+            Html.div
+                [ Attr.class "vm-cons row cons-val" ]
+                [ view viewA ca
+                , Html.text " "
+                , viewHelper viewA rest
+                ]

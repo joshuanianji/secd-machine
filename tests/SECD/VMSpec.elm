@@ -152,9 +152,9 @@ testCons =
                     program =
                         Prog.fromList [ NIL, LDC 3, FUNC CONS, NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS ]
                 in
-                case VM.evaluate <| VM.init program of
+                case VM.evaluate <| VM.initRaw program of
                     Result.Ok (VM.Array cons) ->
-                        Expect.equal (Cons.toString cons VM.valueToString) "((1 2) 3)"
+                        Expect.equal (Cons.toString VM.valueToString cons) "((1 2) 3)"
 
                     _ ->
                         Expect.fail "Failed to evaluate program"
@@ -321,13 +321,26 @@ testFuncs =
                         Prog.fromList [ NIL, LDC 6, FUNC CONS, LDF, NESTED outerFunc, AP ]
                 in
                 vmExpectSuccess program (VM.Integer 4)
+        , Test.test "Applying a function as an argument (square)" <|
+            \_ ->
+                let
+                    square =
+                        [ LD ( 0, 0 ), LD ( 0, 0 ), FUNC MULT, RTN ]
+
+                    squareApply =
+                        [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+
+                    program =
+                        Prog.fromList [ NIL, LDF, NESTED square, FUNC CONS, LDF, NESTED squareApply, AP ]
+                in
+                vmExpectSuccess program (VM.Integer 9)
         ]
 
 
 testRecursiveFuncs : Test
 testRecursiveFuncs =
     Test.describe "Recursive Functions"
-        [ Test.test "Recursive sum function" <|
+        [ Test.test "Recursive list length function" <|
             \_ ->
                 let
                     -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
@@ -342,7 +355,7 @@ testRecursiveFuncs =
                         Prog.fromList
                             [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
                 in
-                vmExpectSuccess program (VM.Integer 6)
+                vmExpectSuccess program (VM.Integer 3)
         ]
 
 
@@ -352,9 +365,9 @@ testRecursiveFuncs =
 
 vmExpectSuccess : Program -> Value -> Expectation
 vmExpectSuccess prog expected =
-    Expect.equal (VM.evaluate <| VM.init prog) (Ok expected)
+    Expect.equal (VM.evaluate <| VM.initRaw prog) (Ok expected)
 
 
 vmExpectFailure : Program -> Expectation
 vmExpectFailure prog =
-    Expect.err (VM.evaluate <| VM.init prog)
+    Expect.err (VM.evaluate <| VM.initRaw prog)

@@ -1,8 +1,11 @@
 module SECD.VM exposing (..)
 
+import Html exposing (Html)
+import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
-import SECD.Environment as Env exposing (Environment)
-import SECD.Error exposing (Error)
+import Lib.Util as Util
+import SECD.Environment as Env exposing (EnvItem(..), Environment)
+import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
 
@@ -14,6 +17,8 @@ import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
 type VM
     = VM
+        -- Context (see below)
+        Context
         -- Stack used for evaluation of expressions
         Stack
         --  Environment used to store the current value list
@@ -22,6 +27,20 @@ type VM
         Control
         -- Dump to store anything else
         Dump
+
+
+
+-- context (right now), just stores the values of the Dummy value (if possible)
+-- the Dummy value is a pointer to a value, which RAP changes to the current function scope (i think)
+
+
+type alias Context =
+    { dummyVal : Maybe (List (Cons Value)) }
+
+
+initCtx : Context
+initCtx =
+    { dummyVal = Nothing }
 
 
 
@@ -41,13 +60,14 @@ type alias Dump =
 
 
 
--- types of values we can return from the VM
+-- types of values that can be in the stack
 
 
 type Value
     = Integer Int
     | Truthy -- false is represented by Nil
     | Array (Cons Value)
+    | Closure (List Op) (Environment Value) -- When loading a function, dump the closure of the function (i think?)
 
 
 boolToValue : Bool -> Value
@@ -116,6 +136,9 @@ vmAtom v =
             Ok Truthy
 
         Array _ ->
+            Ok nil
+
+        Closure _ _ ->
             Ok nil
 
 
@@ -204,7 +227,31 @@ valueToString val =
             "true"
 
         Array arr ->
-            Cons.toString arr valueToString
+            Cons.toString valueToString arr
+
+        Closure f env ->
+            "Closure"
+
+
+viewValue : Value -> Html msg
+viewValue val =
+    case val of
+        Integer i ->
+            Html.div [ Attr.class "vm-val vm-int" ] [ Html.text (String.fromInt i) ]
+
+        Truthy ->
+            Html.div [ Attr.class "vm-val vm-truthy" ] [ Html.text "true" ]
+
+        Array arr ->
+            Html.div [ Attr.class "vm-val row vm-array" ] [ Cons.view viewValue arr ]
+
+        Closure f env ->
+            Html.div
+                [ Attr.class "vm-val row complex vm-closure" ]
+                [ Html.text "Closure"
+                , Html.div [ Attr.class "vm-closure-func" ] [ viewControl f ]
+                , Html.div [ Attr.class "vm-closure-env" ] [ Env.view viewValue env ]
+                ]
 
 
 
@@ -214,16 +261,20 @@ valueToString val =
 type DumpValue
     = Control (List Op) -- in Sel, we want to dump the contents of the control stack
     | EntireState Stack (Environment Value) Control -- When applying a function, we want to dump the state of the VM
-    | Closure (List Op) (Environment Value) -- When loading a function, dump the closure of the function (i think?)
 
 
 
 ---- VM Operations ----
 
 
-init : Program -> VM
+init : Program -> State
 init prog =
-    VM [] Env.init (Program.toList prog) []
+    Unfinished <| initRaw prog
+
+
+initRaw : Program -> VM
+initRaw prog =
+    VM initCtx [] Env.init (Program.toList prog) []
 
 
 
@@ -236,10 +287,28 @@ type State
     | Error VM String
 
 
+initState : VM -> State
+initState =
+    Unfinished
+
+
+stateStep : State -> State
+stateStep st =
+    case st of
+        Unfinished vm ->
+            step vm
+
+        Finished _ _ ->
+            st
+
+        Error _ _ ->
+            st
+
+
 step : VM -> State
 step vm =
     let
-        (VM s e c d) =
+        (VM ctx s e c d) =
             vm
     in
     case c of
@@ -248,43 +317,43 @@ step vm =
 
         -- evaluate Nil
         NIL :: c_ ->
-            Unfinished (VM (nil :: s) e c_ d)
+            Unfinished (VM ctx (nil :: s) e c_ d)
 
         -- evaluate Load Constant
         (LDC x) :: c_ ->
-            Unfinished (VM (Integer x :: s) e c_ d)
+            Unfinished (VM ctx (Integer x :: s) e c_ d)
 
         -- evaluate load variable
         (LD ( x, y )) :: c_ ->
-            loadFromEnv ( x, y ) (VM s e c_ d)
+            loadFromEnv ( x, y ) (VM ctx s e c_ d)
 
         -- Binary or unary operator
         (FUNC f) :: c_ ->
-            evalFunc f (VM s e c_ d)
+            evalFunc f (VM ctx s e c_ d)
 
         -- IF/THEN/ELSE
         SEL :: c_ ->
-            evalIfElse (VM s e c_ d)
+            evalIfElse (VM ctx s e c_ d)
 
         JOIN :: c_ ->
-            endIfElse (VM s e c_ d)
+            endIfElse (VM ctx s e c_ d)
 
         -- Load and evaluating functions
         LDF :: c_ ->
-            loadFunction (VM s e c_ d)
+            loadFunction (VM ctx s e c_ d)
 
         AP :: c_ ->
-            applyFunction (VM s e c_ d)
+            applyFunction (VM ctx s e c_ d)
 
         RTN :: c_ ->
-            returnFromFunction (VM s e c_ d)
+            returnFromFunction (VM ctx s e c_ d)
 
         -- Recursive functions
         DUM :: c_ ->
-            Unfinished (VM s (Env.pushDummy e) c_ d)
+            Unfinished (VM ctx s (Env.pushDummy e) c_ d)
 
         RAP :: c_ ->
-            recursiveApply (VM s e c_ d)
+            recursiveApply (VM ctx s e c_ d)
 
         _ ->
             Error vm "VM: step: VM is in an invalid state"
@@ -305,17 +374,20 @@ endProgram stack vm =
 
 
 loadFromEnv : ( Int, Int ) -> VM -> State
-loadFromEnv ( x, y ) (VM s e c d) =
+loadFromEnv ( x, y ) (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
-    case Env.locate ( x, y ) e of
+    case Env.locate ( x, y ) ctx.dummyVal e of
         Err errStr ->
             Error vm <| "VM: loadFromEnv: Variable not found from coords (" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")\n" ++ errStr
 
-        Ok val ->
-            Unfinished (VM (val :: s) e c d)
+        Ok (Cons.Val a) ->
+            Unfinished (VM ctx (a :: s) e c d)
+
+        Ok consArr ->
+            Unfinished (VM ctx (Array consArr :: s) e c d)
 
 
 evalFunc : Func -> VM -> State
@@ -350,16 +422,16 @@ evalFunc f vm =
 
 
 evalBinary : (Value -> Value -> Result String Value) -> VM -> State
-evalBinary op (VM s e c d) =
+evalBinary op (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case s of
         a :: b :: s_ ->
             case op a b of
                 Ok val ->
-                    Unfinished (VM (val :: s_) e c d)
+                    Unfinished (VM ctx (val :: s_) e c d)
 
                 Err msg ->
                     Error vm ("VM: evalBinary: " ++ msg)
@@ -372,16 +444,16 @@ evalBinary op (VM s e c d) =
 
 
 evalUnary : (Value -> Result String Value) -> VM -> State
-evalUnary op (VM s e c d) =
+evalUnary op (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case s of
         a :: s_ ->
             case op a of
                 Ok val ->
-                    Unfinished (VM (val :: s_) e c d)
+                    Unfinished (VM ctx (val :: s_) e c d)
 
                 Err msg ->
                     Error vm ("VM: evalUnary: " ++ msg)
@@ -394,10 +466,10 @@ evalUnary op (VM s e c d) =
 
 
 evalIfElse : VM -> State
-evalIfElse (VM s e c d) =
+evalIfElse (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case ( s, c ) of
         ( [], _ ) ->
@@ -409,7 +481,7 @@ evalIfElse (VM s e c d) =
                 newD =
                     Control c_ :: d
             in
-            Unfinished (VM s_ e ct newD)
+            Unfinished (VM ctx s_ e ct newD)
 
         ( (Array Cons.Nil) :: s_, (NESTED _) :: (NESTED cf) :: c_ ) ->
             let
@@ -417,7 +489,7 @@ evalIfElse (VM s e c d) =
                 newD =
                     Control c_ :: d
             in
-            Unfinished (VM s_ e cf newD)
+            Unfinished (VM ctx s_ e cf newD)
 
         ( a :: _, _ ) ->
             case a of
@@ -432,63 +504,62 @@ evalIfElse (VM s e c d) =
 
 
 endIfElse : VM -> State
-endIfElse (VM s e c d) =
+endIfElse (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case d of
         (Control c_) :: d_ ->
-            Unfinished (VM s e c_ d_)
+            Unfinished (VM ctx s e c_ d_)
 
         _ ->
             Error vm "VM: endIfElse: Dump stack does not hold control values"
 
 
 loadFunction : VM -> State
-loadFunction (VM s e c d) =
+loadFunction (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case c of
         (NESTED funcBody) :: c_ ->
-            -- Note: in class, we dump the closure in the stack, but I think it's more consistent to move it to the dump.
-            Unfinished (VM s e c_ (Closure funcBody e :: d))
+            Unfinished (VM ctx (Closure funcBody e :: s) e c_ d)
 
         _ ->
             Error vm "VM: loadFunction: cannot find function body!"
 
 
 applyFunction : VM -> State
-applyFunction (VM s e c d) =
+applyFunction (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
-    case ( s, d ) of
+    case s of
         -- vals is a list of the values of the arguments
-        ( (Array vals) :: s_, (Closure funcBody env) :: d_ ) ->
+        (Closure funcBody env) :: (Array vals) :: s_ ->
             case Cons.toList vals of
                 Nothing ->
                     Error vm "VM: applyFunction: badly formatted closure!"
 
                 Just values ->
-                    Unfinished (VM [] (Env.push values env) funcBody (EntireState s_ e c :: d_))
+                    Unfinished (VM ctx [] (Env.push values env) funcBody (EntireState s_ e c :: d))
 
         _ ->
             Error vm "VM: applyFunction: cannot find function body!"
 
 
 returnFromFunction : VM -> State
-returnFromFunction (VM s e c d) =
+returnFromFunction (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
     case ( s, d ) of
         ( x :: _, (EntireState s_ e_ c_) :: d_ ) ->
-            Unfinished (VM (x :: s_) e_ c_ d_)
+            Unfinished (VM ctx (x :: s_) e_ c_ d_)
 
         ( _, (EntireState _ _ _) :: _ ) ->
             Error vm "VM: returnFromFunction: Cannot find function return value!"
@@ -498,21 +569,21 @@ returnFromFunction (VM s e c d) =
 
 
 recursiveApply : VM -> State
-recursiveApply (VM s e c d) =
+recursiveApply (VM ctx s e c d) =
     let
         vm =
-            VM s e c d
+            VM ctx s e c d
     in
-    case ( s, e, d ) of
-        ( (Array vals) :: s_, Env.Dummy :: e_, (Closure funcBody env) :: d_ ) ->
+    case ( s, e ) of
+        ( (Closure funcBody env) :: (Array vals) :: s_, Env.Dummy :: e_ ) ->
             case Cons.toList vals of
                 Nothing ->
-                    Error vm "VM: applyFunction: badly formatted closure!"
+                    Error vm "VM: recursiveApply: badly formatted closure!"
 
                 Just values ->
                     case Env.replaceDummy values env of
                         Ok newEnv ->
-                            Unfinished (VM [] newEnv funcBody (EntireState s_ e_ c :: d_))
+                            Unfinished (VM { ctx | dummyVal = Just values } [] newEnv funcBody (EntireState s_ e_ c :: d))
 
                         Err errStr ->
                             Error vm ("VM: recursiveApply: " ++ errStr)
@@ -530,5 +601,126 @@ evaluate oldVm =
         Finished _ val ->
             Ok val
 
-        Error vm err ->
-            Err <| err ++ Debug.toString vm
+        Error _ err ->
+            Err <| err
+
+
+evalList : VM -> List State
+evalList oldVm =
+    case step oldVm of
+        Unfinished vm ->
+            Unfinished vm :: evalList vm
+
+        other ->
+            List.singleton other
+
+
+
+-- DEBUG
+
+
+viewState : Int -> State -> Html msg
+viewState lookahead st =
+    let
+        ( title, err, body ) =
+            case st of
+                Unfinished vm ->
+                    ( "Unfinished", Html.text "", viewVM lookahead vm )
+
+                Finished vm val ->
+                    ( "Finished: " ++ valueToString val, Html.text "", viewVM lookahead vm )
+
+                Error vm e ->
+                    ( "Error", Error.view e, viewVM lookahead vm )
+    in
+    Html.div
+        [ Attr.class "state" ]
+        [ Html.h3 [ Attr.class "state-title" ] [ Html.text title ]
+        , Html.div [ Attr.class "state-error" ] [ err ]
+        , Html.div [ Attr.class "state-body" ] [ body ]
+        ]
+
+
+viewVM : Int -> VM -> Html msg
+viewVM lookahead (VM ctx s e c d) =
+    Html.div
+        [ Attr.class "vm" ]
+        [ Html.p [ Attr.class "vm-title ctx-title" ] [ Html.text "Context" ]
+        , viewContext ctx
+        , Html.p [ Attr.class "vm-title stack-title" ] [ Html.text "Stack" ]
+        , viewStack s
+        , Html.p [ Attr.class "vm-title env-title" ] [ Html.text "Environment" ]
+        , Env.view viewValue e
+        , Html.p [ Attr.class "vm-title control-title" ] [ Html.text "Control" ]
+        , viewControl c
+        , Html.p [ Attr.class "vm-title dump-title" ] [ Html.text "Dump" ]
+        , viewDump d
+        ]
+
+
+viewContext : Context -> Html msg
+viewContext ctx =
+    let
+        dummyVal =
+            case ctx.dummyVal of
+                Nothing ->
+                    Html.text "Nothing"
+
+                Just v ->
+                    List.map (Cons.view viewValue) v
+                        |> List.intersperse (Html.text ",")
+                        |> Html.div [ Attr.class "dummy-val" ]
+    in
+    Html.div [ Attr.class "vm-body row ctx-body" ]
+        [ Html.text "dummyVal = ", dummyVal ]
+
+
+viewStack : Stack -> Html msg
+viewStack s =
+    let
+        stackElems =
+            List.map viewValue s
+                |> List.intersperse (Html.text ",")
+    in
+    Html.div
+        [ Attr.class "vm-body row stack-body" ]
+        stackElems
+
+
+viewControl : Control -> Html msg
+viewControl c =
+    let
+        controlElems =
+            List.map Program.view c
+                |> List.intersperse (Html.text ",")
+    in
+    Html.div
+        [ Attr.class "vm-body row control-body" ]
+        controlElems
+
+
+viewDump : Dump -> Html msg
+viewDump d =
+    Html.div
+        [ Attr.class "vm-body row dump-body" ]
+        (List.map viewDumpVal d)
+
+
+viewDumpVal : DumpValue -> Html msg
+viewDumpVal dv =
+    case dv of
+        Control c ->
+            Html.div
+                [ Attr.class "row dump-val dump-control" ]
+                [ Html.text "Control"
+                , viewControl c
+                ]
+
+        EntireState s e c ->
+            Html.div
+                [ Attr.class "row dump-val dump-entire-state" ]
+                [ Html.text "EntireState"
+                , viewStack s
+                , Env.view viewValue e
+                , viewControl c
+                ]

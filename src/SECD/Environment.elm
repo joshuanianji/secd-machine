@@ -1,7 +1,13 @@
 module SECD.Environment exposing (..)
 
+import Html exposing (Html)
+import Html.Attributes as Attr
+import Lib.Cons as Cons exposing (Cons)
+import Lib.Util as Util
+
+
+
 -- Environment stack needs to be a list of lists, so it's a little more complicated.alias
--- But, I'm not wrapping the environment in a newtype because I want to be able to pattern match on it
 
 
 type alias Environment a =
@@ -9,8 +15,42 @@ type alias Environment a =
 
 
 type EnvItem a
-    = ListItem (List a)
+    = ListItem (List (Cons a)) -- this ensures the Environent is at least nested 2 deep.
     | Dummy -- with doing recursion
+
+
+
+-- debug
+
+
+view : (a -> Html msg) -> Environment a -> Html msg
+view viewA env =
+    List.map (viewEnvItem viewA) env
+        |> Html.div
+            [ Attr.class "vm-body row env-body" ]
+
+
+viewEnvItem : (a -> Html msg) -> EnvItem a -> Html msg
+viewEnvItem viewA item =
+    case item of
+        ListItem cs ->
+            List.map (Cons.view viewA) cs
+                |> List.intersperse (Html.text ",")
+                |> Util.wrapAdd (Html.text "(") (Html.text ")")
+                |> Html.div [ Attr.class "vm-env row complex vm-listitem" ]
+
+        Dummy ->
+            Html.div [ Attr.class "vm-env dummy" ] [ Html.text "Dummy" ]
+
+
+envItemToString : (a -> String) -> EnvItem a -> String
+envItemToString aToString item =
+    case item of
+        ListItem c ->
+            "[" ++ (String.join ", " <| List.map (Cons.toString aToString) c) ++ "]"
+
+        Dummy ->
+            "Dummy"
 
 
 
@@ -24,10 +64,10 @@ init =
 
 fromList : List (List a) -> Environment a
 fromList =
-    List.map ListItem
+    List.map (ListItem << List.map Cons.Val)
 
 
-push : List a -> Environment a -> Environment a
+push : List (Cons a) -> Environment a -> Environment a
 push xs env =
     ListItem xs :: env
 
@@ -41,8 +81,8 @@ pushDummy env =
 -- locate is 0-indexed
 
 
-locate : ( Int, Int ) -> Environment a -> Result String a
-locate ( x, y ) environment =
+locate : ( Int, Int ) -> Maybe (List (Cons a)) -> Environment a -> Result String (Cons a)
+locate ( x, y ) mDummyVal environment =
     if (x < 0) || (y < 0) then
         Err "Negative index out of bounds"
 
@@ -55,10 +95,15 @@ locate ( x, y ) environment =
                 locateRow y h
 
             ( 0, Dummy :: _ ) ->
-                Err "Locate: attempt to access Dummy Env value!"
+                case mDummyVal of
+                    Nothing ->
+                        Err "Locate: attempt to access uninitialized Dummy Env value!"
+
+                    Just dummyVal ->
+                        locateRow y dummyVal
 
             ( _, _ :: t ) ->
-                locate ( x - 1, y ) t
+                locate ( x - 1, y ) mDummyVal t
 
 
 locateRow : Int -> List a -> Result String a
@@ -78,7 +123,7 @@ locateRow y row =
 -- replace the first row, IFF it is a dummy value
 
 
-replaceDummy : List a -> Environment a -> Result String (Environment a)
+replaceDummy : List (Cons a) -> Environment a -> Result String (Environment a)
 replaceDummy newRow env =
     case env of
         [] ->

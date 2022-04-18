@@ -12,6 +12,7 @@ suite =
         [ testFromList
         , testFromConsList
         , testToString
+        , testToList
         ]
 
 
@@ -105,21 +106,21 @@ simpleToString =
                     cons =
                         Cons (Val "a") Nil
                 in
-                Expect.equal (toString cons identity) "(a)"
+                Expect.equal (toString identity cons) "(a)"
         , Test.test "Cons.toString (a b)" <|
             \_ ->
                 let
                     cons =
                         fromList [ "a", "b" ]
                 in
-                Expect.equal (toString cons identity) "(a b)"
+                Expect.equal (toString identity cons) "(a b)"
         , Test.test "Cons.toString (a b c d)" <|
             \_ ->
                 let
                     cons =
                         fromList [ "a", "b", "c", "d" ]
                 in
-                Expect.equal (toString cons identity) "(a b c d)"
+                Expect.equal (toString identity cons) "(a b c d)"
         ]
 
 
@@ -132,21 +133,21 @@ simpleWithDots =
                     cons =
                         Cons (Val "a") (Val "b")
                 in
-                Expect.equal (toString cons identity) "(a . b)"
+                Expect.equal (toString identity cons) "(a . b)"
         , Test.test "Cons.toString (a b c . d)" <|
             \_ ->
                 let
                     cons =
                         Cons (Val "a") (Cons (Val "b") (Cons (Val "c") (Val "d")))
                 in
-                Expect.equal (toString cons identity) "(a b c . d)"
+                Expect.equal (toString identity cons) "(a b c . d)"
         , Test.test "Cons.toString ((a . b))" <|
             \_ ->
                 let
                     cons =
                         Cons (Cons (Val "a") (Val "b")) Nil
                 in
-                Expect.equal (toString cons identity) "((a . b))"
+                Expect.equal (toString identity cons) "((a . b))"
         ]
 
 
@@ -159,19 +160,65 @@ nested =
                     cons =
                         fromConsList [ fromList [ "a", "b" ], fromList [ "c", "d" ], Val "e" ]
                 in
-                Expect.equal (toString cons identity) "((a b) (c d) e)"
+                Expect.equal (toString identity cons) "((a b) (c d) e)"
         , Test.test "Cons.toString ((((a))))" <|
             \_ ->
                 let
                     cons =
                         fromConsList [ fromConsList [ fromConsList [ fromList [ "a" ] ] ] ]
                 in
-                Expect.equal (toString cons identity) "((((a))))"
+                Expect.equal (toString identity cons) "((((a))))"
         , Test.test "Cons.toString (((a . b)))" <|
             \_ ->
                 let
                     cons =
                         Cons (Cons (Cons (Val "a") (Val "b")) Nil) Nil
                 in
-                Expect.equal (toString cons identity) "(((a . b)))"
+                Expect.equal (toString identity cons) "(((a . b)))"
+        ]
+
+
+testToList : Test
+testToList =
+    Test.describe "Cons.toList"
+        [ Test.test "Nil -> []" <|
+            \_ ->
+                let
+                    actual =
+                        toList Nil
+
+                    expected =
+                        Just []
+                in
+                Expect.equal actual expected
+        , Test.test "[1,2,3]" <|
+            \_ ->
+                let
+                    actual =
+                        toList (fromList [ 1, 2, 3 ])
+
+                    expected =
+                        Just [ Val 1, Val 2, Val 3 ]
+                in
+                Expect.equal actual expected
+        , Test.test "Works on a nested list" <|
+            \_ ->
+                let
+                    actual =
+                        toList (fromConsList [ fromList [ 1, 2 ], Val 3 ])
+
+                    expected =
+                        Just [ fromList [ 1, 2 ], Val 3 ]
+                in
+                Expect.equal actual expected
+        , Test.test "Fails when the life does not end in Nil" <|
+            \_ ->
+                let
+                    actual =
+                        toList (Cons (Val 1) (Val 2))
+
+                    expected =
+                        Nothing
+                in
+                Expect.equal actual expected
         ]

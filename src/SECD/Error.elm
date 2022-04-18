@@ -1,3 +1,12 @@
 module SECD.Error exposing (..)
 
-type alias Error = String
+import Html exposing (Html)
+
+
+type alias Error =
+    String
+
+
+view : Error -> Html msg
+view =
+    Html.text
