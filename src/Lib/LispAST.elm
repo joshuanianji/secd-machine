@@ -2,6 +2,7 @@ module Lib.LispAST exposing (..)
 
 import Char
 import Lib.Cons as Cons exposing (Cons)
+import List.Extra
 import Parser exposing ((|.), (|=), DeadEnd, Parser, Step(..))
 import Set
 
@@ -12,7 +13,7 @@ import Set
 
 type AST
     = Lambda (List Token) AST -- parameters and the body
-    | FuncApp Token (List AST) -- function applied to n arguments
+    | FuncApp AST (List AST) -- function applied to n arguments. Function itself can be an AST (e.g. lambda), but we validate that AST later on
     | If AST AST AST -- if-then-else
     | Let (List ( Token, AST )) AST -- let
     | Letrec (List ( Token, AST )) AST -- letrec
@@ -66,6 +67,7 @@ parser =
             Parser.oneOf
                 [ parseFunctionApp
                 , parseLambda
+                , parseLet
                 ]
 
         parseWithoutParens =
@@ -109,7 +111,7 @@ parseFunctionApp =
                     |> Parser.map (\_ -> Done (List.reverse revStmts))
                 ]
 
-        reservedFuncs : Parser Token
+        reservedFuncs : Parser AST
         reservedFuncs =
             Parser.oneOf
                 [ Parser.map (\_ -> "+") <| Parser.token "+"
@@ -120,10 +122,14 @@ parseFunctionApp =
                 , Parser.map (\_ -> "<") <| Parser.token "<"
                 , Parser.map (\_ -> ">") <| Parser.token ">"
                 ]
-                |> Parser.map token
+                |> Parser.map var
     in
     Parser.succeed FuncApp
-        |= Parser.oneOf [ reservedFuncs, parseToken ]
+        |= Parser.oneOf
+            [ reservedFuncs
+            , parseVar
+            , Parser.lazy (\_ -> parser)
+            ]
         |. Parser.spaces
         |= parseArgs
 
@@ -160,9 +166,36 @@ parseToken =
 parseLambda : Parser AST
 parseLambda =
     Parser.succeed Lambda
-        |. Parser.symbol "lambda"
+        |. Parser.keyword "lambda"
         |. spaces
-        |= parseTokens
+        |= parseList parseToken
+        |. spaces
+        |= Parser.lazy (\_ -> parser)
+
+
+parseLet : Parser AST
+parseLet =
+    let
+        parseLetBindings : Parser (List ( Token, AST ))
+        parseLetBindings =
+            Parser.succeed (\a b -> ( a, b ))
+                |. Parser.spaces
+                |= parseList parseToken
+                |. Parser.spaces
+                |= parseList (Parser.lazy (\_ -> parser))
+                |> Parser.andThen
+                    (\( tokens, vals ) ->
+                        if List.length tokens /= List.length vals then
+                            Parser.problem "Unequal number of tokens and values in let"
+
+                        else
+                            Parser.succeed (List.Extra.zip tokens vals)
+                    )
+    in
+    Parser.succeed Let
+        |. Parser.keyword "let"
+        |. spaces
+        |= parseLetBindings
         |. spaces
         |= Parser.lazy (\_ -> parser)
 
@@ -203,22 +236,22 @@ spaces =
 
 
 
--- parse a list of tokens, for a lambda expression arguments
+-- parse a list of space separated elements in parentheses, in the form (x1 x2 x3)
 
 
-parseTokens : Parser (List Token)
-parseTokens =
+parseList : Parser a -> Parser (List a)
+parseList parseListItem =
     Parser.succeed identity
         |. Parser.token "("
         |. Parser.spaces
-        |= Parser.loop [] tokensHelp
+        |= Parser.loop [] (tokensHelp parseListItem)
 
 
-tokensHelp : List Token -> Parser (Step (List Token) (List Token))
-tokensHelp revStmts =
+tokensHelp : Parser a -> List a -> Parser (Step (List a) (List a))
+tokensHelp parseListItem revStmts =
     Parser.oneOf
         [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
-            |= parseToken
+            |= parseListItem
             |. Parser.spaces
         , Parser.token ")"
             |> Parser.map (\_ -> Done (List.reverse revStmts))
