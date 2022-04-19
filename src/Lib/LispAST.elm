@@ -85,8 +85,30 @@ parse =
 
 parser : Parser AST
 parser =
+    let
+        parseInParens =
+            Parser.oneOf
+                [ parseBinaryOp
+                , parseUnaryOp
+                , parseLambda
+                ]
+
+        parseWithoutParens =
+            Parser.oneOf
+                [ parseNil
+                , parseInt
+                , parseVar
+                ]
+    in
     Parser.oneOf
-        [ parseBinaryOp, parseUnaryOp, parseLambda, parseNil, parseInt, parseVar ]
+        [ Parser.succeed identity
+            |. Parser.symbol "("
+            |. Parser.spaces
+            |= parseInParens
+            |. Parser.spaces
+            |. Parser.symbol ")"
+        , parseWithoutParens
+        ]
 
 
 
@@ -111,15 +133,11 @@ parseBinaryOp =
                 ]
     in
     Parser.succeed BinaryOp
-        |. Parser.symbol "("
-        |. Parser.spaces
         |= parseOp
         |. spaces
         |= Parser.lazy (\_ -> parser)
         |. spaces
         |= Parser.lazy (\_ -> parser)
-        |. Parser.spaces
-        |. Parser.symbol ")"
 
 
 parseUnaryOp : Parser AST
@@ -135,13 +153,24 @@ parseUnaryOp =
                 ]
     in
     Parser.succeed UnaryOp
-        |. Parser.symbol "("
-        |. Parser.spaces
         |= parseOp
         |. spaces
         |= Parser.lazy (\_ -> parser)
+
+
+parseIf : Parser AST
+parseIf =
+    Parser.succeed If
+        |. Parser.symbol "if"
         |. Parser.spaces
-        |. Parser.symbol ")"
+        -- condition
+        |= Parser.lazy (\_ -> parser)
+        |. Parser.spaces
+        -- true branch
+        |= Parser.lazy (\_ -> parser)
+        |. Parser.spaces
+        -- false branch
+        |= Parser.lazy (\_ -> parser)
 
 
 parseToken : Parser Token
@@ -161,15 +190,11 @@ parseToken =
 parseLambda : Parser AST
 parseLambda =
     Parser.succeed Lambda
-        |. Parser.symbol "("
-        |. Parser.spaces
         |. Parser.symbol "lambda"
         |. spaces
         |= parseTokens
         |. spaces
         |= Parser.lazy (\_ -> parser)
-        |. Parser.spaces
-        |. Parser.symbol ")"
 
 
 parseInt : Parser AST

@@ -19,6 +19,7 @@ parseExpectr =
         [ testBasics
         , testBinary
         , testUnary
+        , testIf
         , testTokens
         , testLambda
         ]
@@ -39,27 +40,36 @@ testBasics =
 testBinary : Test
 testBinary =
     Test.describe "Built in binary functions"
-        [ parseExpect parseBinaryOp "(+ 1 2)" (Ok <| BinaryOp ADD (int 1) (int 2))
-        , parseExpect parseBinaryOp "(- 1 2)" (Ok <| BinaryOp SUB (int 1) (int 2))
-        , parseExpect parseBinaryOp "(* 1 2)" (Ok <| BinaryOp MULT (int 1) (int 2))
-        , parseExpect parseBinaryOp "(cons 1 nil)" (Ok <| BinaryOp CONS (int 1) nil)
-        , parseExpect parseBinaryOp "(< 1 2)" (Ok <| BinaryOp (COMPARE CMP_LT) (int 1) (int 2))
-        , parseExpect parseBinaryOp "(> 1 2)" (Ok <| BinaryOp (COMPARE CMP_GT) (int 1) (int 2))
-        , parseExpect parseBinaryOp "(<= 1 2)" (Ok <| BinaryOp (COMPARE CMP_LEQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp "(>= 1 2)" (Ok <| BinaryOp (COMPARE CMP_GEQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp "(eq 1 2)" (Ok <| BinaryOp (COMPARE CMP_EQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp "(* (+ 6 2) 3)" (Ok <| BinaryOp MULT (BinaryOp ADD (int 6) (int 2)) (int 3))
+        [ parseExpect parseBinaryOp "+ 1 2" (Ok <| BinaryOp ADD (int 1) (int 2))
+        , parseExpect parseBinaryOp "- 1 2" (Ok <| BinaryOp SUB (int 1) (int 2))
+        , parseExpect parseBinaryOp "* 1 2" (Ok <| BinaryOp MULT (int 1) (int 2))
+        , parseExpect parseBinaryOp "cons 1 nil" (Ok <| BinaryOp CONS (int 1) nil)
+        , parseExpect parseBinaryOp "< 1 2" (Ok <| BinaryOp (COMPARE CMP_LT) (int 1) (int 2))
+        , parseExpect parseBinaryOp "> 1 2" (Ok <| BinaryOp (COMPARE CMP_GT) (int 1) (int 2))
+        , parseExpect parseBinaryOp "<= 1 2" (Ok <| BinaryOp (COMPARE CMP_LEQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp ">= 1 2" (Ok <| BinaryOp (COMPARE CMP_GEQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp "eq 1 2" (Ok <| BinaryOp (COMPARE CMP_EQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp "* (+ 6 2) 3" (Ok <| BinaryOp MULT (BinaryOp ADD (int 6) (int 2)) (int 3))
         ]
 
 
 testUnary : Test
 testUnary =
     Test.describe "Build in Unary operands"
-        [ parseExpect parseUnaryOp "(atom 4)" (Ok <| UnaryOp ATOM (int 4))
-        , parseExpect parseUnaryOp "(atom nil)" (Ok <| UnaryOp ATOM nil)
-        , parseExpect parseUnaryOp "(null nil)" (Ok <| UnaryOp NULL nil)
-        , parseExpect parseUnaryOp "(cdr nil)" (Ok <| UnaryOp CDR nil)
-        , parseExpect parseUnaryOp "(car nil)" (Ok <| UnaryOp CAR nil)
+        [ parseExpect parseUnaryOp "atom 4" (Ok <| UnaryOp ATOM (int 4))
+        , parseExpect parseUnaryOp "atom nil" (Ok <| UnaryOp ATOM nil)
+        , parseExpect parseUnaryOp "null nil" (Ok <| UnaryOp NULL nil)
+        , parseExpect parseUnaryOp "null x" (Ok <| UnaryOp NULL (var "x"))
+        , parseExpect parseUnaryOp "cdr nil" (Ok <| UnaryOp CDR nil)
+        , parseExpect parseUnaryOp "car nil" (Ok <| UnaryOp CAR nil)
+        ]
+
+
+testIf : Test
+testIf =
+    Test.describe "If statements"
+        [ parseExpect parseIf "if (eq 1 2) 3 4" (Ok <| If (BinaryOp (COMPARE CMP_EQ) (int 1) (int 2)) (int 3) (int 4))
+        , parseExpect parseIf "if (null x) y (cdr x)" (Ok <| If (UnaryOp NULL (var "x")) (var "y") (UnaryOp CDR (var "x")))
         ]
 
 
@@ -80,11 +90,11 @@ testTokens =
 testLambda : Test
 testLambda =
     Test.describe "Lambda functions"
-        [ parseExpect parseLambda "(lambda (x) x)" (Ok <| Lambda [ token "x" ] (var "x"))
-        , parseExpect parseLambda "(  lambda    (x)  x   )" (Ok <| Lambda [ token "x" ] (var "x"))
-        , parseExpect parseLambda "(lambda (x y) (+ x y))" (Ok <| Lambda [ token "x", token "y" ] (BinaryOp ADD (var "x") (var "y")))
-        , parseExpect parseLambda "(lambda  (x y z) x )" (Ok <| Lambda [ token "x", token "y", token "z" ] (var "x"))
-        , parseExpect parseLambda "(lambda () 3)" (Ok <| Lambda [] (int 3))
+        [ parseExpect parseLambda "lambda (x) x" (Ok <| Lambda [ token "x" ] (var "x"))
+        , parseExpect parseLambda "lambda    (x)  x   " (Ok <| Lambda [ token "x" ] (var "x"))
+        , parseExpect parseLambda "lambda (x y) (+ x y)" (Ok <| Lambda [ token "x", token "y" ] (BinaryOp ADD (var "x") (var "y")))
+        , parseExpect parseLambda "lambda  (x y z) x " (Ok <| Lambda [ token "x", token "y", token "z" ] (var "x"))
+        , parseExpect parseLambda "lambda () 3" (Ok <| Lambda [] (int 3))
         ]
 
 
