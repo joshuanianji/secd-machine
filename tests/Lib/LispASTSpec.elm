@@ -17,8 +17,7 @@ parseExpectr : Test
 parseExpectr =
     Test.describe "LispAST.parser"
         [ testBasics
-        , testBinary
-        , testUnary
+        , testFunctionApp
         , testIf
         , testTokens
         , testLambda
@@ -37,39 +36,42 @@ testBasics =
         ]
 
 
-testBinary : Test
-testBinary =
-    Test.describe "Built in binary functions"
-        [ parseExpect parseBinaryOp "+ 1 2" (Ok <| BinaryOp ADD (int 1) (int 2))
-        , parseExpect parseBinaryOp "- 1 2" (Ok <| BinaryOp SUB (int 1) (int 2))
-        , parseExpect parseBinaryOp "* 1 2" (Ok <| BinaryOp MULT (int 1) (int 2))
-        , parseExpect parseBinaryOp "cons 1 nil" (Ok <| BinaryOp CONS (int 1) nil)
-        , parseExpect parseBinaryOp "< 1 2" (Ok <| BinaryOp (COMPARE CMP_LT) (int 1) (int 2))
-        , parseExpect parseBinaryOp "> 1 2" (Ok <| BinaryOp (COMPARE CMP_GT) (int 1) (int 2))
-        , parseExpect parseBinaryOp "<= 1 2" (Ok <| BinaryOp (COMPARE CMP_LEQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp ">= 1 2" (Ok <| BinaryOp (COMPARE CMP_GEQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp "eq 1 2" (Ok <| BinaryOp (COMPARE CMP_EQ) (int 1) (int 2))
-        , parseExpect parseBinaryOp "* (+ 6 2) 3" (Ok <| BinaryOp MULT (BinaryOp ADD (int 6) (int 2)) (int 3))
+testFunctionApp : Test
+testFunctionApp =
+    Test.describe "Function application"
+        [ functionAppSuccess
         ]
 
 
-testUnary : Test
-testUnary =
-    Test.describe "Build in Unary operands"
-        [ parseExpect parseUnaryOp "atom 4" (Ok <| UnaryOp ATOM (int 4))
-        , parseExpect parseUnaryOp "atom nil" (Ok <| UnaryOp ATOM nil)
-        , parseExpect parseUnaryOp "null nil" (Ok <| UnaryOp NULL nil)
-        , parseExpect parseUnaryOp "null x" (Ok <| UnaryOp NULL (var "x"))
-        , parseExpect parseUnaryOp "cdr nil" (Ok <| UnaryOp CDR nil)
-        , parseExpect parseUnaryOp "car nil" (Ok <| UnaryOp CAR nil)
-        ]
+functionAppSuccess : Test
+functionAppSuccess =
+    Test.describe "Succeeds on" <|
+        List.map (\( input, expected ) -> parseExpect parseFunctionApp input (Ok expected))
+            [ ( "x", FuncApp (token "x") [] )
+            , ( "atom 4", FuncApp (token "atom") [ int 4 ] )
+            , ( "atom nil", FuncApp (token "atom") [ nil ] )
+            , ( "null nil", FuncApp (token "null") [ nil ] )
+            , ( "null x", FuncApp (token "null") [ var "x" ] )
+            , ( "cdr nil", FuncApp (token "cdr") [ nil ] )
+            , ( "car nil", FuncApp (token "car") [ nil ] )
+            , ( "+ 1 2", FuncApp (token "+") [ int 1, int 2 ] )
+            , ( "- 1 2", FuncApp (token "-") [ int 1, int 2 ] )
+            , ( "* 1 2", FuncApp (token "*") [ int 1, int 2 ] )
+            , ( "cons 1 nil", FuncApp (token "cons") [ int 1, nil ] )
+            , ( "< 1 2", FuncApp (token "<") [ int 1, int 2 ] )
+            , ( "> 1 2", FuncApp (token ">") [ int 1, int 2 ] )
+            , ( "<= 1 2", FuncApp (token "<=") [ int 1, int 2 ] )
+            , ( ">= 1 2", FuncApp (token ">=") [ int 1, int 2 ] )
+            , ( "eq 1 2", FuncApp (token "eq") [ int 1, int 2 ] )
+            , ( "* (+ 6 2) 3", FuncApp (token "*") [ FuncApp (token "+") [ int 6, int 2 ], int 3 ] )
+            ]
 
 
 testIf : Test
 testIf =
     Test.describe "If statements"
-        [ parseExpect parseIf "if (eq 1 2) 3 4" (Ok <| If (BinaryOp (COMPARE CMP_EQ) (int 1) (int 2)) (int 3) (int 4))
-        , parseExpect parseIf "if (null x) y (cdr x)" (Ok <| If (UnaryOp NULL (var "x")) (var "y") (UnaryOp CDR (var "x")))
+        [ parseExpect parseIf "if (eq 1 2) 3 4" (Ok <| If (FuncApp (token "eq") [ int 1, int 2 ]) (int 3) (int 4))
+        , parseExpect parseIf "if (null x) y (cdr x)" (Ok <| If (FuncApp (token "null") [ var "x" ]) (var "y") (FuncApp (token "cdr") [ var "x" ]))
         ]
 
 
@@ -89,13 +91,24 @@ testTokens =
 
 testLambda : Test
 testLambda =
-    Test.describe "Lambda functions"
-        [ parseExpect parseLambda "lambda (x) x" (Ok <| Lambda [ token "x" ] (var "x"))
-        , parseExpect parseLambda "lambda    (x)  x   " (Ok <| Lambda [ token "x" ] (var "x"))
-        , parseExpect parseLambda "lambda (x y) (+ x y)" (Ok <| Lambda [ token "x", token "y" ] (BinaryOp ADD (var "x") (var "y")))
-        , parseExpect parseLambda "lambda  (x y z) x " (Ok <| Lambda [ token "x", token "y", token "z" ] (var "x"))
-        , parseExpect parseLambda "lambda () 3" (Ok <| Lambda [] (int 3))
-        ]
+    Test.describe "Lambda functions" <|
+        List.map (\( input, expected ) -> parseExpect parseLambda input (Ok expected))
+            [ ( "lambda (x) x"
+              , Lambda [ token "x" ] (var "x")
+              )
+            , ( "lambda    (x)  x   "
+              , Lambda [ token "x" ] (var "x")
+              )
+            , ( "lambda (x y) (+ x y)"
+              , Lambda [ token "x", token "y" ] (FuncApp (token "+") [ var "x", var "y" ])
+              )
+            , ( "lambda  (x y z) x "
+              , Lambda [ token "x", token "y", token "z" ] (var "x")
+              )
+            , ( "lambda () 3"
+              , Lambda [] (int 3)
+              )
+            ]
 
 
 

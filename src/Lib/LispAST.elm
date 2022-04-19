@@ -12,8 +12,7 @@ import Set
 
 type AST
     = Lambda (List Token) AST -- parameters and the body
-    | BinaryOp BinaryOp AST AST -- builtin binary op
-    | UnaryOp UnaryOp AST -- builtin unary op
+    | FuncApp Token (List AST) -- function applied to n arguments
     | If AST AST AST -- if-then-else
     | Let (List ( Token, AST )) AST -- let
     | Letrec (List ( Token, AST )) AST -- letrec
@@ -24,29 +23,6 @@ type AST
 
 type Token
     = Token String
-
-
-type BinaryOp
-    = ADD
-    | MULT
-    | SUB
-    | CONS
-    | COMPARE Cmp
-
-
-type Cmp
-    = CMP_EQ
-    | CMP_LT
-    | CMP_GT
-    | CMP_LEQ
-    | CMP_GEQ
-
-
-type UnaryOp
-    = ATOM -- true if the element is an atom (integer or boolean), NIL otherwise
-    | CAR
-    | CDR
-    | NULL -- Returns true on Nil
 
 
 
@@ -88,8 +64,7 @@ parser =
     let
         parseInParens =
             Parser.oneOf
-                [ parseBinaryOp
-                , parseUnaryOp
+                [ parseFunctionApp
                 , parseLambda
                 ]
 
@@ -115,47 +90,42 @@ parser =
 -- (op AST AST)
 
 
-parseBinaryOp : Parser AST
-parseBinaryOp =
+parseFunctionApp : Parser AST
+parseFunctionApp =
     let
-        parseOp : Parser BinaryOp
-        parseOp =
-            Parser.oneOf
-                [ Parser.token "+" |> Parser.map (\_ -> ADD)
-                , Parser.token "*" |> Parser.map (\_ -> MULT)
-                , Parser.token "-" |> Parser.map (\_ -> SUB)
-                , Parser.token "cons" |> Parser.map (\_ -> CONS)
-                , Parser.token "<=" |> Parser.map (\_ -> COMPARE CMP_LEQ)
-                , Parser.token ">=" |> Parser.map (\_ -> COMPARE CMP_GEQ)
-                , Parser.token "<" |> Parser.map (\_ -> COMPARE CMP_LT)
-                , Parser.token ">" |> Parser.map (\_ -> COMPARE CMP_GT)
-                , Parser.token "eq" |> Parser.map (\_ -> COMPARE CMP_EQ)
-                ]
-    in
-    Parser.succeed BinaryOp
-        |= parseOp
-        |. spaces
-        |= Parser.lazy (\_ -> parser)
-        |. spaces
-        |= Parser.lazy (\_ -> parser)
+        parseArgs : Parser (List AST)
+        parseArgs =
+            Parser.succeed identity
+                |. Parser.spaces
+                |= Parser.loop [] argsHelp
 
-
-parseUnaryOp : Parser AST
-parseUnaryOp =
-    let
-        parseOp : Parser UnaryOp
-        parseOp =
+        argsHelp : List AST -> Parser (Step (List AST) (List AST))
+        argsHelp revStmts =
             Parser.oneOf
-                [ Parser.token "atom" |> Parser.map (\_ -> ATOM)
-                , Parser.token "car" |> Parser.map (\_ -> CAR)
-                , Parser.token "cdr" |> Parser.map (\_ -> CDR)
-                , Parser.token "null" |> Parser.map (\_ -> NULL)
+                [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
+                    |= Parser.lazy (\_ -> parser)
+                    |. Parser.spaces
+                , Parser.succeed ()
+                    |> Parser.map (\_ -> Done (List.reverse revStmts))
                 ]
+
+        reservedFuncs : Parser Token
+        reservedFuncs =
+            Parser.oneOf
+                [ Parser.map (\_ -> "+") <| Parser.token "+"
+                , Parser.map (\_ -> "-") <| Parser.token "-"
+                , Parser.map (\_ -> "*") <| Parser.token "*"
+                , Parser.map (\_ -> "<=") <| Parser.token "<="
+                , Parser.map (\_ -> ">=") <| Parser.token ">="
+                , Parser.map (\_ -> "<") <| Parser.token "<"
+                , Parser.map (\_ -> ">") <| Parser.token ">"
+                ]
+                |> Parser.map token
     in
-    Parser.succeed UnaryOp
-        |= parseOp
-        |. spaces
-        |= Parser.lazy (\_ -> parser)
+    Parser.succeed FuncApp
+        |= Parser.oneOf [ reservedFuncs, parseToken ]
+        |. Parser.spaces
+        |= parseArgs
 
 
 parseIf : Parser AST
