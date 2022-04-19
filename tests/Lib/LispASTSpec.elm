@@ -39,13 +39,14 @@ testBasics =
 testFunctionApp : Test
 testFunctionApp =
     Test.describe "Function application"
-        [ functionAppSuccess
+        [ binaryUnarySuccess
+        , nArySuccess
         ]
 
 
-functionAppSuccess : Test
-functionAppSuccess =
-    Test.describe "Succeeds on" <|
+binaryUnarySuccess : Test
+binaryUnarySuccess =
+    Test.describe "Binary and Unary Functions succeed on" <|
         List.map (\( input, expected ) -> parseExpect parseFunctionApp input (Ok expected))
             [ ( "x", FuncApp (token "x") [] )
             , ( "atom 4", FuncApp (token "atom") [ int 4 ] )
@@ -64,6 +65,16 @@ functionAppSuccess =
             , ( ">= 1 2", FuncApp (token ">=") [ int 1, int 2 ] )
             , ( "eq 1 2", FuncApp (token "eq") [ int 1, int 2 ] )
             , ( "* (+ 6 2) 3", FuncApp (token "*") [ FuncApp (token "+") [ int 6, int 2 ], int 3 ] )
+            ]
+
+
+nArySuccess : Test
+nArySuccess =
+    Test.describe "N-ary functions succeed on" <|
+        List.map (\( input, expected ) -> parseExpect parseFunctionApp input (Ok expected))
+            [ ( "list 1 2 3 4 5", FuncApp (token "list") [ int 1, int 2, int 3, int 4, int 5 ] )
+            , ( "list 1 2 3 4 5 6 7 8 9 10", FuncApp (token "list") [ int 1, int 2, int 3, int 4, int 5, int 6, int 7, int 8, int 9, int 10 ] )
+            , ( "+ 1 2 3 4 5", FuncApp (token "+") [ int 1, int 2, int 3, int 4, int 5 ] )
             ]
 
 
