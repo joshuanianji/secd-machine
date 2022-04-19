@@ -19,63 +19,38 @@ suite =
 
 testLocate : Test
 testLocate =
+    let
+        env1 =
+            Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
+
+        env2 =
+            [ Env.Dummy ]
+    in
     Test.describe "Environment.locate"
         [ Test.test "Locates (0,0)" <|
             \_ ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.equal (Env.locate ( 0, 0 ) Nothing env) (Ok <| Cons.Val 1)
+                Expect.equal (Env.locate ( 0, 0 ) Nothing env1) (Ok <| Cons.Val 1)
         , Test.test "Locates (1,1)" <|
             \_ ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.equal (Env.locate ( 1, 1 ) Nothing env) (Ok <| Cons.Val 4)
+                Expect.equal (Env.locate ( 1, 1 ) Nothing env1) (Ok <| Cons.Val 4)
         , Test.test "Locates (1,0)" <|
             \_ ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.equal (Env.locate ( 1, 0 ) Nothing env) (Ok <| Cons.Val 3)
+                Expect.equal (Env.locate ( 1, 0 ) Nothing env1) (Ok <| Cons.Val 3)
         , Test.test "Fails in out of bound range" <|
             \_ ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.err (Env.locate ( 2, 1 ) Nothing env)
+                Expect.err (Env.locate ( 2, 1 ) Nothing env1)
         , Test.fuzz (fuzzIntPairRange 2 10) "fails in out of bound range (fuzz)" <|
             \( x, y ) ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.err (Env.locate ( x, y ) Nothing env)
+                Expect.err (Env.locate ( x, y ) Nothing env1)
         , Test.fuzz (fuzzIntPairRange -10 -1) "Fails at negative indices" <|
             \( x, y ) ->
-                let
-                    env =
-                        Env.fromList [ [ 1, 2 ], [ 3, 4 ] ]
-                in
-                Expect.err (Env.locate ( x, y ) Nothing env)
+                Expect.err (Env.locate ( x, y ) Nothing env1)
         , Test.test "Fails with uniniitalized dummy value" <|
             \_ ->
-                let
-                    env =
-                        [ Env.Dummy ]
-                in
-                Expect.err (Env.locate ( 0, 0 ) Nothing env)
+                Expect.err (Env.locate ( 0, 0 ) Nothing env2)
         , Test.test "Returns dummy value when dummy is present" <|
             \_ ->
-                let
-                    env =
-                        [ Env.Dummy ]
-                in
-                Expect.equal (Env.locate ( 0, 0 ) (Just [ Cons.Val 1 ]) env) (Ok <| Cons.Val 1)
+                Expect.equal (Env.locate ( 0, 0 ) (Just [ Cons.Val 1 ]) env2) (Ok <| Cons.Val 1)
         ]
 
 

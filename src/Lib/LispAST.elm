@@ -86,18 +86,18 @@ parse =
 parser : Parser AST
 parser =
     Parser.oneOf
-        [ parseBinaryOp, parseLambda, parseNil, parseInt, parseVar ]
+        [ parseBinaryOp, parseUnaryOp, parseLambda, parseNil, parseInt, parseVar ]
 
 
 
--- (+ AST AST)
+-- (op AST AST)
 
 
 parseBinaryOp : Parser AST
 parseBinaryOp =
     let
-        parseSymbol : Parser BinaryOp
-        parseSymbol =
+        parseOp : Parser BinaryOp
+        parseOp =
             Parser.oneOf
                 [ Parser.token "+" |> Parser.map (\_ -> ADD)
                 , Parser.token "*" |> Parser.map (\_ -> MULT)
@@ -113,9 +113,31 @@ parseBinaryOp =
     Parser.succeed BinaryOp
         |. Parser.symbol "("
         |. Parser.spaces
-        |= parseSymbol
+        |= parseOp
         |. spaces
         |= Parser.lazy (\_ -> parser)
+        |. spaces
+        |= Parser.lazy (\_ -> parser)
+        |. Parser.spaces
+        |. Parser.symbol ")"
+
+
+parseUnaryOp : Parser AST
+parseUnaryOp =
+    let
+        parseOp : Parser UnaryOp
+        parseOp =
+            Parser.oneOf
+                [ Parser.token "atom" |> Parser.map (\_ -> ATOM)
+                , Parser.token "car" |> Parser.map (\_ -> CAR)
+                , Parser.token "cdr" |> Parser.map (\_ -> CDR)
+                , Parser.token "null" |> Parser.map (\_ -> NULL)
+                ]
+    in
+    Parser.succeed UnaryOp
+        |. Parser.symbol "("
+        |. Parser.spaces
+        |= parseOp
         |. spaces
         |= Parser.lazy (\_ -> parser)
         |. Parser.spaces

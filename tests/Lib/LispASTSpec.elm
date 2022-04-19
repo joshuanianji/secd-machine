@@ -3,21 +3,22 @@ module Lib.LispASTSpec exposing (suite)
 import Expect
 import Fuzz
 import Lib.LispAST exposing (..)
-import Parser
+import Parser exposing (Parser)
 import Test exposing (Test)
 
 
 suite : Test
 suite =
     Test.describe "LispAST Spec"
-        [ testParser ]
+        [ parseExpectr ]
 
 
-testParser : Test
-testParser =
+parseExpectr : Test
+parseExpectr =
     Test.describe "LispAST.parser"
         [ testBasics
         , testBinary
+        , testUnary
         , testTokens
         , testLambda
         ]
@@ -38,73 +39,68 @@ testBasics =
 testBinary : Test
 testBinary =
     Test.describe "Built in binary functions"
-        [ Test.test "(+ 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(+ 1 2)") (Ok <| BinaryOp ADD (int 1) (int 2))
-        , Test.test "(- 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(- 1 2)") (Ok <| BinaryOp SUB (int 1) (int 2))
-        , Test.test "(* 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(* 1 2)") (Ok <| BinaryOp MULT (int 1) (int 2))
-        , Test.test "(cons 1 nil)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(cons 1 nil)") (Ok <| BinaryOp CONS (int 1) nil)
-        , Test.test "(< 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(< 1 2)") (Ok <| BinaryOp (COMPARE CMP_LT) (int 1) (int 2))
-        , Test.test "(> 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(> 1 2)") (Ok <| BinaryOp (COMPARE CMP_GT) (int 1) (int 2))
-        , Test.test "(eq 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(eq 1 2)") (Ok <| BinaryOp (COMPARE CMP_EQ) (int 1) (int 2))
-        , Test.test "(<= 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(<= 1 2)") (Ok <| BinaryOp (COMPARE CMP_LEQ) (int 1) (int 2))
-        , Test.test "(>= 1 2)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(>= 1 2)") (Ok <| BinaryOp (COMPARE CMP_GEQ) (int 1) (int 2))
-        , Test.test "(* (+ 6 2) 3)" <|
-            \_ ->
-                Expect.equal (Parser.run parseBinaryOp "(* (+ 6 2) 3)") (Ok <| BinaryOp MULT (BinaryOp ADD (int 6) (int 2)) (int 3))
+        [ parseExpect parseBinaryOp "(+ 1 2)" (Ok <| BinaryOp ADD (int 1) (int 2))
+        , parseExpect parseBinaryOp "(- 1 2)" (Ok <| BinaryOp SUB (int 1) (int 2))
+        , parseExpect parseBinaryOp "(* 1 2)" (Ok <| BinaryOp MULT (int 1) (int 2))
+        , parseExpect parseBinaryOp "(cons 1 nil)" (Ok <| BinaryOp CONS (int 1) nil)
+        , parseExpect parseBinaryOp "(< 1 2)" (Ok <| BinaryOp (COMPARE CMP_LT) (int 1) (int 2))
+        , parseExpect parseBinaryOp "(> 1 2)" (Ok <| BinaryOp (COMPARE CMP_GT) (int 1) (int 2))
+        , parseExpect parseBinaryOp "(<= 1 2)" (Ok <| BinaryOp (COMPARE CMP_LEQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp "(>= 1 2)" (Ok <| BinaryOp (COMPARE CMP_GEQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp "(eq 1 2)" (Ok <| BinaryOp (COMPARE CMP_EQ) (int 1) (int 2))
+        , parseExpect parseBinaryOp "(* (+ 6 2) 3)" (Ok <| BinaryOp MULT (BinaryOp ADD (int 6) (int 2)) (int 3))
         ]
+
+
+testUnary : Test
+testUnary =
+    Test.describe "Build in Unary operands"
+        [ parseExpect parseUnaryOp "(atom 4)" (Ok <| UnaryOp ATOM (int 4))
+        , parseExpect parseUnaryOp "(atom nil)" (Ok <| UnaryOp ATOM nil)
+        , parseExpect parseUnaryOp "(null nil)" (Ok <| UnaryOp NULL nil)
+        , parseExpect parseUnaryOp "(cdr nil)" (Ok <| UnaryOp CDR nil)
+        , parseExpect parseUnaryOp "(car nil)" (Ok <| UnaryOp CAR nil)
+        ]
+
+
+
+-- we use parseTokens to parse the arguments for lambda expressions
 
 
 testTokens : Test
 testTokens =
     Test.describe "A list of tokens"
-        [ Test.test "()" <|
-            \_ ->
-                Expect.equal (Parser.run parseTokens "()") (Ok <| [])
-        , Test.test "(x y)" <|
-            \_ ->
-                Expect.equal (Parser.run parseTokens "(x y)") (Ok <| [ token "x", token "y" ])
-        , Test.test "(x y z)" <|
-            \_ ->
-                Expect.equal (Parser.run parseTokens "(x y z)") (Ok <| [ token "x", token "y", token "z" ])
-        , Test.test "( x y   z )" <|
-            \_ ->
-                Expect.equal (Parser.run parseTokens "( x y   z )") (Ok <| [ token "x", token "y", token "z" ])
+        [ parseExpect parseTokens "()" (Ok <| [])
+        , parseExpectErr parseTokens "(1 2 3)"
+        , parseExpect parseTokens "(x y    z)" (Ok <| [ token "x", token "y", token "z" ])
+        , parseExpect parseTokens "(x)" (Ok <| [ token "x" ])
         ]
 
 
 testLambda : Test
 testLambda =
     Test.describe "Lambda functions"
-        [ Test.test "(lambda (x) x)" <|
-            \_ ->
-                Expect.equal (Parser.run parseLambda "(lambda (x) x)") (Ok <| Lambda [ token "x" ] (var "x"))
-        , Test.test "(  lambda    (x)  x   )" <|
-            \_ ->
-                Expect.equal (Parser.run parseLambda "(  lambda    (x)  x   )") (Ok <| Lambda [ token "x" ] (var "x"))
-        , Test.test "(lambda (x y) (+ x y))" <|
-            \_ ->
-                Expect.equal (Parser.run parseLambda "(lambda (x y) (+ x y))") (Ok <| Lambda [ token "x", token "y" ] (BinaryOp ADD (var "x") (var "y")))
-        , Test.test "(lambda  (x y z) x )" <|
-            \_ ->
-                Expect.equal (Parser.run parseLambda "(lambda  (x y z) x )") (Ok <| Lambda [ token "x", token "y", token "z" ] (var "x"))
-        , Test.test "(lambda () 3)" <|
-            \_ ->
-                Expect.equal (Parser.run parseLambda "(lambda () 3)") (Ok <| Lambda [] (int 3))
+        [ parseExpect parseLambda "(lambda (x) x)" (Ok <| Lambda [ token "x" ] (var "x"))
+        , parseExpect parseLambda "(  lambda    (x)  x   )" (Ok <| Lambda [ token "x" ] (var "x"))
+        , parseExpect parseLambda "(lambda (x y) (+ x y))" (Ok <| Lambda [ token "x", token "y" ] (BinaryOp ADD (var "x") (var "y")))
+        , parseExpect parseLambda "(lambda  (x y z) x )" (Ok <| Lambda [ token "x", token "y", token "z" ] (var "x"))
+        , parseExpect parseLambda "(lambda () 3)" (Ok <| Lambda [] (int 3))
         ]
+
+
+
+-- runs a string a tests it against the expected result
+
+
+parseExpect : Parser data -> String -> Result (List Parser.DeadEnd) data -> Test
+parseExpect parser str res =
+    Test.test str <|
+        \_ ->
+            Expect.equal (Parser.run parser str) res
+
+
+parseExpectErr : Parser data -> String -> Test
+parseExpectErr parser str =
+    Test.test str <|
+        \_ ->
+            Expect.err (Parser.run parser str)
