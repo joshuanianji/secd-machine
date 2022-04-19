@@ -145,11 +145,29 @@ testLambda =
             ]
 
 
+
+-- parse let and letrec
+
+
 testLet : Test
 testLet =
-    Test.describe "Let bindings" <|
-        List.map (\( input, expected ) -> parseExpect parseLet input (Ok expected))
+    Test.describe "Let and Letrec bindings"
+        [ testLetSuccess
+        , testLetRec
+        ]
+
+
+testLetSuccess : Test
+testLetSuccess =
+    Test.describe "Let statements that should succeed" <|
+        List.map
+            (\( input, expected ) -> parseExpect parseLet input (Ok expected))
             [ ( "let (x y) (1 2) (+ x y)"
+              , Let
+                    [ ( token "x", int 1 ), ( token "y", int 2 ) ]
+                    (FuncApp (var "+") [ var "x", var "y" ])
+              )
+            , ( "let (x y )(1 2)   (+ x y )"
               , Let
                     [ ( token "x", int 1 ), ( token "y", int 2 ) ]
                     (FuncApp (var "+") [ var "x", var "y" ])
@@ -160,6 +178,12 @@ testLet =
                     (FuncApp (var "*") [ var "x", var "x" ])
               )
             ]
+
+
+testLetRec : Test
+testLetRec =
+    Test.describe "Recursive functions using letrec"
+        [ Test.todo "Add test cases after we implement the QUOTE function" ]
 
 
 

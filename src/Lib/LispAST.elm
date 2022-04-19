@@ -68,6 +68,7 @@ parser =
                 [ parseFunctionApp
                 , parseLambda
                 , parseLet
+                , parseLetrec
                 ]
 
         parseWithoutParens =
@@ -175,6 +176,16 @@ parseLambda =
 
 parseLet : Parser AST
 parseLet =
+    parseGeneralLet "let" Let
+
+
+parseLetrec : Parser AST
+parseLetrec =
+    parseGeneralLet "letrec" Letrec
+
+
+parseGeneralLet : String -> (List ( Token, AST ) -> AST -> AST) -> Parser AST
+parseGeneralLet letKeyword toLet =
     let
         parseLetBindings : Parser (List ( Token, AST ))
         parseLetBindings =
@@ -186,14 +197,14 @@ parseLet =
                 |> Parser.andThen
                     (\( tokens, vals ) ->
                         if List.length tokens /= List.length vals then
-                            Parser.problem "Unequal number of tokens and values in let"
+                            Parser.problem <| "Unequal number of tokens and values in " ++ letKeyword ++ "!"
 
                         else
                             Parser.succeed (List.Extra.zip tokens vals)
                     )
     in
-    Parser.succeed Let
-        |. Parser.keyword "let"
+    Parser.succeed toLet
+        |. Parser.keyword letKeyword
         |. spaces
         |= parseLetBindings
         |. spaces
