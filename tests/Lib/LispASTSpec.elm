@@ -11,12 +11,77 @@ import Test exposing (Test)
 suite : Test
 suite =
     Test.describe "LispAST Spec"
-        [ parseExpectr ]
+        [ integrations
+        , unitParseTests
+        ]
 
 
-parseExpectr : Test
-parseExpectr =
-    Test.describe "LispAST.parser"
+
+---- INTEGRATION TESTS ----
+-- testing the entire parser
+-- this adds testing like, () -> nil and '() -> nil
+
+
+integrations : Test
+integrations =
+    Test.describe "Integration testing"
+        [ integrationBasics
+        , integrationFuncApps
+        ]
+
+
+
+-- Testing basics - e.g. parsing values
+
+
+integrationBasics : Test
+integrationBasics =
+    Test.describe "Basics - parsing values"
+        [ Test.fuzz Fuzz.int "Parses a number" <|
+            \n ->
+                Expect.equal (parse (String.fromInt n)) (Ok <| int n)
+        , Test.test "Parses variable name 'A'" <|
+            \_ ->
+                Expect.equal (parse "A") (Ok <| var "A")
+        , Test.test "Parses variable name 'A_B'" <|
+            \_ ->
+                Expect.equal (parse "A_B") (Ok <| var "A_B")
+        , Test.test "Fails on variable name 'A-B'" <|
+            \_ ->
+                Expect.err (parse "A-B")
+        ]
+
+
+
+-- function application, with some other stuff
+
+
+integrationFuncApps : Test
+integrationFuncApps =
+    Test.describe "Function Application"
+        [ Test.test "(+ a b) " <|
+            \_ ->
+                Expect.equal (parse "(+ a b)") (Ok <| FuncApp (var "+") [ var "a", var "b" ])
+        , Test.test "(+ a b c) " <|
+            \_ ->
+                Expect.equal (parse "(+ a b c)") (Ok <| FuncApp (var "+") [ var "a", var "b", var "c" ])
+        , Test.test "(fib 10)" <|
+            \_ ->
+                Expect.equal (parse "(fib 10)") (Ok <| FuncApp (var "fib") [ int 10 ])
+        , Test.test "(fib (+ 3 4))" <|
+            \_ ->
+                Expect.equal (parse "(fib (+ 3 4))") (Ok <| FuncApp (var "fib") [ FuncApp (var "+") [ int 3, int 4 ] ])
+        ]
+
+
+
+---- UNIT TESTS ----
+-- testing the parsers for each individual AST node
+
+
+unitParseTests : Test
+unitParseTests =
+    Test.describe "Testing individual parsers"
         [ testBasics
         , testFunctionApp
         , testIf
@@ -32,10 +97,10 @@ testBasics =
     Test.describe "Basics"
         [ Test.fuzz Fuzz.int "ints" <|
             \x ->
-                Expect.equal (Parser.run parseInt (String.fromInt x)) (Ok <| int x)
+                Expect.equal (Parser.run parseInt (String.fromInt x)) (Ok <| intVal x)
         , Test.test "Variable" <|
             \_ ->
-                Expect.equal (Parser.run parseVar "x") (Ok <| var "x")
+                Expect.equal (Parser.run parseVar "x") (Ok <| strVal "x")
         ]
 
 

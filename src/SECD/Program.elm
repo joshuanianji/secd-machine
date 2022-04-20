@@ -2,6 +2,7 @@ module SECD.Program exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util
 
 

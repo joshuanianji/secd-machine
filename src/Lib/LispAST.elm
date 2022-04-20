@@ -71,7 +71,11 @@ int =
 
 parse : String -> Result (List DeadEnd) AST
 parse =
-    Parser.run parser
+    Parser.run <|
+        Parser.succeed identity
+            |= parser
+            -- when parsing, ensure we parse the entire string
+            |. Parser.end
 
 
 parser : Parser AST
@@ -88,8 +92,7 @@ parser =
         parseWithoutParens =
             Parser.oneOf
                 [ parseNil
-                , parseInt
-                , parseVar
+                , parseValue
                 , parseQuote
                 ]
     in
@@ -143,7 +146,7 @@ parseFunctionApp =
     Parser.succeed FuncApp
         |= Parser.oneOf
             [ reservedFuncs
-            , parseVar
+            , Parser.map Value parseVar
             , Parser.lazy (\_ -> parser)
             ]
         |. Parser.spaces
@@ -303,7 +306,16 @@ quoteInParensHelper revStmts =
         ]
 
 
-parseInt : Parser AST
+parseValue : Parser AST
+parseValue =
+    Parser.succeed Value
+        |= Parser.oneOf
+            [ parseInt
+            , parseVar
+            ]
+
+
+parseInt : Parser Value
 parseInt =
     Parser.oneOf
         [ Parser.succeed negate
@@ -311,12 +323,12 @@ parseInt =
             |= Parser.int
         , Parser.int
         ]
-        |> Parser.map (Integer >> Value)
+        |> Parser.map Integer
 
 
-parseVar : Parser AST
+parseVar : Parser Value
 parseVar =
-    Parser.map (Var >> Value) parseToken
+    Parser.map Var parseToken
 
 
 parseNil : Parser AST
