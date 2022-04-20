@@ -13,17 +13,17 @@ import Set
 
 type AST
     = Lambda (List Token) AST -- parameters and the body
-    | FuncApp AST (List AST) -- function applied to n arguments. Function itself can be an AST (e.g. lambda), but we validate that AST later on
+    | FuncApp AST (List AST) -- function applied to n arguments. Function itself can be an AST (e.g. lambda), but we validate that AST separately
     | If AST AST AST -- if-then-else
     | Let (List ( Token, AST )) AST -- let
     | Letrec (List ( Token, AST )) AST -- letrec
-    | Quote (Cons Value) -- quote function (can be nested)
-    | Value Value
+    | Quote (Cons Int) -- quote function (can be nested)
+    | Val Int -- an integer constant
+    | Var Token -- variable
 
 
-type Value
-    = Integer Int
-    | Var Token
+
+-- a variable or function
 
 
 type Token
@@ -40,29 +40,31 @@ nil =
     Quote Cons.Nil
 
 
+
+-- creates a variable
+
+
 var : String -> AST
 var =
-    Token >> Var >> Value
+    Token >> Var
 
 
-strVal : String -> Value
-strVal =
-    token >> Var
+
+-- creates an Integer constant
 
 
-intVal : Int -> Value
-intVal =
-    Integer
+int : Int -> AST
+int =
+    Val
+
+
+
+-- creates a token (variable or function)
 
 
 token : String -> Token
 token =
     Token
-
-
-int : Int -> AST
-int =
-    Integer >> Value
 
 
 
@@ -94,6 +96,7 @@ parser =
             Parser.oneOf
                 [ parseNil
                 , parseValue
+                , parseVariable
                 , parseQuote
                 ]
     in
@@ -131,8 +134,8 @@ parseFunctionApp =
                     |> Parser.map (\_ -> Done (List.reverse revStmts))
                 ]
 
-        reservedFuncs : Parser AST
-        reservedFuncs =
+        parseBuiltins : Parser AST
+        parseBuiltins =
             Parser.oneOf
                 [ Parser.map (\_ -> "+") <| Parser.token "+"
                 , Parser.map (\_ -> "-") <| Parser.token "-"
@@ -145,9 +148,10 @@ parseFunctionApp =
                 |> Parser.map var
     in
     Parser.succeed FuncApp
+        -- the function we apply can be a variable, a reserved function or an AST
         |= Parser.oneOf
-            [ reservedFuncs
-            , Parser.map Value parseVar
+            [ parseBuiltins
+            , Parser.map Var parseToken
             , Parser.lazy (\_ -> parser)
             ]
         |. Parser.spaces
@@ -167,6 +171,11 @@ parseIf =
         |. Parser.spaces
         -- false branch
         |= Parser.lazy (\_ -> parser)
+
+
+parseVariable : Parser AST
+parseVariable =
+    Parser.map Var parseToken
 
 
 parseToken : Parser Token
@@ -242,39 +251,11 @@ parseQuote =
 -- calls parseInParens when it encounters parentheses
 
 
-quoteParseCons : Parser (Cons Value)
+quoteParseCons : Parser (Cons Int)
 quoteParseCons =
-    let
-        parseOp : Parser Value
-        parseOp =
-            [ "+", "-", "<=", ">=", "*", "<", ">" ]
-                |> List.map (\x -> Parser.map (\_ -> strVal x) <| Parser.keyword x)
-                |> Parser.oneOf
-
-        parseWord : Parser Value
-        parseWord =
-            Parser.variable
-                { start = Char.isAlpha
-                , inner = \c -> Char.isAlphaNum c || c == '_'
-                , reserved = Set.empty
-                }
-                |> Parser.map strVal
-
-        parseInteger : Parser Value
-        parseInteger =
-            Parser.oneOf
-                [ Parser.succeed negate
-                    |. Parser.symbol "-"
-                    |= Parser.int
-                , Parser.int
-                ]
-                |> Parser.map Integer
-    in
     Parser.succeed identity
         |= Parser.oneOf
-            [ Parser.map Cons.single <| parseOp
-            , Parser.map Cons.single <| parseWord
-            , Parser.map Cons.single <| parseInteger
+            [ Parser.map Cons.single <| parseInt
             , Parser.succeed identity
                 |. Parser.symbol "("
                 |. Parser.spaces
@@ -289,14 +270,14 @@ quoteParseCons =
 -- recursively calls parseCons
 
 
-quoteParseInParens : Parser (Cons Value)
+quoteParseInParens : Parser (Cons Int)
 quoteParseInParens =
     Parser.succeed identity
         |= Parser.loop [] quoteInParensHelper
         |> Parser.map Cons.fromConsList
 
 
-quoteInParensHelper : List (Cons Value) -> Parser (Step (List (Cons Value)) (List (Cons Value)))
+quoteInParensHelper : List (Cons Int) -> Parser (Step (List (Cons Int)) (List (Cons Int)))
 quoteInParensHelper revStmts =
     Parser.oneOf
         [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
@@ -309,14 +290,10 @@ quoteInParensHelper revStmts =
 
 parseValue : Parser AST
 parseValue =
-    Parser.succeed Value
-        |= Parser.oneOf
-            [ parseInt
-            , parseVar
-            ]
+    Parser.map Val parseInt
 
 
-parseInt : Parser Value
+parseInt : Parser Int
 parseInt =
     Parser.oneOf
         [ Parser.succeed negate
@@ -324,12 +301,6 @@ parseInt =
             |= Parser.int
         , Parser.int
         ]
-        |> Parser.map Integer
-
-
-parseVar : Parser Value
-parseVar =
-    Parser.map Var parseToken
 
 
 parseNil : Parser AST

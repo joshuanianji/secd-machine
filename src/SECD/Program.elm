@@ -2,6 +2,7 @@ module SECD.Program exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util
 
@@ -249,3 +250,48 @@ fromList =
 fromSingleton : Op -> Program
 fromSingleton op =
     Program [ op ]
+
+
+
+---- CONVERSION ----
+
+
+fromAST : AST -> Program
+fromAST ast =
+    Program <| astToOps ast
+
+
+astToOps : AST -> List Op
+astToOps ast =
+    case ast of
+        -- nil vals
+        AST.Var (AST.Token "nil") ->
+            [ NIL ]
+
+        -- Compile list (nil on empty list)
+        AST.Quote cons ->
+            compileCons cons
+
+        AST.Val n ->
+            [ LDC n ]
+
+        _ ->
+            []
+
+
+compileCons : Cons Int -> List Op
+compileCons cs =
+    let
+        compileConsHelper : Cons Int -> List Op -> List Op
+        compileConsHelper cons acc =
+            case cons of
+                Cons.Nil ->
+                    NIL :: acc
+
+                Cons.Val n ->
+                    [ LDC n ]
+
+                Cons.Cons hd tl ->
+                    compileConsHelper tl <| compileCons hd ++ (FUNC CONS :: acc)
+    in
+    compileConsHelper cs []

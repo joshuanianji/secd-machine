@@ -123,10 +123,10 @@ testBasics =
     Test.describe "Basics"
         [ Test.fuzz Fuzz.int "ints" <|
             \x ->
-                Expect.equal (Parser.run parseInt (String.fromInt x)) (Ok <| intVal x)
+                Expect.equal (Parser.run parseInt (String.fromInt x)) (Ok x)
         , Test.test "Variable" <|
             \_ ->
-                Expect.equal (Parser.run parseVar "x") (Ok <| strVal "x")
+                Expect.equal (Parser.run parseToken "x") (Ok <| token "x")
         ]
 
 
@@ -199,7 +199,7 @@ complexApp =
                     [ int 4 ]
               )
             , ( "len '(1 2 3 4 5)"
-              , FuncApp (var "len") [ Quote <| Cons.fromList [ intVal 1, intVal 2, intVal 3, intVal 4, intVal 5 ] ]
+              , FuncApp (var "len") [ Quote <| Cons.fromList [ 1, 2, 3, 4, 5 ] ]
               )
             ]
 
@@ -323,7 +323,7 @@ testLetRec =
                     factApp =
                         "fact 10"
 
-                    -- assume lambdas parse as expected
+                    -- assume function application parse as expected
                     appExpected =
                         Parser.run parseFunctionApp factApp
 
@@ -364,7 +364,7 @@ testLetRec =
 
 testQuote : Test
 testQuote =
-    Test.describe "Quote function"
+    Test.describe "Quote function - only accept nested integers"
         [ quoteBasics
         , quoteNested
         ]
@@ -372,33 +372,22 @@ testQuote =
 
 quoteBasics : Test
 quoteBasics =
-    let
-        consVal : String -> Cons Value
-        consVal =
-            Cons.single << strVal
-    in
-    Test.describe "Quoting basic structures" <|
+    Test.describe "Quoting basic structures (lists)" <|
         List.map (\( input, expected ) -> parseExpect parseQuote input (Ok expected))
-            [ ( "'a", Quote (consVal "a") )
-            , ( "'b", Quote (consVal "b") )
-            , ( "'(a)", Quote (Cons.fromList [ strVal "a" ]) )
-            , ( "'lambda", Quote (consVal "lambda") )
-            , ( "'(a b c)", Quote (Cons.fromList [ strVal "a", strVal "b", strVal "c" ]) )
+            [ ( "'()", Quote Cons.Nil )
+            , ( "'(1)", Quote <| Cons.fromList [ 1 ] )
+            , ( "'(1 2)", Quote <| Cons.fromList [ 1, 2 ] )
+            , ( "'(1 2 3)", Quote <| Cons.fromList [ 1, 2, 3 ] )
             ]
 
 
 quoteNested : Test
 quoteNested =
-    let
-        consToken : String -> Cons Value
-        consToken =
-            Cons.single << strVal
-    in
     Test.describe "Quoting nested structures" <|
         List.map (\( input, expected ) -> parseExpect parseQuote input (Ok expected))
-            [ ( "'(lambda (x y) (+ x y))"
-              , Quote (Cons.fromConsList [ consToken "lambda", Cons.fromList [ strVal "x", strVal "y" ], Cons.fromList [ strVal "+", strVal "x", strVal "y" ] ])
-              )
+            [ ( "'(1 (2 3))", Quote <| Cons.fromConsList [ Cons.single 1, Cons.fromList [ 2, 3 ] ] )
+            , ( "'(1 (2 3) 4)", Quote <| Cons.fromConsList [ Cons.single 1, Cons.fromList [ 2, 3 ], Cons.single 4 ] )
+            , ( "'(((1 2) 3) 4)", Quote <| Cons.fromConsList [ Cons.fromConsList [ Cons.fromList [ 1, 2 ], Cons.single 3 ], Cons.single 4 ] )
             ]
 
 
