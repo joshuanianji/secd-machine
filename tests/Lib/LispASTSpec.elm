@@ -27,6 +27,7 @@ integrations =
     Test.describe "Integration testing"
         [ integrationBasics
         , integrationFuncApps
+        , integrationEdgeCases
         ]
 
 
@@ -71,6 +72,31 @@ integrationFuncApps =
         , Test.test "(fib (+ 3 4))" <|
             \_ ->
                 Expect.equal (parse "(fib (+ 3 4))") (Ok <| FuncApp (var "fib") [ FuncApp (var "+") [ int 3, int 4 ] ])
+        ]
+
+
+
+-- me trying to think of edge cases that aren't already covered in the unit tests
+
+
+integrationEdgeCases : Test
+integrationEdgeCases =
+    Test.describe "Edge Cases"
+        [ Test.test "Parses empty quote list to nil " <|
+            \_ ->
+                Expect.equal (parse "'()") (Ok <| Quote Cons.nil)
+        , Test.test "Parses empty list to nil" <|
+            \_ ->
+                Expect.equal (parse "()") (Ok <| Quote Cons.nil)
+        , Test.test "(eq '() ())" <|
+            \_ ->
+                Expect.equal (parse "(eq () '())") (Ok <| FuncApp (var "eq") [ Quote Cons.nil, Quote Cons.nil ])
+        , Test.test "Parses (x) as a function application" <|
+            \_ ->
+                Expect.equal (parse "(x)") (Ok <| FuncApp (var "x") [])
+        , Test.test "Parses (+) as a function application (this is not valid once we compile it though)" <|
+            \_ ->
+                Expect.equal (parse "(+)") (Ok <| FuncApp (var "+") [])
         ]
 
 

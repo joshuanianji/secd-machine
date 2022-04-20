@@ -87,6 +87,7 @@ parser =
                 , parseLambda
                 , parseLet
                 , parseLetrec
+                , Parser.succeed <| Quote Cons.nil -- an empty parentheses is just treated as NIL
                 ]
 
         parseWithoutParens =
