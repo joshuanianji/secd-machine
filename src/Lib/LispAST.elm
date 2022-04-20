@@ -17,8 +17,12 @@ type AST
     | If AST AST AST -- if-then-else
     | Let (List ( Token, AST )) AST -- let
     | Letrec (List ( Token, AST )) AST -- letrec
-    | Quote (Cons Token) -- quote function (can be nested)
-    | Integer Int
+    | Quote (Cons Value) -- quote function (can be nested)
+    | Value Value
+
+
+type Value
+    = Integer Int
     | Var Token
 
 
@@ -38,7 +42,17 @@ nil =
 
 var : String -> AST
 var =
-    Token >> Var
+    Token >> Var >> Value
+
+
+strVal : String -> Value
+strVal =
+    token >> Var
+
+
+intVal : Int -> Value
+intVal =
+    Integer
 
 
 token : String -> Token
@@ -48,7 +62,7 @@ token =
 
 int : Int -> AST
 int =
-    Integer
+    Integer >> Value
 
 
 
@@ -76,6 +90,7 @@ parser =
                 [ parseNil
                 , parseInt
                 , parseVar
+                , parseQuote
                 ]
     in
     Parser.oneOf
@@ -211,6 +226,83 @@ parseGeneralLet letKeyword toLet =
         |= Parser.lazy (\_ -> parser)
 
 
+parseQuote : Parser AST
+parseQuote =
+    Parser.succeed Quote
+        |. Parser.token "'"
+        |= quoteParseCons
+
+
+
+-- parses one singular cons element
+-- calls parseInParens when it encounters parentheses
+
+
+quoteParseCons : Parser (Cons Value)
+quoteParseCons =
+    let
+        parseOp : Parser Value
+        parseOp =
+            [ "+", "-", "<=", ">=", "*", "<", ">" ]
+                |> List.map (\x -> Parser.map (\_ -> strVal x) <| Parser.keyword x)
+                |> Parser.oneOf
+
+        parseWord : Parser Value
+        parseWord =
+            Parser.variable
+                { start = Char.isAlpha
+                , inner = \c -> Char.isAlphaNum c || c == '_'
+                , reserved = Set.empty
+                }
+                |> Parser.map strVal
+
+        parseInteger : Parser Value
+        parseInteger =
+            Parser.oneOf
+                [ Parser.succeed negate
+                    |. Parser.symbol "-"
+                    |= Parser.int
+                , Parser.int
+                ]
+                |> Parser.map Integer
+    in
+    Parser.succeed identity
+        |= Parser.oneOf
+            [ Parser.map Cons.single <| parseOp
+            , Parser.map Cons.single <| parseWord
+            , Parser.map Cons.single <| parseInteger
+            , Parser.succeed identity
+                |. Parser.symbol "("
+                |. Parser.spaces
+                |= Parser.lazy (\_ -> quoteParseInParens)
+                |. Parser.spaces
+                |. Parser.symbol ")"
+            ]
+
+
+
+-- parses in parentheses
+-- recursively calls parseCons
+
+
+quoteParseInParens : Parser (Cons Value)
+quoteParseInParens =
+    Parser.succeed identity
+        |= Parser.loop [] quoteInParensHelper
+        |> Parser.map Cons.fromConsList
+
+
+quoteInParensHelper : List (Cons Value) -> Parser (Step (List (Cons Value)) (List (Cons Value)))
+quoteInParensHelper revStmts =
+    Parser.oneOf
+        [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
+            |= quoteParseCons
+            |. Parser.spaces
+        , Parser.succeed ()
+            |> Parser.map (\_ -> Done (List.reverse revStmts))
+        ]
+
+
 parseInt : Parser AST
 parseInt =
     Parser.oneOf
@@ -219,12 +311,12 @@ parseInt =
             |= Parser.int
         , Parser.int
         ]
-        |> Parser.map Integer
+        |> Parser.map (Integer >> Value)
 
 
 parseVar : Parser AST
 parseVar =
-    Parser.map Var parseToken
+    Parser.map (Var >> Value) parseToken
 
 
 parseNil : Parser AST

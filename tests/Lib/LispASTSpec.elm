@@ -2,6 +2,7 @@ module Lib.LispASTSpec exposing (suite)
 
 import Expect
 import Fuzz
+import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
 import Test exposing (Test)
@@ -22,6 +23,7 @@ parseExpectr =
         , testTokens
         , testLambda
         , testLet
+        , testQuote
         ]
 
 
@@ -105,6 +107,9 @@ complexApp =
                     )
                     [ int 4 ]
               )
+            , ( "len '(1 2 3 4 5)"
+              , FuncApp (var "len") [ Quote <| Cons.fromList [ intVal 1, intVal 2, intVal 3, intVal 4, intVal 5 ] ]
+              )
             ]
 
 
@@ -115,6 +120,9 @@ testIf =
         , parseExpect parseIf "if (null x) y (cdr x)" (Ok <| If (FuncApp (var "null") [ var "x" ]) (var "y") (FuncApp (var "cdr") [ var "x" ]))
         , parseExpect parseIf "if  ( null   x )  y ( cdr x  ) " (Ok <| If (FuncApp (var "null") [ var "x" ]) (var "y") (FuncApp (var "cdr") [ var "x" ]))
         , parseExpect parseIf "if(null x)y(cdr x) " (Ok <| If (FuncApp (var "null") [ var "x" ]) (var "y") (FuncApp (var "cdr") [ var "x" ]))
+        , parseExpect parseIf
+            "if (null x) 0 (+ 1 (len (cdr x)))"
+            (Ok <| If (FuncApp (var "null") [ var "x" ]) (int 0) (FuncApp (var "+") [ int 1, FuncApp (var "len") [ FuncApp (var "cdr") [ var "x" ] ] ]))
         ]
 
 
@@ -183,7 +191,124 @@ testLetSuccess =
 testLetRec : Test
 testLetRec =
     Test.describe "Recursive functions using letrec"
-        [ Test.todo "Add test cases after we implement the QUOTE function" ]
+        [ Test.test "Recursive length of a list" <|
+            \_ ->
+                let
+                    lambda =
+                        "lambda (x) (if (null x) 0 (+ 1 (len (cdr x))))"
+
+                    -- assume lambdas parse as expected
+                    lambdaExpected =
+                        Parser.run parseLambda lambda
+
+                    lenApp =
+                        "len '(1 2 3 4 5)"
+
+                    -- assume lambdas parse as expected
+                    lenAppExpected =
+                        Parser.run parseFunctionApp lenApp
+
+                    input =
+                        "letrec (len) ((" ++ lambda ++ ")) (" ++ lenApp ++ ")"
+
+                    expected =
+                        Result.map2 (\lExp lAppExp -> Letrec [ ( token "len", lExp ) ] lAppExp) lambdaExpected lenAppExpected
+                in
+                Expect.all
+                    [ Expect.ok
+                    , Expect.equal expected
+                    ]
+                    (Parser.run parseLetrec input)
+        , Test.test "Factorial" <|
+            \_ ->
+                let
+                    factDef =
+                        "lambda (n) (if (eq n 0) 1 (* n (fact (- n 1))))"
+
+                    -- assume lambdas parse as expected
+                    defExpected =
+                        Parser.run parseLambda factDef
+
+                    factApp =
+                        "fact 10"
+
+                    -- assume lambdas parse as expected
+                    appExpected =
+                        Parser.run parseFunctionApp factApp
+
+                    input =
+                        "letrec (fact) ((" ++ factDef ++ ")) (" ++ factApp ++ ")"
+
+                    expected =
+                        Result.map2 (\lExp lAppExp -> Letrec [ ( token "fact", lExp ) ] lAppExp) defExpected appExpected
+                in
+                Expect.all
+                    [ Expect.ok
+                    , Expect.equal expected
+                    ]
+                    (Parser.run parseLetrec input)
+        , Test.test "Fibonacci" <|
+            \_ ->
+                let
+                    fibDef =
+                        "lambda (n) (if (eq n 0) 0 (if (eq n 1) 1 (+ (fib (- n 1)) (fib (- n 2)))))"
+
+                    -- assume lambdas parse as expected
+                    defExpected =
+                        Parser.run parseLambda fibDef
+
+                    input =
+                        "letrec (fib) ((" ++ fibDef ++ ")) (fib 10)"
+
+                    expected =
+                        Result.map (\def -> Letrec [ ( token "fib", def ) ] (FuncApp (var "fib") [ int 10 ])) defExpected
+                in
+                Expect.all
+                    [ Expect.ok
+                    , Expect.equal expected
+                    ]
+                    (Parser.run parseLetrec input)
+        ]
+
+
+testQuote : Test
+testQuote =
+    Test.describe "Quote function"
+        [ quoteBasics
+        , quoteNested
+        ]
+
+
+quoteBasics : Test
+quoteBasics =
+    let
+        consVal : String -> Cons Value
+        consVal =
+            Cons.single << strVal
+    in
+    Test.describe "Quoting basic structures" <|
+        List.map (\( input, expected ) -> parseExpect parseQuote input (Ok expected))
+            [ ( "'a", Quote (consVal "a") )
+            , ( "'b", Quote (consVal "b") )
+            , ( "'(a)", Quote (Cons.fromList [ strVal "a" ]) )
+            , ( "'lambda", Quote (consVal "lambda") )
+            , ( "'(a b c)", Quote (Cons.fromList [ strVal "a", strVal "b", strVal "c" ]) )
+            ]
+
+
+quoteNested : Test
+quoteNested =
+    let
+        consToken : String -> Cons Value
+        consToken =
+            Cons.single << strVal
+    in
+    Test.describe "Quoting nested structures" <|
+        List.map (\( input, expected ) -> parseExpect parseQuote input (Ok expected))
+            [ ( "'(lambda (x y) (+ x y))"
+              , Quote (Cons.fromConsList [ consToken "lambda", Cons.fromList [ strVal "x", strVal "y" ], Cons.fromList [ strVal "+", strVal "x", strVal "y" ] ])
+              )
+            ]
 
 
 
