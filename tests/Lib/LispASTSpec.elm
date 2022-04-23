@@ -2,7 +2,7 @@ module Lib.LispASTSpec exposing (suite)
 
 import Expect
 import Fuzz
-import Lib.Cons as Cons exposing (Cons)
+import Lib.Cons as Cons
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
 import Test exposing (Test)
