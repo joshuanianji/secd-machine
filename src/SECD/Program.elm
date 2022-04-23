@@ -5,6 +5,7 @@ import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util
+import SECD.Error exposing (Error)
 
 
 
@@ -253,30 +254,33 @@ fromSingleton op =
 
 
 
----- CONVERSION ----
+---- COMPILATION ----
 
 
-fromAST : AST -> Program
-fromAST ast =
-    Program <| astToOps ast
+compile : AST -> Result Error Program
+compile ast =
+    Result.map Program <| compile_ ast
 
 
-astToOps : AST -> List Op
-astToOps ast =
+compile_ : AST -> Result Error (List Op)
+compile_ ast =
     case ast of
         -- nil vals
         AST.Var (AST.Token "nil") ->
-            [ NIL ]
+            Ok [ NIL ]
 
         -- Compile list (nil on empty list)
         AST.Quote cons ->
-            compileCons cons
+            Ok <| compileCons cons
 
         AST.Val n ->
-            [ LDC n ]
+            Ok <| [ LDC n ]
+
+        AST.FuncApp f args ->
+            compileFuncApp f args
 
         _ ->
-            []
+            Err "Not supported yet"
 
 
 compileCons : Cons Int -> List Op
@@ -295,3 +299,87 @@ compileCons cs =
                     compileConsHelper tl <| compileCons hd ++ (FUNC CONS :: acc)
     in
     compileConsHelper cs []
+
+
+compileFuncApp : AST -> List AST -> Result Error (List Op)
+compileFuncApp f args =
+    let
+        ( argNum, op ) =
+            case f of
+                AST.Var (AST.Token "+") ->
+                    ( 2, FUNC ADD )
+
+                AST.Var (AST.Token "*") ->
+                    ( 2, FUNC MULT )
+
+                AST.Var (AST.Token "-") ->
+                    ( 2, FUNC SUB )
+
+                AST.Var (AST.Token "atom") ->
+                    ( 1, FUNC ATOM )
+
+                AST.Var (AST.Token "cons") ->
+                    ( 2, FUNC CONS )
+
+                AST.Var (AST.Token "car") ->
+                    ( 1, FUNC CAR )
+
+                AST.Var (AST.Token "cdr") ->
+                    ( 1, FUNC CDR )
+
+                AST.Var (AST.Token "null") ->
+                    ( 1, FUNC NULL )
+
+                AST.Var (AST.Token "eq") ->
+                    ( 2, FUNC (COMPARE CMP_EQ) )
+
+                AST.Var (AST.Token "<") ->
+                    ( 2, FUNC (COMPARE CMP_LT) )
+
+                AST.Var (AST.Token ">") ->
+                    ( 2, FUNC (COMPARE CMP_GT) )
+
+                AST.Var (AST.Token "<=") ->
+                    ( 2, FUNC (COMPARE CMP_LEQ) )
+
+                AST.Var (AST.Token ">=") ->
+                    ( 2, FUNC (COMPARE CMP_GEQ) )
+
+                -- idk how do compile user defined functions yet
+                _ ->
+                    ( 0, LDF )
+    in
+    if List.length args == argNum then
+        Result.map2
+            (\compiledFunc compiledArgs ->
+                compiledArgs ++ LDF :: compiledFunc
+            )
+            (compile_ f)
+            (compileArgs args)
+
+    else
+        Err <| "Invalid number of arguments"
+
+
+compileArgs : List AST -> Result Error (List Op)
+compileArgs args =
+    let
+        helper : List AST -> Result Error (List Op)
+        helper args_ =
+            case args_ of
+                [] ->
+                    Ok [ NIL ]
+
+                arg :: xs ->
+                    Result.map2
+                        (\cmpArg cmpArgs ->
+                            FUNC CONS :: (cmpArg ++ cmpArgs)
+                        )
+                        (compile_ arg)
+                        (helper xs)
+    in
+    if List.length args == 0 then
+        Ok []
+
+    else
+        Result.map List.reverse (helper args)

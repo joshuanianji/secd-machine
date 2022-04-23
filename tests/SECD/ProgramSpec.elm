@@ -38,16 +38,21 @@ integrationBasics =
                         AST.int n
 
                     expected =
-                        fromList [ LDC n ]
+                        Ok <| fromList [ LDC n ]
                 in
-                Expect.equal (fromAST ast) expected
+                Expect.equal (compile ast) expected
+        , Test.test "Compiles NIL variable" <|
+            \_ ->
+                Expect.equal (compile <| AST.var "nil") <| (Ok <| fromList [ NIL ])
         ]
 
 
 unitTests : Test
 unitTests =
     Test.describe "Testing auxiliary functions separately"
-        [ testCompileCons ]
+        [ testCompileCons
+        , testCompileArgs
+        ]
 
 
 testCompileCons : Test
@@ -68,4 +73,22 @@ testCompileCons =
         , Test.test "(((1 2)))" <|
             \_ ->
                 Expect.equal (compileCons (Cons.fromConsList [ Cons.fromConsList [ Cons.fromList [ 1, 2 ] ] ])) [ NIL, NIL, NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, FUNC CONS ]
+        ]
+
+
+testCompileArgs : Test
+testCompileArgs =
+    Test.describe "Program.compileArgs"
+        [ Test.test "Empty args" <|
+            \_ ->
+                compileArgs []
+                    |> Expect.equal (Ok <| [])
+        , Test.test "[2,3]" <|
+            \_ ->
+                compileArgs [ AST.int 2, AST.int 3 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
+        , Test.test "[1,2,3]" <|
+            \_ ->
+                compileArgs [ AST.int 1, AST.int 2, AST.int 3 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         ]
