@@ -3,7 +3,7 @@ module SECD.ProgramSpec exposing (suite)
 import Expect
 import Fuzz
 import Lib.Cons as Cons
-import Lib.LispAST as AST
+import Lib.LispAST as AST exposing (AST(..))
 import SECD.Program exposing (..)
 import Test exposing (Test)
 
@@ -99,7 +99,12 @@ testCompileFunc : Test
 testCompileFunc =
     Test.describe "Program.compileFunc"
         [ testCompileFuncBuiltins
+        , testCompileFuncIllegalCalls
         ]
+
+
+
+-- Testing that builtin functions work
 
 
 testCompileFuncBuiltins : Test
@@ -124,4 +129,30 @@ testCompileFuncBuiltins =
             , ( "car", 1, FUNC CAR )
             , ( "cdr", 1, FUNC CDR )
             , ( "atom", 1, FUNC ATOM )
+            ]
+
+
+
+-- Tests that our compiler correctly recognized illegal function calls
+
+
+testCompileFuncIllegalCalls : Test
+testCompileFuncIllegalCalls =
+    Test.describe "Program.compileFunc with illegal function calls" <|
+        List.map
+            (\( name, ast ) ->
+                Test.test ("Does not compile " ++ name) <|
+                    \_ ->
+                        case compileFunc ast of
+                            ( Just _, Ok _ ) ->
+                                Expect.fail "This should fail!"
+
+                            ( Nothing, Err _ ) ->
+                                Expect.pass
+
+                            _ ->
+                                Expect.fail <| "compileFunc is acting weird with this ast: " ++ name
+            )
+            [ ( "'nil", Quote Cons.Nil )
+            , ( "'(1 2 3)", Quote (Cons.fromList [ 1, 2, 3 ]) )
             ]

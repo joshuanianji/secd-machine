@@ -372,6 +372,9 @@ compileFunc f =
         AST.Val _ ->
             ( Nothing, Err <| "Illegal function call - attempting to call an integer!" )
 
+        AST.Quote _ ->
+            ( Nothing, Err <| "Illegal function call - attempting to call a quote value!" )
+
         -- idk how do compile user defined functions yet
         _ ->
             ( Nothing, Err "Compile Function - not implemented yet." )
