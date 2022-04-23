@@ -304,19 +304,25 @@ compileCons cs =
 compileFuncApp : AST -> List AST -> Result Error (List Op)
 compileFuncApp f args =
     let
-        ( argNum, compiledFuncResult ) =
-            compileFunc f
-    in
-    if argNum == Just (List.length args) || argNum == Nothing then
-        Result.map2
-            (\compiledFunc compiledArgs ->
-                compiledArgs ++ LDF :: compiledFunc
-            )
-            compiledFuncResult
-            (compileArgs args)
+        checkArity : ( Maybe Int, List Op ) -> Result Error (List Op)
+        checkArity ( arity, compiledFunction ) =
+            if arity == Just (List.length args) || arity == Nothing then
+                Ok <| LDF :: compiledFunction
 
-    else
-        Err <| "Invalid number of arguments"
+            else
+                Err <| "Invalid number of arguments"
+
+        addArguments : List Op -> Result Error (List Op)
+        addArguments compiledFunction =
+            Result.map
+                (\compiledArgs ->
+                    compiledArgs ++ compiledFunction
+                )
+                (compileArgs args)
+    in
+    compileFunc f
+        |> Result.andThen checkArity
+        |> Result.andThen addArguments
 
 
 
@@ -324,60 +330,87 @@ compileFuncApp f args =
 -- the arguments are Nothing if we don't know how many arguments it takes (e.g. a Let binding)
 
 
-compileFunc : AST -> ( Maybe Int, Result Error (List Op) )
+compileFunc : AST -> Result Error ( Maybe Int, List Op )
 compileFunc f =
     case f of
         AST.Var (AST.Token "+") ->
-            ( Just 2, Ok <| [ FUNC ADD ] )
+            Ok <| ( Just 2, [ FUNC ADD ] )
 
         AST.Var (AST.Token "*") ->
-            ( Just 2, Ok <| [ FUNC MULT ] )
+            Ok <| ( Just 2, [ FUNC MULT ] )
 
         AST.Var (AST.Token "-") ->
-            ( Just 2, Ok <| [ FUNC SUB ] )
+            Ok <| ( Just 2, [ FUNC SUB ] )
 
         AST.Var (AST.Token "atom") ->
-            ( Just 1, Ok <| [ FUNC ATOM ] )
+            Ok <| ( Just 1, [ FUNC ATOM ] )
 
         AST.Var (AST.Token "cons") ->
-            ( Just 2, Ok <| [ FUNC CONS ] )
+            Ok <| ( Just 2, [ FUNC CONS ] )
 
         AST.Var (AST.Token "car") ->
-            ( Just 1, Ok <| [ FUNC CAR ] )
+            Ok <| ( Just 1, [ FUNC CAR ] )
 
         AST.Var (AST.Token "cdr") ->
-            ( Just 1, Ok <| [ FUNC CDR ] )
+            Ok <| ( Just 1, [ FUNC CDR ] )
 
         AST.Var (AST.Token "null") ->
-            ( Just 1, Ok <| [ FUNC NULL ] )
+            Ok <| ( Just 1, [ FUNC NULL ] )
 
         AST.Var (AST.Token "eq") ->
-            ( Just 2, Ok <| [ FUNC (COMPARE CMP_EQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_EQ) ] )
 
         AST.Var (AST.Token "<") ->
-            ( Just 2, Ok <| [ FUNC (COMPARE CMP_LT) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LT) ] )
 
         AST.Var (AST.Token ">") ->
-            ( Just 2, Ok <| [ FUNC (COMPARE CMP_GT) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GT) ] )
 
         AST.Var (AST.Token "<=") ->
-            ( Just 2, Ok <| [ FUNC (COMPARE CMP_LEQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LEQ) ] )
 
         AST.Var (AST.Token ">=") ->
-            ( Just 2, Ok <| [ FUNC (COMPARE CMP_GEQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ] )
 
         AST.Var (AST.Token token) ->
-            ( Nothing, Err <| "CompileFunc - custom function names not implemented yet! (token: " ++ token ++ ")" )
+            Err <| "CompileFunc - custom function names not implemented yet! (token: " ++ token ++ ")"
 
         AST.Val _ ->
-            ( Nothing, Err <| "Illegal function call - attempting to call an integer!" )
+            Err "Illegal function call - attempting to call an integer!"
 
         AST.Quote _ ->
-            ( Nothing, Err <| "Illegal function call - attempting to call a quote value!" )
+            Err "Illegal function call - attempting to call a quote value!"
+
+        -- currying
+        AST.FuncApp f_ args_ ->
+            -- basically compiles the arguments, then compiles the function.
+            compileArgs args_
+                |> Result.andThen
+                    (\compiledArgs ->
+                        Result.map (\compiledFunc -> ( compiledArgs, compiledFunc ))
+                            (compileFunc f_)
+                    )
+                |> Result.andThen
+                    (\( compiledArgs, ( funcArity, compiledFunc ) ) ->
+                        let
+                            newArity =
+                                Maybe.map (\n -> n - List.length args_) funcArity
+                        in
+                        case newArity of
+                            Just n ->
+                                if n < 0 then
+                                    Err "CompileFunc - Too many arguments"
+
+                                else
+                                    Ok ( newArity, compiledArgs ++ compiledFunc )
+
+                            Nothing ->
+                                Ok ( newArity, compiledArgs ++ compiledFunc )
+                    )
 
         -- idk how do compile user defined functions yet
         _ ->
-            ( Nothing, Err "Compile Function - not implemented yet." )
+            Err "Compile Function - not implemented yet."
 
 
 compileArgs : List AST -> Result Error (List Op)

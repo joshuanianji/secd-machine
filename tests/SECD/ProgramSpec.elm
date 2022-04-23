@@ -11,11 +11,11 @@ import Test exposing (Test)
 suite : Test
 suite =
     Test.describe "Program"
-        [ testFromAST ]
+        [ testCompiler ]
 
 
-testFromAST : Test
-testFromAST =
+testCompiler : Test
+testCompiler =
     Test.describe "Program.fromAST and auxiliary functions"
         [ integrationTests
         , unitTests
@@ -84,6 +84,10 @@ testCompileArgs =
             \_ ->
                 compileArgs []
                     |> Expect.equal (Ok <| [])
+        , Test.test "Singleton" <|
+            \_ ->
+                compileArgs [ AST.int 1 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
         , Test.test "[2,3]" <|
             \_ ->
                 compileArgs [ AST.int 2, AST.int 3 ]
@@ -100,6 +104,7 @@ testCompileFunc =
     Test.describe "Program.compileFunc"
         [ testCompileFuncBuiltins
         , testCompileFuncIllegalCalls
+        , testCompileFuncCurrying
         ]
 
 
@@ -115,7 +120,7 @@ testCompileFuncBuiltins =
                 Test.test ("Compiles " ++ token) <|
                     \_ ->
                         compileFunc (AST.var token)
-                            |> Expect.equal ( Just expectedArgs, Ok [ expectedFunc ] )
+                            |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ] ))
             )
             [ ( "+", 2, FUNC ADD )
             , ( "-", 2, FUNC SUB )
@@ -144,15 +149,29 @@ testCompileFuncIllegalCalls =
                 Test.test ("Does not compile " ++ name) <|
                     \_ ->
                         case compileFunc ast of
-                            ( Just _, Ok _ ) ->
+                            Ok ( Just _, _ ) ->
                                 Expect.fail "This should fail!"
 
-                            ( Nothing, Err _ ) ->
-                                Expect.pass
+                            Ok ( Nothing, _ ) ->
+                                Expect.fail <| "compileFunc is acting weird with this ast: " ++ name ++ ". Not returning valid arity"
 
-                            _ ->
-                                Expect.fail <| "compileFunc is acting weird with this ast: " ++ name
+                            Err _ ->
+                                Expect.pass
             )
             [ ( "'nil", Quote Cons.Nil )
             , ( "'(1 2 3)", Quote (Cons.fromList [ 1, 2, 3 ]) )
             ]
+
+
+testCompileFuncCurrying : Test
+testCompileFuncCurrying =
+    Test.describe "Program.compileFunc with currying" <|
+        [ Test.test "(+ 1)" <|
+            \_ ->
+                compileFunc (FuncApp (AST.var "+") [ AST.int 1 ])
+                    |> Expect.equal (Ok ( Just 1, [ NIL, LDC 1, FUNC CONS, FUNC ADD ] ))
+        , Test.test "(+ 1 2)" <|
+            \_ ->
+                compileFunc (FuncApp (AST.var "+") [ AST.int 1, AST.int 2 ])
+                    |> Expect.equal (Ok ( Just 0, [ NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC ADD ] ))
+        ]
