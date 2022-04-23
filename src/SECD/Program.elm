@@ -304,61 +304,77 @@ compileCons cs =
 compileFuncApp : AST -> List AST -> Result Error (List Op)
 compileFuncApp f args =
     let
-        ( argNum, op ) =
-            case f of
-                AST.Var (AST.Token "+") ->
-                    ( 2, FUNC ADD )
-
-                AST.Var (AST.Token "*") ->
-                    ( 2, FUNC MULT )
-
-                AST.Var (AST.Token "-") ->
-                    ( 2, FUNC SUB )
-
-                AST.Var (AST.Token "atom") ->
-                    ( 1, FUNC ATOM )
-
-                AST.Var (AST.Token "cons") ->
-                    ( 2, FUNC CONS )
-
-                AST.Var (AST.Token "car") ->
-                    ( 1, FUNC CAR )
-
-                AST.Var (AST.Token "cdr") ->
-                    ( 1, FUNC CDR )
-
-                AST.Var (AST.Token "null") ->
-                    ( 1, FUNC NULL )
-
-                AST.Var (AST.Token "eq") ->
-                    ( 2, FUNC (COMPARE CMP_EQ) )
-
-                AST.Var (AST.Token "<") ->
-                    ( 2, FUNC (COMPARE CMP_LT) )
-
-                AST.Var (AST.Token ">") ->
-                    ( 2, FUNC (COMPARE CMP_GT) )
-
-                AST.Var (AST.Token "<=") ->
-                    ( 2, FUNC (COMPARE CMP_LEQ) )
-
-                AST.Var (AST.Token ">=") ->
-                    ( 2, FUNC (COMPARE CMP_GEQ) )
-
-                -- idk how do compile user defined functions yet
-                _ ->
-                    ( 0, LDF )
+        ( argNum, compiledFuncResult ) =
+            compileFunc f
     in
-    if List.length args == argNum then
+    if argNum == Just (List.length args) || argNum == Nothing then
         Result.map2
             (\compiledFunc compiledArgs ->
                 compiledArgs ++ LDF :: compiledFunc
             )
-            (compile_ f)
+            compiledFuncResult
             (compileArgs args)
 
     else
         Err <| "Invalid number of arguments"
+
+
+
+-- compiles the function, also returns the number of arguments it takes
+-- the arguments are Nothing if we don't know how many arguments it takes (e.g. a Let binding)
+
+
+compileFunc : AST -> ( Maybe Int, Result Error (List Op) )
+compileFunc f =
+    case f of
+        AST.Var (AST.Token "+") ->
+            ( Just 2, Ok <| [ FUNC ADD ] )
+
+        AST.Var (AST.Token "*") ->
+            ( Just 2, Ok <| [ FUNC MULT ] )
+
+        AST.Var (AST.Token "-") ->
+            ( Just 2, Ok <| [ FUNC SUB ] )
+
+        AST.Var (AST.Token "atom") ->
+            ( Just 1, Ok <| [ FUNC ATOM ] )
+
+        AST.Var (AST.Token "cons") ->
+            ( Just 2, Ok <| [ FUNC CONS ] )
+
+        AST.Var (AST.Token "car") ->
+            ( Just 1, Ok <| [ FUNC CAR ] )
+
+        AST.Var (AST.Token "cdr") ->
+            ( Just 1, Ok <| [ FUNC CDR ] )
+
+        AST.Var (AST.Token "null") ->
+            ( Just 1, Ok <| [ FUNC NULL ] )
+
+        AST.Var (AST.Token "eq") ->
+            ( Just 2, Ok <| [ FUNC (COMPARE CMP_EQ) ] )
+
+        AST.Var (AST.Token "<") ->
+            ( Just 2, Ok <| [ FUNC (COMPARE CMP_LT) ] )
+
+        AST.Var (AST.Token ">") ->
+            ( Just 2, Ok <| [ FUNC (COMPARE CMP_GT) ] )
+
+        AST.Var (AST.Token "<=") ->
+            ( Just 2, Ok <| [ FUNC (COMPARE CMP_LEQ) ] )
+
+        AST.Var (AST.Token ">=") ->
+            ( Just 2, Ok <| [ FUNC (COMPARE CMP_GEQ) ] )
+
+        AST.Var (AST.Token token) ->
+            ( Nothing, Err <| "CompileFunc - custom function names not implemented yet! (token: " ++ token ++ ")" )
+
+        AST.Val _ ->
+            ( Nothing, Err <| "Illegal function call - attempting to call an integer!" )
+
+        -- idk how do compile user defined functions yet
+        _ ->
+            ( Nothing, Err "Compile Function - not implemented yet." )
 
 
 compileArgs : List AST -> Result Error (List Op)

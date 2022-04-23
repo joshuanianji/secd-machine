@@ -52,6 +52,7 @@ unitTests =
     Test.describe "Testing auxiliary functions separately"
         [ testCompileCons
         , testCompileArgs
+        , testCompileFunc
         ]
 
 
@@ -92,3 +93,35 @@ testCompileArgs =
                 compileArgs [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         ]
+
+
+testCompileFunc : Test
+testCompileFunc =
+    Test.describe "Program.compileFunc"
+        [ testCompileFuncBuiltins
+        ]
+
+
+testCompileFuncBuiltins : Test
+testCompileFuncBuiltins =
+    Test.describe "Program.compileFunc with builtin functions" <|
+        List.map
+            (\( token, expectedArgs, expectedFunc ) ->
+                Test.test ("Compiles " ++ token) <|
+                    \_ ->
+                        compileFunc (AST.var token)
+                            |> Expect.equal ( Just expectedArgs, Ok [ expectedFunc ] )
+            )
+            [ ( "+", 2, FUNC ADD )
+            , ( "-", 2, FUNC SUB )
+            , ( "*", 2, FUNC MULT )
+            , ( "eq", 2, FUNC <| COMPARE CMP_EQ )
+            , ( "<", 2, FUNC <| COMPARE CMP_LT )
+            , ( ">", 2, FUNC <| COMPARE CMP_GT )
+            , ( ">=", 2, FUNC <| COMPARE CMP_GEQ )
+            , ( "<=", 2, FUNC <| COMPARE CMP_LEQ )
+            , ( "cons", 2, FUNC CONS )
+            , ( "car", 1, FUNC CAR )
+            , ( "cdr", 1, FUNC CDR )
+            , ( "atom", 1, FUNC ATOM )
+            ]
