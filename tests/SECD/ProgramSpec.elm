@@ -174,4 +174,8 @@ testCompileFuncCurrying =
             \_ ->
                 compileFunc (FuncApp (AST.var "+") [ AST.int 1, AST.int 2 ])
                     |> Expect.equal (Ok ( Just 0, [ NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC ADD ] ))
+        , Test.test "Fails for too many arguments - ((+ 1) 2 3)" <|
+            \_ ->
+                compileFunc (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
+                    |> Expect.err
         ]

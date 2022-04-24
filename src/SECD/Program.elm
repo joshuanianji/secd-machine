@@ -305,12 +305,17 @@ compileFuncApp : AST -> List AST -> Result Error (List Op)
 compileFuncApp f args =
     let
         checkArity : ( Maybe Int, List Op ) -> Result Error (List Op)
-        checkArity ( arity, compiledFunction ) =
-            if arity == Just (List.length args) || arity == Nothing then
-                Ok <| LDF :: compiledFunction
+        checkArity ( mArity, compiledFunction ) =
+            case mArity of
+                Just arity ->
+                    if arity >= List.length args then
+                        Ok <| LDF :: compiledFunction
 
-            else
-                Err <| "Invalid number of arguments"
+                    else
+                        Err <| "Invalid number of arguments"
+
+                Nothing ->
+                    Ok <| LDF :: compiledFunction
 
         addArguments : List Op -> Result Error (List Op)
         addArguments compiledFunction =
@@ -326,7 +331,7 @@ compileFuncApp f args =
 
 
 
--- compiles the function, also returns the number of arguments it takes
+-- compiles the function that is being called, and also returns the number of arguments it can take.
 -- the arguments are Nothing if we don't know how many arguments it takes (e.g. a Let binding)
 
 
