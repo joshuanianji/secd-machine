@@ -54,7 +54,7 @@ integrationIf =
     Test.describe "If statement structures" <|
         [ Test.test "(if (ATOM 1) 1 2" <|
             \_ ->
-                (compile_ <| AST.If (AST.FuncApp (AST.var "atom") [ AST.int 1 ]) (AST.int 1) (AST.int 2))
+                (compile_ emptyEnv <| AST.If (AST.FuncApp (AST.var "atom") [ AST.int 1 ]) (AST.int 1) (AST.int 2))
                     |> Expect.equal (Ok [ LDC 1, FUNC ATOM, SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ])
         ]
 
@@ -95,19 +95,19 @@ testCompileArgsBuiltin =
     Test.describe "Program.compileArgs for builtin functions"
         [ Test.test "Empty args" <|
             \_ ->
-                compileArgs True []
+                compileArgs emptyEnv True []
                     |> Expect.equal (Ok <| [])
         , Test.test "Singleton" <|
             \_ ->
-                compileArgs True [ AST.int 1 ]
+                compileArgs emptyEnv True [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ LDC 1 ])
         , Test.test "[2,3]" <|
             \_ ->
-                compileArgs True [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv True [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2 ])
         , Test.test "[1,2,3]" <|
             \_ ->
-                compileArgs True [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv True [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2, LDC 1 ])
         ]
 
@@ -117,19 +117,19 @@ testCompileArgsNonbuiltin =
     Test.describe "Program.compileArgs for user functions"
         [ Test.test "Empty args" <|
             \_ ->
-                compileArgs False []
+                compileArgs emptyEnv False []
                     |> Expect.equal (Ok <| [])
         , Test.test "Singleton" <|
             \_ ->
-                compileArgs False [ AST.int 1 ]
+                compileArgs emptyEnv False [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
         , Test.test "[2,3]" <|
             \_ ->
-                compileArgs False [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
         , Test.test "[1,2,3]" <|
             \_ ->
-                compileArgs False [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         ]
 
@@ -154,7 +154,7 @@ testCompileFuncBuiltins =
             (\( token, expectedArgs, expectedFunc ) ->
                 Test.test ("Compiles " ++ token) <|
                     \_ ->
-                        compileFunc (AST.var token)
+                        compileFunc emptyEnv (AST.var token)
                             |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ], True ))
             )
             [ ( "+", 2, FUNC ADD )
@@ -183,7 +183,7 @@ testCompileFuncIllegalCalls =
             (\( name, ast ) ->
                 Test.test ("Does not compile " ++ name) <|
                     \_ ->
-                        case compileFunc ast of
+                        case compileFunc emptyEnv ast of
                             Ok ( Just _, _, _ ) ->
                                 Expect.fail "This should fail!"
 
@@ -203,14 +203,14 @@ testCompileFuncCurrying =
     Test.describe "Program.compileFunc with currying" <|
         [ Test.test "(+ 1)" <|
             \_ ->
-                compileFunc (FuncApp (AST.var "+") [ AST.int 1 ])
+                compileFunc emptyEnv (FuncApp (AST.var "+") [ AST.int 1 ])
                     |> Expect.equal (Ok ( Just 1, [ LDC 1, FUNC ADD ], True ))
         , Test.test "(+ 1 2)" <|
             \_ ->
-                compileFunc (FuncApp (AST.var "+") [ AST.int 1, AST.int 2 ])
+                compileFunc emptyEnv (FuncApp (AST.var "+") [ AST.int 1, AST.int 2 ])
                     |> Expect.equal (Ok ( Just 0, [ LDC 2, LDC 1, FUNC ADD ], True ))
         , Test.test "Fails for too many arguments - ((+ 1) 2 3)" <|
             \_ ->
-                compileFunc (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
+                compileFunc emptyEnv (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
                     |> Expect.err
         ]

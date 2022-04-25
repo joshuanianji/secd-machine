@@ -1,5 +1,6 @@
 module SECD.Program exposing (..)
 
+import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
@@ -259,11 +260,34 @@ fromSingleton op =
 
 compile : AST -> Result Error Program
 compile ast =
-    Result.map Program <| compile_ ast
+    Result.map Program <| compile_ emptyEnv ast
 
 
-compile_ : AST -> Result Error (List Op)
-compile_ ast =
+
+-- keeps track of the environment, or the value of a variable
+-- we first look at the function closure, then the let binding closure
+-- when we immediately come across a variable name we don't know, we exit, unlike lisp
+
+
+type alias Environment =
+    { -- a simple map of an identifier to its compiled value
+      letBindings : Dict String (List Op)
+
+    -- doubly nested list of argument names
+    -- Used to calculate the "coordinates" of each value
+    , functionClosure : List (List String)
+    }
+
+
+emptyEnv : Environment
+emptyEnv =
+    { letBindings = Dict.empty
+    , functionClosure = []
+    }
+
+
+compile_ : Environment -> AST -> Result Error (List Op)
+compile_ env ast =
     case ast of
         -- nil vals
         AST.Var (AST.Token "nil") ->
@@ -277,16 +301,16 @@ compile_ ast =
             Ok <| [ LDC n ]
 
         AST.FuncApp f args ->
-            compileFuncApp f args
+            compileFuncApp env f args
 
         AST.If cond branchT branchF ->
             Result.map3
                 (\compiledCond compiledT compiledF ->
                     compiledCond ++ [ SEL, NESTED (compiledT ++ [ JOIN ]), NESTED (compiledF ++ [ JOIN ]) ]
                 )
-                (compile_ cond)
-                (compile_ branchT)
-                (compile_ branchF)
+                (compile_ env cond)
+                (compile_ env branchT)
+                (compile_ env branchF)
 
         _ ->
             Err "Not supported yet"
@@ -310,8 +334,8 @@ compileCons cs =
     compileConsHelper cs []
 
 
-compileFuncApp : AST -> List AST -> Result Error (List Op)
-compileFuncApp f args =
+compileFuncApp : Environment -> AST -> List AST -> Result Error (List Op)
+compileFuncApp env f args =
     let
         checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( List Op, Bool )
         checkArity ( mArity, compiledFunction, isBuiltIn ) =
@@ -332,9 +356,9 @@ compileFuncApp f args =
                 (\compiledArgs ->
                     compiledArgs ++ compiledFunction
                 )
-                (compileArgs isBuiltIn args)
+                (compileArgs env isBuiltIn args)
     in
-    compileFunc f
+    compileFunc env f
         |> Result.andThen checkArity
         |> Result.andThen addArguments
 
@@ -345,8 +369,8 @@ compileFuncApp f args =
 -- the Arity is Nothing if we don't know how many arguments it takes (e.g. an if statement)
 
 
-compileFunc : AST -> Result Error ( Maybe Int, List Op, Bool )
-compileFunc f =
+compileFunc : Environment -> AST -> Result Error ( Maybe Int, List Op, Bool )
+compileFunc env f =
     case f of
         AST.Var (AST.Token "+") ->
             Ok <| ( Just 2, [ FUNC ADD ], True )
@@ -420,12 +444,12 @@ compileFunc f =
                 addArgs ( funcArity, compiledFunc, isBuiltin ) =
                     Result.map
                         (\compiledArgs -> ( funcArity, compiledArgs ++ compiledFunc, isBuiltin ))
-                        (compileArgs isBuiltin args_)
+                        (compileArgs env isBuiltin args_)
             in
             -- Compiles the function, then compiles arguments
             -- argument compilation depends on if the function is builtin (push arguments onto stack naively)
             -- or not (create a list to push onto the stack)
-            compileFunc f_
+            compileFunc env f_
                 |> Result.andThen checkArity
                 |> Result.andThen addArgs
 
@@ -439,8 +463,8 @@ compileFunc f =
 -- otherwise, make a list out of the arguments.
 
 
-compileArgs : Bool -> List AST -> Result Error (List Op)
-compileArgs isBuiltIn args =
+compileArgs : Environment -> Bool -> List AST -> Result Error (List Op)
+compileArgs env isBuiltIn args =
     let
         compileNonBuiltin : List AST -> Result Error (List Op)
         compileNonBuiltin args_ =
@@ -451,7 +475,7 @@ compileArgs isBuiltIn args =
                 arg :: xs ->
                     Result.map2
                         (\cmpArg cmpArgs -> FUNC CONS :: (cmpArg ++ cmpArgs))
-                        (compile_ arg)
+                        (compile_ env arg)
                         (compileNonBuiltin xs)
 
         compileBuiltin : List AST -> Result Error (List Op)
@@ -463,7 +487,7 @@ compileArgs isBuiltIn args =
                 arg :: xs ->
                     Result.map2
                         (\cmpArg cmpArgs -> cmpArg ++ cmpArgs)
-                        (compile_ arg)
+                        (compile_ env arg)
                         (compileBuiltin xs)
     in
     if List.length args == 0 then
