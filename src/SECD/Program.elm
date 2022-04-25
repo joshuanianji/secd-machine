@@ -319,21 +319,26 @@ compileCons cs =
     compileConsHelper cs []
 
 
+
+-- there is a lot of overlap from this function and the compileFunc case for FuncApp
+-- Not sure how to merge them, but we're assuming this is the topmost level function call
+-- so, the arity must be exactly equal
+
+
 compileFuncApp : Environment -> AST -> List AST -> Result Error (List Op)
 compileFuncApp env f args =
     let
         checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( List Op, Bool )
         checkArity ( mArity, compiledFunction, isBuiltIn ) =
-            case mArity of
-                Just arity ->
-                    if arity >= List.length args then
-                        Ok ( compiledFunction, isBuiltIn )
-
-                    else
-                        Err <| "Invalid number of arguments"
-
-                Nothing ->
+            if mArity == Just (List.length args) || mArity == Nothing then
+                if isBuiltIn then
                     Ok ( compiledFunction, isBuiltIn )
+
+                else
+                    Ok ( LDF :: compiledFunction ++ [ AP ], isBuiltIn )
+
+            else
+                Err <| "Invalid number of arguments"
 
         addArguments : ( List Op, Bool ) -> Result Error (List Op)
         addArguments ( compiledFunction, isBuiltIn ) =
@@ -349,51 +354,40 @@ compileFuncApp env f args =
 
 
 
--- compiled very similarly with Lambdass
+-- A let function can be thought of as a lambda function application!
 
 
 compileLet : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
 compileLet env bindings body =
     let
         vars =
-            List.map (Tuple.first >> AST.tokenToStr) bindings
+            List.map Tuple.first bindings
 
-        compiledVals =
+        -- the values, or the bound values, can be thought of as "arguments"
+        vals =
             List.map Tuple.second bindings
-                |> compileArgs env False
 
         newEnv =
-            addVarNames vars env
+            addVarNames (List.map AST.tokenToStr vars) env
 
-        compiledBody =
-            compile_ newEnv body
+        lambdaBody =
+            AST.Lambda vars body
     in
-    Result.map2
-        (\compiledBodyOk compiledArgsOk ->
-            compiledArgsOk ++ [ LDF, NESTED (compiledBodyOk ++ [ RTN ]), AP ]
-        )
-        compiledBody
-        compiledVals
+    compileFuncApp newEnv lambdaBody vals
 
 
 compileLambda : Environment -> List Token -> AST -> Result Error (List Op)
 compileLambda env vars body =
     let
-        vars =
-            List.map (Tuple.first >> AST.tokenToStr) bindings
-
         newEnv =
-            addVarNames vars env
+            addVarNames (List.map AST.tokenToStr vars) env
 
         compiledBody =
             compile_ newEnv body
     in
-    Result.map2
-        (\compiledBodyOk compiledArgsOk ->
-            compiledArgsOk ++ [ LDF, NESTED (compiledBodyOk ++ [ RTN ]), AP ]
-        )
+    Result.map
+        (\compiledBodyOk -> [ NESTED (compiledBodyOk ++ [ RTN ]) ])
         compiledBody
-        compiledVals
 
 
 
@@ -490,6 +484,10 @@ compileFunc env f =
                 |> Result.andThen checkArity
                 |> Result.andThen addArgs
 
+        AST.Lambda args f_ ->
+            compileLambda env args f_
+                |> Result.map (\ops -> ( Just <| List.length args, ops, False ))
+
         -- idk how do compile user defined functions yet
         _ ->
             Err "Compile Function - not implemented yet."
@@ -507,11 +505,11 @@ compileArgs env isBuiltIn args =
         compileNonBuiltin args_ =
             case args_ of
                 [] ->
-                    Ok [ NIL ]
+                    Ok []
 
                 arg :: xs ->
                     Result.map2
-                        (\cmpArg cmpArgs -> FUNC CONS :: (cmpArg ++ cmpArgs))
+                        (\cmpArg cmpArgs -> cmpArg ++ FUNC CONS :: cmpArgs)
                         (compile_ env arg)
                         (compileNonBuiltin xs)
 
@@ -531,10 +529,12 @@ compileArgs env isBuiltIn args =
         Ok []
 
     else if isBuiltIn then
-        Result.map List.reverse (compileBuiltin args)
+        -- we want to push the arguments on the stack in REVERSE order
+        compileBuiltin <| List.reverse args
 
     else
-        Result.map List.reverse (compileNonBuiltin args)
+        -- appending "NIL" to the front
+        Result.map ((::) NIL) (compileNonBuiltin <| List.reverse args)
 
 
 

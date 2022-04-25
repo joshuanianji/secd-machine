@@ -29,6 +29,9 @@ integrationTests =
     Test.describe "Testing the entire Program.astToOps"
         [ integrationBasics
         , integrationIf
+
+        -- "stress testing" environment handling
+        -- , integrationEnv
         ]
 
 
@@ -68,7 +71,11 @@ unitTests =
         , testCompileArgsBuiltin
         , testCompileArgsNonbuiltin
         , testCompileFunc
+        , testCompileFuncApp
+
+        -- note that lambda and let are compiled extremely siimlarly
         , testCompileLet
+        , testCompileLambda
         ]
 
 
@@ -219,6 +226,36 @@ testCompileFuncCurrying =
         ]
 
 
+testCompileFuncApp : Test
+testCompileFuncApp =
+    Test.describe "Program.testCompileFunc"
+        [ Test.test "Builtin (-)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ]
+                    |> Expect.equal (Ok [ LDC 2, LDC 1, FUNC SUB ])
+        , Test.test "Builtin (CONS)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "cons") [ AST.int 1, AST.nil ]
+                    |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS ])
+        , Test.test "Builtin - fails for too many args 2 for ATOM)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "atom") [ AST.int 1, AST.nil ]
+                    |> Expect.err
+        , Test.test "Evaluate arithmetic (- 1 2)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ]
+                    |> Expect.equal (Ok [ LDC 2, LDC 1, FUNC SUB ])
+        , Test.test "Slightly more complex arithmetic - (+ (- 1 2) 3)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.int 2 ], AST.int 3 ]
+                    |> Expect.equal (Ok [ LDC 3, LDC 2, LDC 1, FUNC SUB, FUNC ADD ])
+        , Test.test "Deeper nested arithmetic - (+ (- 1 (* 2 5)) 3)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5 ] ], AST.int 3 ]
+                    |> Expect.equal (Ok [ LDC 3, LDC 5, LDC 2, FUNC MULT, LDC 1, FUNC SUB, FUNC ADD ])
+        ]
+
+
 testCompileLet : Test
 testCompileLet =
     Test.describe "Program.compileLet" <|
@@ -226,6 +263,27 @@ testCompileLet =
             \_ ->
                 compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
                     |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 1, 1 ), FUNC ADD, RTN ], AP ])
+        ]
+
+
+testCompileLambda : Test
+testCompileLambda =
+    Test.describe "Program.compileLambda" <|
+        [ Test.test "compiled (lambda (x y) (+ x y))" <|
+            \_ ->
+                compileLambda emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
+                    |> Expect.equal (Ok [ NESTED [ LD ( 1, 2 ), LD ( 1, 1 ), FUNC ADD, RTN ] ])
+        , Test.test "Nested Lambda - (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5))" <|
+            \_ ->
+                compileLambda emptyEnv
+                    [ AST.token "z" ]
+                    (AST.FuncApp
+                        (AST.Lambda [ AST.token "x", AST.token "y" ]
+                            (AST.FuncApp (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.var "x", AST.var "y" ], AST.var "z" ])
+                        )
+                        [ AST.Val 3, AST.Val 5 ]
+                    )
+                    |> Expect.equal (Ok [ NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 2, 1 ), LD ( 1, 2 ), LD ( 1, 1 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
         ]
 
 
