@@ -105,41 +105,57 @@ testCompileArgsBuiltin =
     Test.describe "Program.compileArgs for builtin functions"
         [ Test.test "Empty args" <|
             \_ ->
-                compileArgs emptyEnv True []
+                compileArgs emptyEnv BuiltinFunc []
                     |> Expect.equal (Ok <| [])
         , Test.test "Singleton" <|
             \_ ->
-                compileArgs emptyEnv True [ AST.int 1 ]
+                compileArgs emptyEnv BuiltinFunc [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ LDC 1 ])
         , Test.test "[2,3]" <|
             \_ ->
-                compileArgs emptyEnv True [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv BuiltinFunc [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2 ])
         , Test.test "[1,2,3]" <|
             \_ ->
-                compileArgs emptyEnv True [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv BuiltinFunc [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2, LDC 1 ])
         ]
 
 
 testCompileArgsNonbuiltin : Test
 testCompileArgsNonbuiltin =
-    Test.describe "Program.compileArgs for user functions"
-        [ Test.test "Empty args" <|
+    Test.describe "Program.compileArgs for user defined/lambda functions"
+        [ Test.test "Empty args - Lambda" <|
             \_ ->
-                compileArgs emptyEnv False []
+                compileArgs emptyEnv LambdaFunc []
                     |> Expect.equal (Ok <| [])
-        , Test.test "Singleton" <|
+        , Test.test "Empty args - Loaded" <|
             \_ ->
-                compileArgs emptyEnv False [ AST.int 1 ]
+                compileArgs emptyEnv LoadedFunc []
+                    |> Expect.equal (Ok <| [])
+        , Test.test "Singleton - Lambda" <|
+            \_ ->
+                compileArgs emptyEnv LambdaFunc [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
-        , Test.test "[2,3]" <|
+        , Test.test "Singleton - Loaded" <|
             \_ ->
-                compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv LoadedFunc [ AST.int 1 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
+        , Test.test "[2,3] - Lambda" <|
+            \_ ->
+                compileArgs emptyEnv LambdaFunc [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
-        , Test.test "[1,2,3]" <|
+        , Test.test "[2,3] - Loaded" <|
             \_ ->
-                compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv LoadedFunc [ AST.int 2, AST.int 3 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
+        , Test.test "[1,2,3] - Lambda" <|
+            \_ ->
+                compileArgs emptyEnv LambdaFunc [ AST.int 1, AST.int 2, AST.int 3 ]
+                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
+        , Test.test "[1,2,3] - Loaded" <|
+            \_ ->
+                compileArgs emptyEnv LoadedFunc [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         ]
 
@@ -149,7 +165,6 @@ testCompileFunc =
     Test.describe "Program.compileFunc"
         [ testCompileFuncBuiltins
         , testCompileFuncIllegalCalls
-        , testCompileFuncCurrying
         ]
 
 
@@ -165,7 +180,7 @@ testCompileFuncBuiltins =
                 Test.test ("Compiles " ++ token) <|
                     \_ ->
                         compileFunc emptyEnv (AST.var token)
-                            |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ], True ))
+                            |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ], BuiltinFunc ))
             )
             [ ( "+", 2, FUNC ADD )
             , ( "-", 2, FUNC SUB )
@@ -208,24 +223,6 @@ testCompileFuncIllegalCalls =
             ]
 
 
-testCompileFuncCurrying : Test
-testCompileFuncCurrying =
-    Test.describe "Program.compileFunc with currying" <|
-        [ Test.test "(+ 1)" <|
-            \_ ->
-                compileFunc emptyEnv (FuncApp (AST.var "+") [ AST.int 1 ])
-                    |> Expect.equal (Ok ( Just 1, [ LDC 1, FUNC ADD ], True ))
-        , Test.test "(+ 1 2)" <|
-            \_ ->
-                compileFunc emptyEnv (FuncApp (AST.var "+") [ AST.int 1, AST.int 2 ])
-                    |> Expect.equal (Ok ( Just 0, [ LDC 2, LDC 1, FUNC ADD ], True ))
-        , Test.test "Fails for too many arguments - ((+ 1) 2 3)" <|
-            \_ ->
-                compileFunc emptyEnv (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
-                    |> Expect.err
-        ]
-
-
 testCompileFuncApp : Test
 testCompileFuncApp =
     Test.describe "Program.testCompileFunc"
@@ -240,6 +237,10 @@ testCompileFuncApp =
         , Test.test "Builtin - fails for too many args 2 for ATOM)" <|
             \_ ->
                 compileFuncApp emptyEnv (AST.var "atom") [ AST.int 1, AST.nil ]
+                    |> Expect.err
+        , Test.test "Lambda fails with not enough args - ((lambda (x y) (+ x y)) 2)" <|
+            \_ ->
+                compileFunc emptyEnv (FuncApp (Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])) [ AST.int 2 ])
                     |> Expect.err
         , Test.test "Evaluate arithmetic (- 1 2)" <|
             \_ ->
@@ -267,6 +268,12 @@ testCompileLet =
             \_ ->
                 compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
                     |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 1, 1 ), FUNC ADD, RTN ], AP ])
+        , Test.test "lambda binding - (let (f) ((lambda (x) (+ x 1))) (f 3))" <|
+            \_ ->
+                compileLet emptyEnv
+                    [ ( AST.token "f", AST.Lambda [ AST.token "x" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.int 1 ]) ) ]
+                    (AST.FuncApp (AST.var "f") [ AST.int 3 ])
+                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 1, LD ( 1, 1 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 1, 1 ), AP, RTN ], AP ])
         ]
 
 
@@ -276,7 +283,7 @@ testCompileLambda =
         [ Test.test "compiled (lambda (x y) (+ x y))" <|
             \_ ->
                 compileLambda emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
-                    |> Expect.equal (Ok [ NESTED [ LD ( 1, 2 ), LD ( 1, 1 ), FUNC ADD, RTN ] ])
+                    |> Expect.equal (Ok [ LDF, NESTED [ LD ( 1, 2 ), LD ( 1, 1 ), FUNC ADD, RTN ] ])
         , Test.test "Nested Lambda - (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5))" <|
             \_ ->
                 compileLambda emptyEnv
@@ -287,7 +294,8 @@ testCompileLambda =
                         )
                         [ AST.Val 3, AST.Val 5 ]
                     )
-                    |> Expect.equal (Ok [ NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 2, 1 ), LD ( 1, 2 ), LD ( 1, 1 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
+                    |> Expect.equal
+                        (Ok [ LDF, NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 2, 1 ), LD ( 1, 2 ), LD ( 1, 1 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
         ]
 
 

@@ -328,25 +328,29 @@ compileCons cs =
 compileFuncApp : Environment -> AST -> List AST -> Result Error (List Op)
 compileFuncApp env f args =
     let
-        checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( List Op, Bool )
-        checkArity ( mArity, compiledFunction, isBuiltIn ) =
+        checkArity : ( Maybe Int, List Op, FuncType ) -> Result Error ( List Op, FuncType )
+        checkArity ( mArity, compiledFunction, funcType ) =
             if mArity == Just (List.length args) || mArity == Nothing then
-                if isBuiltIn then
-                    Ok ( compiledFunction, isBuiltIn )
+                case funcType of
+                    BuiltinFunc ->
+                        Ok ( compiledFunction, funcType )
 
-                else
-                    Ok ( LDF :: compiledFunction ++ [ AP ], isBuiltIn )
+                    LambdaFunc ->
+                        Ok ( compiledFunction ++ [ AP ], funcType )
+
+                    LoadedFunc ->
+                        Ok ( compiledFunction ++ [ AP ], funcType )
 
             else
                 Err <| "Invalid number of arguments"
 
-        addArguments : ( List Op, Bool ) -> Result Error (List Op)
-        addArguments ( compiledFunction, isBuiltIn ) =
+        addArguments : ( List Op, FuncType ) -> Result Error (List Op)
+        addArguments ( compiledFunction, funcType ) =
             Result.map
                 (\compiledArgs ->
                     compiledArgs ++ compiledFunction
                 )
-                (compileArgs env isBuiltIn args)
+                (compileArgs env funcType args)
     in
     compileFunc env f
         |> Result.andThen checkArity
@@ -386,64 +390,76 @@ compileLambda env vars body =
             compile_ newEnv body
     in
     Result.map
-        (\compiledBodyOk -> [ NESTED (compiledBodyOk ++ [ RTN ]) ])
+        (\compiledBodyOk -> [ LDF, NESTED (compiledBodyOk ++ [ RTN ]) ])
         compiledBody
 
 
 
+-- for Builtin functions, we load the arguments onto the stack naively
+-- for lambda/loaded functions, we load the arguments onto the stack in a list
+-- for loaded functions, we also do not run LDF, but run AP right after
+
+
+type FuncType
+    = BuiltinFunc
+    | LambdaFunc
+    | LoadedFunc
+
+
+
 -- Compiles the function that we're calling arguments with
--- Returns : ( Arity, Compiled Function, isBuiltIn )
+-- Returns : ( Arity, Compiled Function, FuncType )
 -- the Arity is Nothing if we don't know how many arguments it takes (e.g. an if statement)
 
 
-compileFunc : Environment -> AST -> Result Error ( Maybe Int, List Op, Bool )
+compileFunc : Environment -> AST -> Result Error ( Maybe Int, List Op, FuncType )
 compileFunc env f =
     case f of
         -- Builtin functions
         AST.Var (AST.Token "+") ->
-            Ok <| ( Just 2, [ FUNC ADD ], True )
+            Ok <| ( Just 2, [ FUNC ADD ], BuiltinFunc )
 
         AST.Var (AST.Token "*") ->
-            Ok <| ( Just 2, [ FUNC MULT ], True )
+            Ok <| ( Just 2, [ FUNC MULT ], BuiltinFunc )
 
         AST.Var (AST.Token "-") ->
-            Ok <| ( Just 2, [ FUNC SUB ], True )
+            Ok <| ( Just 2, [ FUNC SUB ], BuiltinFunc )
 
         AST.Var (AST.Token "atom") ->
-            Ok <| ( Just 1, [ FUNC ATOM ], True )
+            Ok <| ( Just 1, [ FUNC ATOM ], BuiltinFunc )
 
         AST.Var (AST.Token "cons") ->
-            Ok <| ( Just 2, [ FUNC CONS ], True )
+            Ok <| ( Just 2, [ FUNC CONS ], BuiltinFunc )
 
         AST.Var (AST.Token "car") ->
-            Ok <| ( Just 1, [ FUNC CAR ], True )
+            Ok <| ( Just 1, [ FUNC CAR ], BuiltinFunc )
 
         AST.Var (AST.Token "cdr") ->
-            Ok <| ( Just 1, [ FUNC CDR ], True )
+            Ok <| ( Just 1, [ FUNC CDR ], BuiltinFunc )
 
         AST.Var (AST.Token "null") ->
-            Ok <| ( Just 1, [ FUNC NULL ], True )
+            Ok <| ( Just 1, [ FUNC NULL ], BuiltinFunc )
 
         AST.Var (AST.Token "eq") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_EQ) ], True )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_EQ) ], BuiltinFunc )
 
         AST.Var (AST.Token "<") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LT) ], True )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LT) ], BuiltinFunc )
 
         AST.Var (AST.Token ">") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GT) ], True )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GT) ], BuiltinFunc )
 
         AST.Var (AST.Token "<=") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LEQ) ], True )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LEQ) ], BuiltinFunc )
 
         AST.Var (AST.Token ">=") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ], True )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ], BuiltinFunc )
 
         -- custom function
         -- Find the definition in the environment
         AST.Var (AST.Token token) ->
             lookup token env
-                |> Result.map (\val -> ( Nothing, [ val ], False ))
+                |> Result.map (\val -> ( Nothing, [ val ], LoadedFunc ))
 
         AST.Val _ ->
             Err "Illegal function call - attempting to call an integer!"
@@ -451,31 +467,22 @@ compileFunc env f =
         AST.Quote _ ->
             Err "Illegal function call - attempting to call a quote value!"
 
-        -- currying
+        -- do NOT allow currying
         AST.FuncApp f_ args_ ->
             let
-                checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( Maybe Int, List Op, Bool )
-                checkArity ( funcArity, compiledFunc, isBuiltin ) =
-                    let
-                        newArity =
-                            Maybe.map (\n -> n - List.length args_) funcArity
-                    in
-                    case newArity of
-                        Just n ->
-                            if n < 0 then
-                                Err "CompileFunc - Too many arguments"
+                checkArity : ( Maybe Int, List Op, FuncType ) -> Result Error ( Maybe Int, List Op, FuncType )
+                checkArity ( funcArity, compiledFunc, funcType ) =
+                    if funcArity == Just (List.length args_) then
+                        Ok ( Just 0, compiledFunc, funcType )
 
-                            else
-                                Ok ( newArity, compiledFunc, isBuiltin )
+                    else
+                        Err "Incorrect number of arguments in function application!"
 
-                        Nothing ->
-                            Ok ( newArity, compiledFunc, isBuiltin )
-
-                addArgs : ( Maybe Int, List Op, Bool ) -> Result Error ( Maybe Int, List Op, Bool )
-                addArgs ( funcArity, compiledFunc, isBuiltin ) =
+                addArgs : ( Maybe Int, List Op, FuncType ) -> Result Error ( Maybe Int, List Op, FuncType )
+                addArgs ( funcArity, compiledFunc, funcType ) =
                     Result.map
-                        (\compiledArgs -> ( funcArity, compiledArgs ++ compiledFunc, isBuiltin ))
-                        (compileArgs env isBuiltin args_)
+                        (\compiledArgs -> ( funcArity, compiledArgs ++ compiledFunc, funcType ))
+                        (compileArgs env funcType args_)
             in
             -- Compiles the function, then compiles arguments
             -- argument compilation depends on if the function is builtin (push arguments onto stack naively)
@@ -486,7 +493,7 @@ compileFunc env f =
 
         AST.Lambda args f_ ->
             compileLambda env args f_
-                |> Result.map (\ops -> ( Just <| List.length args, ops, False ))
+                |> Result.map (\ops -> ( Just <| List.length args, ops, LambdaFunc ))
 
         -- idk how do compile user defined functions yet
         _ ->
@@ -498,8 +505,8 @@ compileFunc env f =
 -- otherwise, make a list out of the arguments.
 
 
-compileArgs : Environment -> Bool -> List AST -> Result Error (List Op)
-compileArgs env isBuiltIn args =
+compileArgs : Environment -> FuncType -> List AST -> Result Error (List Op)
+compileArgs env funcType args =
     let
         compileNonBuiltin : List AST -> Result Error (List Op)
         compileNonBuiltin args_ =
@@ -528,7 +535,7 @@ compileArgs env isBuiltIn args =
     if List.length args == 0 then
         Ok []
 
-    else if isBuiltIn then
+    else if funcType == BuiltinFunc then
         -- we want to push the arguments on the stack in REVERSE order
         compileBuiltin <| List.reverse args
 

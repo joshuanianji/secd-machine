@@ -35,7 +35,7 @@ init : ( Model, Cmd Msg )
 init =
     let
         vm =
-            VM.initRaw factorial
+            VM.initRaw letLambda
 
         currState =
             VM.initState vm
@@ -151,6 +151,11 @@ factorial =
             [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
     in
     Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 6, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+
+
+letLambda : Prog.Program
+letLambda =
+    Prog.fromList [ NIL, LDF, NESTED [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ]
 
 
 

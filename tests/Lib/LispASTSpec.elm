@@ -97,6 +97,14 @@ integrationEdgeCases =
         , Test.test "Parses (+) as a function application (this is not valid once we compile it though)" <|
             \_ ->
                 Expect.equal (parse "(+)") (Ok <| FuncApp (var "+") [])
+        , Test.test "Function in let binding" <|
+            \_ ->
+                parse "(let (f) ((lambda (x) (+ x 1))) (f 3))"
+                    |> Expect.equal
+                        (Ok <|
+                            Let [ ( token "f", Lambda [ token "x" ] (FuncApp (var "+") [ var "x", int 1 ]) ) ]
+                                (FuncApp (var "f") [ int 3 ])
+                        )
         ]
 
 
