@@ -11,6 +11,7 @@
             "elm/html": "1.0.0",
             "elm/parser": "1.1.0",
             "elm-community/list-extra": "8.5.2",
+            "elm-community/result-extra": "2.4.0",
             "mdgriffith/elm-ui": "1.1.8",
             "ohanhi/keyboard": "2.0.1",
             "wernerdegroot/listzipper": "4.0.0"

@@ -227,7 +227,7 @@ testCompilerEnvironment : Test
 testCompilerEnvironment =
     Test.describe "Testing Compiler Environment"
         [ compiledEnvLookup
-        , testAddLetBindings
+        , testAddVarNames
         ]
 
 
@@ -235,23 +235,17 @@ compiledEnvLookup : Test
 compiledEnvLookup =
     let
         testEnv =
-            { letBindings = Dict.fromList [ ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
-            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
-            }
+            Env [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
     in
     Test.describe "Environment Lookup"
         [ Test.test "lookup function - correctly looks up function closure" <|
             \_ ->
                 lookup "asdkjasdkas" testEnv
-                    |> Expect.equal (Ok [ LD ( 2, 3 ) ])
-        , Test.test "lookup function - correctly looks up function closure before let bindings" <|
+                    |> Expect.equal (Ok <| LD ( 2, 3 ))
+        , Test.test "lookup function - correctly looks up function closure - part 2" <|
             \_ ->
                 lookup "x" testEnv
-                    |> Expect.equal (Ok [ LD ( 1, 1 ) ])
-        , Test.test "lookup function - correctly looks up let bindings" <|
-            \_ ->
-                lookup "y" testEnv
-                    |> Expect.equal (Ok [ LDC 2 ])
+                    |> Expect.equal (Ok <| LD ( 1, 1 ))
         , Test.test "lookup function - correctly fails for unknown variable" <|
             \_ ->
                 lookup "pppppp" testEnv
@@ -259,31 +253,31 @@ compiledEnvLookup =
         ]
 
 
-testAddLetBindings : Test
-testAddLetBindings =
+testAddVarNames : Test
+testAddVarNames =
     let
         testEnv =
-            { letBindings = Dict.fromList [ ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
-            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
-            }
+            Env [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
     in
     Test.describe "Test addLetBindings"
         [ Test.test "Succeeds with adding a single let bind" <|
             \_ ->
-                addLetBindings [ ( "pppppp", [ LDC 1 ] ) ] testEnv
+                addVarNames [ "pppppp" ] testEnv
                     |> Expect.equal
-                        (Ok
-                            { letBindings = Dict.fromList [ ( "pppppp", [ LDC 1 ] ), ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
-                            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
-                            }
-                        )
+                        (Env [ [ "pppppp" ], [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ])
         , Test.test "Able to query after adding a let bind" <|
             \_ ->
-                addLetBindings [ ( "pppppp", [ LDC 1 ] ) ] testEnv
-                    |> Result.andThen (lookup "pppppp")
-                    |> Expect.equal (Ok [ LDC 1 ])
-        , Test.test "Fails for name collisions" <|
+                addVarNames [ "pppppp", "x", "z" ] testEnv
+                    |> lookup "pppppp"
+                    |> Expect.equal (Ok <| LD ( 1, 1 ))
+        , Test.test "Query an earlier element after a let bind" <|
             \_ ->
-                addLetBindings [ ( "x", [ LDC 1 ] ) ] testEnv
-                    |> Expect.err
+                addVarNames [ "pppppp" ] testEnv
+                    |> lookup "w"
+                    |> Expect.equal (Ok <| LD ( 3, 1 ))
+        , Test.test "More recent pushes to the env are treated with higher priority" <|
+            \_ ->
+                addVarNames [ "pppppp", "x" ] testEnv
+                    |> lookup "x"
+                    |> Expect.equal (Ok <| LD ( 1, 2 ))
         ]

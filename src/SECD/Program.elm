@@ -6,6 +6,7 @@ import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
+import Result.Extra
 import SECD.Error exposing (Error)
 
 
@@ -270,8 +271,8 @@ compile_ env ast =
         AST.Var (AST.Token "nil") ->
             Ok [ NIL ]
 
-        AST.Var (AST.Token variable) ->
-            lookup variable env
+        AST.Var (AST.Token var) ->
+            Result.map List.singleton <| lookup var env
 
         -- Compile list (nil on empty list)
         AST.Quote cons ->
@@ -291,6 +292,9 @@ compile_ env ast =
                 (compile_ env cond)
                 (compile_ env branchT)
                 (compile_ env branchF)
+
+        AST.Let bindings body ->
+            compileLet env bindings body
 
         _ ->
             Err "Not supported yet"
@@ -341,6 +345,27 @@ compileFuncApp env f args =
     compileFunc env f
         |> Result.andThen checkArity
         |> Result.andThen addArguments
+
+
+compileLet : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
+compileLet env bindings letBody =
+    let
+        vars =
+            List.map (Tuple.first >> AST.tokenToStr) bindings
+
+        compiledVals =
+            List.map Tuple.second bindings
+                |> compileArgs env False
+
+        compiledBody =
+            compile_ (addVarNames vars env) letBody
+    in
+    Result.map2
+        (\compiledBodyOk compiledArgsOk ->
+            compiledArgsOk ++ compiledBodyOk
+        )
+        compiledBody
+        compiledVals
 
 
 
@@ -397,7 +422,7 @@ compileFunc env f =
         -- I can fix that later, right?
         AST.Var (AST.Token token) ->
             lookup token env
-                |> Result.map (\val -> ( Nothing, val, False ))
+                |> Result.map (\val -> ( Nothing, [ val ], False ))
 
         AST.Val _ ->
             Err "Illegal function call - attempting to call an integer!"
@@ -491,50 +516,23 @@ compileArgs env isBuiltIn args =
 -- when we immediately come across a variable name we don't know, we exit, unlike lisp
 
 
-type alias Environment =
-    { -- a simple map of an identifier to its compiled value
-      -- Making this a dictoinary means we prevent shadowing, since each let binding identifier must be unique
-      letBindings : Dict String (List Op)
-
-    -- doubly nested list of argument names
-    -- Used to calculate the "coordinates" of each value
-    , functionClosure : List (List String)
-    }
+type Environment
+    = -- doubly nested list of argument names
+      -- Used to calculate the "coordinates" of each value
+      Env (List (List String))
 
 
 emptyEnv : Environment
 emptyEnv =
-    { letBindings = Dict.empty
-    , functionClosure = []
-    }
-
-
-
--- Lookup the value of a variable
--- we first look at the function closure, then the let binding closure
-
-
-lookup : String -> Environment -> Result Error (List Op)
-lookup var env =
-    case lookupFunctionClosure var env.functionClosure of
-        Nothing ->
-            case Dict.get var env.letBindings of
-                Nothing ->
-                    Err <| "Unknown variable " ++ var ++ "!"
-
-                Just val ->
-                    Ok val
-
-        Just loadC ->
-            Ok [ loadC ]
+    Env []
 
 
 
 -- returns an apprioriate LD (x.y), else fails with "unknown variable"
 
 
-lookupFunctionClosure : String -> List (List String) -> Maybe Op
-lookupFunctionClosure var env =
+lookup : String -> Environment -> Result Error Op
+lookup var (Env env) =
     let
         searchLine : List String -> Int -> Int -> Maybe Op
         searchLine l y x =
@@ -549,16 +547,16 @@ lookupFunctionClosure var env =
                     else
                         searchLine tl y (x + 1)
 
-        helper : List (List String) -> Int -> Maybe Op
+        helper : List (List String) -> Int -> Result Error Op
         helper l y =
             case l of
                 [] ->
-                    Nothing
+                    Err <| "Unknown variable " ++ var ++ "!"
 
                 hd :: tl ->
                     case searchLine hd y 1 of
                         Just op ->
-                            Just op
+                            Ok op
 
                         Nothing ->
                             helper tl (y + 1)
@@ -567,19 +565,9 @@ lookupFunctionClosure var env =
 
 
 
--- Adding Let Bindings, making sure fail when there is a name collision
+-- only add names/strings to the let bindings
 
 
-addLetBindings : List ( String, List Op ) -> Environment -> Result Error Environment
-addLetBindings bindings env =
-    case bindings of
-        [] ->
-            Ok env
-
-        ( var, val ) :: binds ->
-            case Dict.get var env.letBindings of
-                Just _ ->
-                    Err <| "Variable '" ++ var ++ "' was already defined above!"
-
-                Nothing ->
-                    addLetBindings binds { env | letBindings = Dict.insert var val env.letBindings }
+addVarNames : List String -> Environment -> Environment
+addVarNames vars (Env env) =
+    Env (vars :: env)
