@@ -279,6 +279,15 @@ compile_ ast =
         AST.FuncApp f args ->
             compileFuncApp f args
 
+        AST.If cond branchT branchF ->
+            Result.map3
+                (\compiledCond compiledT compiledF ->
+                    compiledCond ++ [ SEL, NESTED (compiledT ++ [ JOIN ]), NESTED (compiledF ++ [ JOIN ]) ]
+                )
+                (compile_ cond)
+                (compile_ branchT)
+                (compile_ branchF)
+
         _ ->
             Err "Not supported yet"
 
@@ -304,26 +313,26 @@ compileCons cs =
 compileFuncApp : AST -> List AST -> Result Error (List Op)
 compileFuncApp f args =
     let
-        checkArity : ( Maybe Int, List Op ) -> Result Error (List Op)
-        checkArity ( mArity, compiledFunction ) =
+        checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( List Op, Bool )
+        checkArity ( mArity, compiledFunction, isBuiltIn ) =
             case mArity of
                 Just arity ->
                     if arity >= List.length args then
-                        Ok <| LDF :: compiledFunction
+                        Ok ( compiledFunction, isBuiltIn )
 
                     else
                         Err <| "Invalid number of arguments"
 
                 Nothing ->
-                    Ok <| LDF :: compiledFunction
+                    Ok ( compiledFunction, isBuiltIn )
 
-        addArguments : List Op -> Result Error (List Op)
-        addArguments compiledFunction =
+        addArguments : ( List Op, Bool ) -> Result Error (List Op)
+        addArguments ( compiledFunction, isBuiltIn ) =
             Result.map
                 (\compiledArgs ->
                     compiledArgs ++ compiledFunction
                 )
-                (compileArgs args)
+                (compileArgs isBuiltIn args)
     in
     compileFunc f
         |> Result.andThen checkArity
@@ -331,51 +340,52 @@ compileFuncApp f args =
 
 
 
--- compiles the function that is being called, and also returns the number of arguments it can take.
--- the arguments are Nothing if we don't know how many arguments it takes (e.g. a Let binding)
+-- Compiles the function that we're calling arguments with
+-- Returns : ( Arity, Compiled Function, isBuiltIn )
+-- the Arity is Nothing if we don't know how many arguments it takes (e.g. an if statement)
 
 
-compileFunc : AST -> Result Error ( Maybe Int, List Op )
+compileFunc : AST -> Result Error ( Maybe Int, List Op, Bool )
 compileFunc f =
     case f of
         AST.Var (AST.Token "+") ->
-            Ok <| ( Just 2, [ FUNC ADD ] )
+            Ok <| ( Just 2, [ FUNC ADD ], True )
 
         AST.Var (AST.Token "*") ->
-            Ok <| ( Just 2, [ FUNC MULT ] )
+            Ok <| ( Just 2, [ FUNC MULT ], True )
 
         AST.Var (AST.Token "-") ->
-            Ok <| ( Just 2, [ FUNC SUB ] )
+            Ok <| ( Just 2, [ FUNC SUB ], True )
 
         AST.Var (AST.Token "atom") ->
-            Ok <| ( Just 1, [ FUNC ATOM ] )
+            Ok <| ( Just 1, [ FUNC ATOM ], True )
 
         AST.Var (AST.Token "cons") ->
-            Ok <| ( Just 2, [ FUNC CONS ] )
+            Ok <| ( Just 2, [ FUNC CONS ], True )
 
         AST.Var (AST.Token "car") ->
-            Ok <| ( Just 1, [ FUNC CAR ] )
+            Ok <| ( Just 1, [ FUNC CAR ], True )
 
         AST.Var (AST.Token "cdr") ->
-            Ok <| ( Just 1, [ FUNC CDR ] )
+            Ok <| ( Just 1, [ FUNC CDR ], True )
 
         AST.Var (AST.Token "null") ->
-            Ok <| ( Just 1, [ FUNC NULL ] )
+            Ok <| ( Just 1, [ FUNC NULL ], True )
 
         AST.Var (AST.Token "eq") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_EQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_EQ) ], True )
 
         AST.Var (AST.Token "<") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LT) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LT) ], True )
 
         AST.Var (AST.Token ">") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GT) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GT) ], True )
 
         AST.Var (AST.Token "<=") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LEQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_LEQ) ], True )
 
         AST.Var (AST.Token ">=") ->
-            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ] )
+            Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ], True )
 
         AST.Var (AST.Token token) ->
             Err <| "CompileFunc - custom function names not implemented yet! (token: " ++ token ++ ")"
@@ -388,55 +398,79 @@ compileFunc f =
 
         -- currying
         AST.FuncApp f_ args_ ->
-            -- basically compiles the arguments, then compiles the function.
-            compileArgs args_
-                |> Result.andThen
-                    (\compiledArgs ->
-                        Result.map (\compiledFunc -> ( compiledArgs, compiledFunc ))
-                            (compileFunc f_)
-                    )
-                |> Result.andThen
-                    (\( compiledArgs, ( funcArity, compiledFunc ) ) ->
-                        let
-                            newArity =
-                                Maybe.map (\n -> n - List.length args_) funcArity
-                        in
-                        case newArity of
-                            Just n ->
-                                if n < 0 then
-                                    Err "CompileFunc - Too many arguments"
+            let
+                checkArity : ( Maybe Int, List Op, Bool ) -> Result Error ( Maybe Int, List Op, Bool )
+                checkArity ( funcArity, compiledFunc, isBuiltin ) =
+                    let
+                        newArity =
+                            Maybe.map (\n -> n - List.length args_) funcArity
+                    in
+                    case newArity of
+                        Just n ->
+                            if n < 0 then
+                                Err "CompileFunc - Too many arguments"
 
-                                else
-                                    Ok ( newArity, compiledArgs ++ compiledFunc )
+                            else
+                                Ok ( newArity, compiledFunc, isBuiltin )
 
-                            Nothing ->
-                                Ok ( newArity, compiledArgs ++ compiledFunc )
-                    )
+                        Nothing ->
+                            Ok ( newArity, compiledFunc, isBuiltin )
+
+                addArgs : ( Maybe Int, List Op, Bool ) -> Result Error ( Maybe Int, List Op, Bool )
+                addArgs ( funcArity, compiledFunc, isBuiltin ) =
+                    Result.map
+                        (\compiledArgs -> ( funcArity, compiledArgs ++ compiledFunc, isBuiltin ))
+                        (compileArgs isBuiltin args_)
+            in
+            -- Compiles the function, then compiles arguments
+            -- argument compilation depends on if the function is builtin (push arguments onto stack naively)
+            -- or not (create a list to push onto the stack)
+            compileFunc f_
+                |> Result.andThen checkArity
+                |> Result.andThen addArgs
 
         -- idk how do compile user defined functions yet
         _ ->
             Err "Compile Function - not implemented yet."
 
 
-compileArgs : List AST -> Result Error (List Op)
-compileArgs args =
+
+-- ifthe arguments are from a builtin function, we can just push them onto the stack
+-- otherwise, make a list out of the arguments.
+
+
+compileArgs : Bool -> List AST -> Result Error (List Op)
+compileArgs isBuiltIn args =
     let
-        helper : List AST -> Result Error (List Op)
-        helper args_ =
+        compileNonBuiltin : List AST -> Result Error (List Op)
+        compileNonBuiltin args_ =
             case args_ of
                 [] ->
                     Ok [ NIL ]
 
                 arg :: xs ->
                     Result.map2
-                        (\cmpArg cmpArgs ->
-                            FUNC CONS :: (cmpArg ++ cmpArgs)
-                        )
+                        (\cmpArg cmpArgs -> FUNC CONS :: (cmpArg ++ cmpArgs))
                         (compile_ arg)
-                        (helper xs)
+                        (compileNonBuiltin xs)
+
+        compileBuiltin : List AST -> Result Error (List Op)
+        compileBuiltin args_ =
+            case args_ of
+                [] ->
+                    Ok []
+
+                arg :: xs ->
+                    Result.map2
+                        (\cmpArg cmpArgs -> cmpArg ++ cmpArgs)
+                        (compile_ arg)
+                        (compileBuiltin xs)
     in
     if List.length args == 0 then
         Ok []
 
+    else if isBuiltIn then
+        Result.map List.reverse (compileBuiltin args)
+
     else
-        Result.map List.reverse (helper args)
+        Result.map List.reverse (compileNonBuiltin args)
