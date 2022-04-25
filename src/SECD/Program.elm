@@ -1,12 +1,10 @@
 module SECD.Program exposing (..)
 
-import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
-import Result.Extra
 import SECD.Error exposing (Error)
 
 

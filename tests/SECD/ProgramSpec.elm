@@ -1,6 +1,5 @@
 module SECD.ProgramSpec exposing (suite)
 
-import Dict
 import Expect
 import Fuzz
 import Lib.Cons as Cons
