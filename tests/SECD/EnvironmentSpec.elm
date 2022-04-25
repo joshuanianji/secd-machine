@@ -3,7 +3,7 @@ module SECD.EnvironmentSpec exposing (suite)
 import Expect
 import Fuzz exposing (Fuzzer)
 import Lib.Cons as Cons
-import SECD.Environment as Env
+import SECD.VMEnv as Env
 import Test exposing (Test)
 
 

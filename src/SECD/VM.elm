@@ -3,9 +3,9 @@ module SECD.VM exposing (..)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
-import SECD.Environment as Env exposing (EnvItem(..), Environment)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
+import SECD.VMEnv as Env exposing (EnvItem(..), Environment)
 
 
 

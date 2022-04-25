@@ -263,29 +263,6 @@ compile ast =
     Result.map Program <| compile_ emptyEnv ast
 
 
-
--- keeps track of the environment, or the value of a variable
--- we first look at the function closure, then the let binding closure
--- when we immediately come across a variable name we don't know, we exit, unlike lisp
-
-
-type alias Environment =
-    { -- a simple map of an identifier to its compiled value
-      letBindings : Dict String (List Op)
-
-    -- doubly nested list of argument names
-    -- Used to calculate the "coordinates" of each value
-    , functionClosure : List (List String)
-    }
-
-
-emptyEnv : Environment
-emptyEnv =
-    { letBindings = Dict.empty
-    , functionClosure = []
-    }
-
-
 compile_ : Environment -> AST -> Result Error (List Op)
 compile_ env ast =
     case ast of
@@ -498,3 +475,83 @@ compileArgs env isBuiltIn args =
 
     else
         Result.map List.reverse (compileNonBuiltin args)
+
+
+
+---- ENVIRONMENT ----
+-- keeps track of the environment, or the value of a variable
+-- when we immediately come across a variable name we don't know, we exit, unlike lisp
+
+
+type alias Environment =
+    { -- a simple map of an identifier to its compiled value
+      letBindings : Dict String (List Op)
+
+    -- doubly nested list of argument names
+    -- Used to calculate the "coordinates" of each value
+    , functionClosure : List (List String)
+    }
+
+
+emptyEnv : Environment
+emptyEnv =
+    { letBindings = Dict.empty
+    , functionClosure = []
+    }
+
+
+
+-- Lookup the value of a variable
+-- we first look at the function closure, then the let binding closure
+
+
+lookup : String -> Environment -> Result Error (List Op)
+lookup var env =
+    case lookupFunctionClosure var env.functionClosure of
+        Nothing ->
+            case Dict.get var env.letBindings of
+                Nothing ->
+                    Err <| "Unknown variable " ++ var ++ "!"
+
+                Just val ->
+                    Ok val
+
+        Just loadC ->
+            Ok [ loadC ]
+
+
+
+-- returns an apprioriate LD (x.y), else fails with "unknown variable"
+
+
+lookupFunctionClosure : String -> List (List String) -> Maybe Op
+lookupFunctionClosure var env =
+    let
+        searchLine : List String -> Int -> Int -> Maybe Op
+        searchLine l y x =
+            case l of
+                [] ->
+                    Nothing
+
+                hd :: tl ->
+                    if hd == var then
+                        Just <| LD ( y, x )
+
+                    else
+                        searchLine tl y (x + 1)
+
+        helper : List (List String) -> Int -> Maybe Op
+        helper l y =
+            case l of
+                [] ->
+                    Nothing
+
+                hd :: tl ->
+                    case searchLine hd y 1 of
+                        Just op ->
+                            Just op
+
+                        Nothing ->
+                            helper tl (y + 1)
+    in
+    helper env 1

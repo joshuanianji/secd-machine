@@ -1,5 +1,6 @@
 module SECD.ProgramSpec exposing (suite)
 
+import Dict
 import Expect
 import Fuzz
 import Lib.Cons as Cons
@@ -11,7 +12,9 @@ import Test exposing (Test)
 suite : Test
 suite =
     Test.describe "Program"
-        [ testCompiler ]
+        [ testCompiler
+        , testCompilerEnvironment
+        ]
 
 
 testCompiler : Test
@@ -212,5 +215,43 @@ testCompileFuncCurrying =
         , Test.test "Fails for too many arguments - ((+ 1) 2 3)" <|
             \_ ->
                 compileFunc emptyEnv (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
+                    |> Expect.err
+        ]
+
+
+
+---- COMPILER ENVIRONMENT ----
+
+
+testCompilerEnvironment : Test
+testCompilerEnvironment =
+    Test.describe "Testing Compiler Environment"
+        [ compiledEnvLookup ]
+
+
+compiledEnvLookup : Test
+compiledEnvLookup =
+    let
+        testEnv =
+            { letBindings = Dict.fromList [ ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
+            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
+            }
+    in
+    Test.describe "Environment Lookup"
+        [ Test.test "lookup function - correctly looks up function closure" <|
+            \_ ->
+                lookup "asdkjasdkas" testEnv
+                    |> Expect.equal (Ok [ LD ( 2, 3 ) ])
+        , Test.test "lookup function - correctly looks up function closure before let bindings" <|
+            \_ ->
+                lookup "x" testEnv
+                    |> Expect.equal (Ok [ LD ( 1, 1 ) ])
+        , Test.test "lookup function - correctly looks up let bindings" <|
+            \_ ->
+                lookup "y" testEnv
+                    |> Expect.equal (Ok [ LDC 2 ])
+        , Test.test "lookup function - correctly fails for unknown variable" <|
+            \_ ->
+                lookup "pppppp" testEnv
                     |> Expect.err
         ]

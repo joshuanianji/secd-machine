@@ -1,4 +1,4 @@
-module SECD.Environment exposing (..)
+module SECD.VMEnv exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
@@ -7,7 +7,9 @@ import Lib.Util as Util
 
 
 
--- Environment stack needs to be a list of lists, so it's a little more complicated.alias
+-- "Environment" stack used by the VM when executing
+-- Environment stack is essentially a list of lists, so it's a little more complicated than that
+-- putting this in its own file for organization
 
 
 type alias Environment a =
@@ -15,7 +17,7 @@ type alias Environment a =
 
 
 type EnvItem a
-    = ListItem (List (Cons a)) -- this ensures the Environent is at least nested 2 deep.
+    = ListItem (List (Cons a)) -- this ensures the Environment is at least nested 2 deep.
     | Dummy -- with doing recursion
 
 
