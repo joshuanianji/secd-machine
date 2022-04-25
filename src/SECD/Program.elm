@@ -4,7 +4,7 @@ import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.Cons as Cons exposing (Cons)
-import Lib.LispAST as AST exposing (AST)
+import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
 import SECD.Error exposing (Error)
 
@@ -270,6 +270,9 @@ compile_ env ast =
         AST.Var (AST.Token "nil") ->
             Ok [ NIL ]
 
+        AST.Var (AST.Token variable) ->
+            lookup variable env
+
         -- Compile list (nil on empty list)
         AST.Quote cons ->
             Ok <| compileCons cons
@@ -388,8 +391,13 @@ compileFunc env f =
         AST.Var (AST.Token ">=") ->
             Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ], True )
 
+        -- custom function
+        -- rerun compileFunc, but substitute with the value of the token
+        -- we get lazy and just say we don't know the value of any let-binding function, but that's ok
+        -- I can fix that later, right?
         AST.Var (AST.Token token) ->
-            Err <| "CompileFunc - custom function names not implemented yet! (token: " ++ token ++ ")"
+            lookup token env
+                |> Result.map (\val -> ( Nothing, val, False ))
 
         AST.Val _ ->
             Err "Illegal function call - attempting to call an integer!"
@@ -485,6 +493,7 @@ compileArgs env isBuiltIn args =
 
 type alias Environment =
     { -- a simple map of an identifier to its compiled value
+      -- Making this a dictoinary means we prevent shadowing, since each let binding identifier must be unique
       letBindings : Dict String (List Op)
 
     -- doubly nested list of argument names
@@ -555,3 +564,22 @@ lookupFunctionClosure var env =
                             helper tl (y + 1)
     in
     helper env 1
+
+
+
+-- Adding Let Bindings, making sure to
+
+
+addLetBindings : List ( String, List Op ) -> Environment -> Result Error Environment
+addLetBindings bindings env =
+    case bindings of
+        [] ->
+            Ok env
+
+        ( var, val ) :: binds ->
+            case Dict.get var env.letBindings of
+                Just _ ->
+                    Err <| "Variable '" ++ var ++ "' was already defined above!"
+
+                Nothing ->
+                    addLetBindings binds { env | letBindings = Dict.insert var val env.letBindings }

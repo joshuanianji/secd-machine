@@ -30,6 +30,11 @@ type Token
     = Token String
 
 
+tokenToStr : Token -> String
+tokenToStr (Token str) =
+    str
+
+
 
 -- constructors
 -- mainly for writing tests

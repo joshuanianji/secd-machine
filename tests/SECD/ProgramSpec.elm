@@ -226,7 +226,9 @@ testCompileFuncCurrying =
 testCompilerEnvironment : Test
 testCompilerEnvironment =
     Test.describe "Testing Compiler Environment"
-        [ compiledEnvLookup ]
+        [ compiledEnvLookup
+        , testAddLetBindings
+        ]
 
 
 compiledEnvLookup : Test
@@ -253,5 +255,35 @@ compiledEnvLookup =
         , Test.test "lookup function - correctly fails for unknown variable" <|
             \_ ->
                 lookup "pppppp" testEnv
+                    |> Expect.err
+        ]
+
+
+testAddLetBindings : Test
+testAddLetBindings =
+    let
+        testEnv =
+            { letBindings = Dict.fromList [ ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
+            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
+            }
+    in
+    Test.describe "Test addLetBindings"
+        [ Test.test "Succeeds with adding a single let bind" <|
+            \_ ->
+                addLetBindings [ ( "pppppp", [ LDC 1 ] ) ] testEnv
+                    |> Expect.equal
+                        (Ok
+                            { letBindings = Dict.fromList [ ( "pppppp", [ LDC 1 ] ), ( "x", [ LDC 1 ] ), ( "y", [ LDC 2 ] ) ]
+                            , functionClosure = [ [ "x", "z" ], [ "w", "q", "asdkjasdkas" ] ]
+                            }
+                        )
+        , Test.test "Able to query after adding a let bind" <|
+            \_ ->
+                addLetBindings [ ( "pppppp", [ LDC 1 ] ) ] testEnv
+                    |> Result.andThen (lookup "pppppp")
+                    |> Expect.equal (Ok [ LDC 1 ])
+        , Test.test "Fails for name collisions" <|
+            \_ ->
+                addLetBindings [ ( "x", [ LDC 1 ] ) ] testEnv
                     |> Expect.err
         ]
