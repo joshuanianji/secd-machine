@@ -253,6 +253,10 @@ testCompileFuncApp =
             \_ ->
                 compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5 ] ], AST.int 3 ]
                     |> Expect.equal (Ok [ LDC 3, LDC 5, LDC 2, FUNC MULT, LDC 1, FUNC SUB, FUNC ADD ])
+        , Test.test "Deeper nested arithmetic fails for too many args - (+ (- 1 (* 2 5 3)) 3)" <|
+            \_ ->
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5, AST.int 3 ] ], AST.int 3 ]
+                    |> Expect.err
         ]
 
 
