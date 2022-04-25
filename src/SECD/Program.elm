@@ -567,7 +567,7 @@ lookupFunctionClosure var env =
 
 
 
--- Adding Let Bindings, making sure to
+-- Adding Let Bindings, making sure fail when there is a name collision
 
 
 addLetBindings : List ( String, List Op ) -> Environment -> Result Error Environment
