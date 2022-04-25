@@ -35,7 +35,7 @@ init : ( Model, Cmd Msg )
 init =
     let
         vm =
-            VM.initRaw factorial
+            VM.initRaw <| mutuallyRecursiveIsEven 5
 
         currState =
             VM.initState vm

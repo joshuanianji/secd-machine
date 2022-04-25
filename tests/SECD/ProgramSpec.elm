@@ -26,12 +26,9 @@ testCompiler =
 
 integrationTests : Test
 integrationTests =
-    Test.describe "Testing the entire Program.astToOps"
+    Test.describe "Testing the entire Program.compile"
         [ integrationBasics
-        , integrationIf
-
-        -- "stress testing" environment handling
-        -- , integrationEnv
+        , integrationComplex
         ]
 
 
@@ -54,13 +51,36 @@ integrationBasics =
         ]
 
 
-integrationIf : Test
-integrationIf =
-    Test.describe "If statement structures" <|
-        [ Test.test "(if (ATOM 1) 1 2" <|
+integrationComplex : Test
+integrationComplex =
+    Test.describe "More complex structures" <|
+        [ Test.test "(if (ATOM 1) 1 2)" <|
             \_ ->
                 (compile_ emptyEnv <| AST.If (AST.FuncApp (AST.var "atom") [ AST.int 1 ]) (AST.int 1) (AST.int 2))
                     |> Expect.equal (Ok [ LDC 1, FUNC ATOM, SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ])
+        , Test.test "Pseudo currying - ((lambda (x) ((lambda (x y) (+ x y)) 4 x)) 5)" <|
+            \_ ->
+                let
+                    adder =
+                        AST.Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
+
+                    adderCompiled =
+                        [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ]
+
+                    outerFunc =
+                        AST.Lambda [ AST.token "x" ] (AST.FuncApp adder [ AST.Val 4, AST.var "x" ])
+
+                    outerFuncCompiled =
+                        [ NIL, LD ( 0, 0 ), FUNC CONS, LDC 4, FUNC CONS, LDF, NESTED adderCompiled, AP, RTN ]
+
+                    body =
+                        AST.FuncApp outerFunc [ AST.Val 5 ]
+
+                    bodyCompiled =
+                        [ NIL, LDC 5, FUNC CONS, LDF, NESTED outerFuncCompiled, AP ]
+                in
+                compile_ emptyEnv body
+                    |> Expect.equal (Ok bodyCompiled)
         ]
 
 
