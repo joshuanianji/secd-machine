@@ -68,6 +68,7 @@ unitTests =
         , testCompileArgsBuiltin
         , testCompileArgsNonbuiltin
         , testCompileFunc
+        , testCompileLet
         ]
 
 
@@ -215,6 +216,16 @@ testCompileFuncCurrying =
             \_ ->
                 compileFunc emptyEnv (FuncApp (FuncApp (AST.var "+") [ AST.int 1 ]) [ AST.int 2, AST.int 3 ])
                     |> Expect.err
+        ]
+
+
+testCompileLet : Test
+testCompileLet =
+    Test.describe "Program.compileLet" <|
+        [ Test.test "compiled (let (x) (1) (+ x 2))" <|
+            \_ ->
+                compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
+                    |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 1, 1 ), FUNC ADD, RTN ], AP ])
         ]
 
 

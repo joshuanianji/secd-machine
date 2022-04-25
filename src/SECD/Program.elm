@@ -294,6 +294,9 @@ compile_ env ast =
         AST.Let bindings body ->
             compileLet env bindings body
 
+        AST.Lambda vars body ->
+            compileLambda env vars body
+
         _ ->
             Err "Not supported yet"
 
@@ -345,8 +348,12 @@ compileFuncApp env f args =
         |> Result.andThen addArguments
 
 
+
+-- compiled very similarly with Lambdass
+
+
 compileLet : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
-compileLet env bindings letBody =
+compileLet env bindings body =
     let
         vars =
             List.map (Tuple.first >> AST.tokenToStr) bindings
@@ -355,12 +362,35 @@ compileLet env bindings letBody =
             List.map Tuple.second bindings
                 |> compileArgs env False
 
+        newEnv =
+            addVarNames vars env
+
         compiledBody =
-            compile_ (addVarNames vars env) letBody
+            compile_ newEnv body
     in
     Result.map2
         (\compiledBodyOk compiledArgsOk ->
-            compiledArgsOk ++ compiledBodyOk
+            compiledArgsOk ++ [ LDF, NESTED (compiledBodyOk ++ [ RTN ]), AP ]
+        )
+        compiledBody
+        compiledVals
+
+
+compileLambda : Environment -> List Token -> AST -> Result Error (List Op)
+compileLambda env vars body =
+    let
+        vars =
+            List.map (Tuple.first >> AST.tokenToStr) bindings
+
+        newEnv =
+            addVarNames vars env
+
+        compiledBody =
+            compile_ newEnv body
+    in
+    Result.map2
+        (\compiledBodyOk compiledArgsOk ->
+            compiledArgsOk ++ [ LDF, NESTED (compiledBodyOk ++ [ RTN ]), AP ]
         )
         compiledBody
         compiledVals
@@ -375,6 +405,7 @@ compileLet env bindings letBody =
 compileFunc : Environment -> AST -> Result Error ( Maybe Int, List Op, Bool )
 compileFunc env f =
     case f of
+        -- Builtin functions
         AST.Var (AST.Token "+") ->
             Ok <| ( Just 2, [ FUNC ADD ], True )
 
@@ -415,9 +446,7 @@ compileFunc env f =
             Ok <| ( Just 2, [ FUNC (COMPARE CMP_GEQ) ], True )
 
         -- custom function
-        -- rerun compileFunc, but substitute with the value of the token
-        -- we get lazy and just say we don't know the value of any let-binding function, but that's ok
-        -- I can fix that later, right?
+        -- Find the definition in the environment
         AST.Var (AST.Token token) ->
             lookup token env
                 |> Result.map (\val -> ( Nothing, [ val ], False ))
