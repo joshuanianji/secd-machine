@@ -374,6 +374,33 @@ testRecursiveFuncs =
                         Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
                 in
                 vmExpectSuccess program (VM.Integer 720)
+        , Test.fuzzWith { runs = 5 } (Fuzz.intRange 0 10) "Mutually recursive isEven" <|
+            \n ->
+                let
+                    isEven =
+                        mutualRecursive [ NIL ] ( 1, 1 )
+
+                    isOdd =
+                        mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+
+                    mutualRecursive onTrue letrecCoords =
+                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
+
+                    body =
+                        [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
+
+                    program =
+                        Prog.fromList
+                            [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
+
+                    expected =
+                        if modBy 2 n == 1 then
+                            VM.nil
+
+                        else
+                            VM.Truthy
+                in
+                vmExpectSuccess program expected
         ]
 
 

@@ -5,6 +5,7 @@ import Fuzz
 import Lib.Cons as Cons
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
+import SECD.Program exposing (Func)
 import Test exposing (Test)
 
 
@@ -28,6 +29,7 @@ integrations =
         [ integrationBasics
         , integrationFuncApps
         , integrationEdgeCases
+        , integrationGeneral
         ]
 
 
@@ -105,6 +107,40 @@ integrationEdgeCases =
                             Let [ ( token "f", Lambda [ token "x" ] (FuncApp (var "+") [ var "x", int 1 ]) ) ]
                                 (FuncApp (var "f") [ int 3 ])
                         )
+        ]
+
+
+integrationGeneral : Test
+integrationGeneral =
+    Test.describe "Parsing bigger programs"
+        [ Test.test "Recursive length program" <|
+            \_ ->
+                let
+                    program =
+                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1) )))) (f '(1 2 3) 0))"
+
+                    expected =
+                        Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
+                in
+                parse program
+                    |> Expect.equal (Ok expected)
+        , Test.test "Mutually recursive isEven" <|
+            \_ ->
+                let
+                    program =
+                        "(letrec (odd even) ((lambda (n) (if (eq n 0) nil (even (- n 1)))) (lambda (n) (if (eq n 0) (atom nil) (odd (- n 1))))) (even 4))"
+
+                    oddFunc =
+                        Lambda [ Token "n" ] (If (FuncApp (var "eq") [ var "n", Val 0 ]) nil (FuncApp (var "even") [ FuncApp (var "-") [ var "n", Val 1 ] ]))
+
+                    evenFunc =
+                        Lambda [ Token "n" ] (If (FuncApp (var "eq") [ var "n", Val 0 ]) (FuncApp (var "atom") [ nil ]) (FuncApp (var "odd") [ FuncApp (var "-") [ var "n", Val 1 ] ]))
+
+                    expected =
+                        Letrec [ ( Token "odd", oddFunc ), ( Token "even", evenFunc ) ] (FuncApp (var "even") [ Val 4 ])
+                in
+                parse program
+                    |> Expect.equal (Ok expected)
         ]
 
 

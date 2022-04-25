@@ -280,7 +280,7 @@ compile_ env ast =
             Ok <| [ LDC n ]
 
         AST.FuncApp f args ->
-            compileFuncApp env f args
+            compileFuncApp env f args False
 
         AST.If cond branchT branchF ->
             Result.map3
@@ -291,14 +291,14 @@ compile_ env ast =
                 (compile_ env branchT)
                 (compile_ env branchF)
 
-        AST.Let bindings body ->
-            compileLet env bindings body
-
         AST.Lambda vars body ->
             compileLambda env vars body
 
-        _ ->
-            Err "Not supported yet"
+        AST.Let bindings body ->
+            compileLet env bindings body
+
+        AST.Letrec bindings body ->
+            compileLetrec env bindings body
 
 
 compileCons : Cons Int -> List Op
@@ -320,14 +320,19 @@ compileCons cs =
 
 
 
--- there is a lot of overlap from this function and the compileFunc case for FuncApp
--- Not sure how to merge them, but we're assuming this is the topmost level function call
--- so, the arity must be exactly equal
+-- compiles a function being called with the arguments
 
 
-compileFuncApp : Environment -> AST -> List AST -> Result Error (List Op)
-compileFuncApp env f args =
+compileFuncApp : Environment -> AST -> List AST -> Bool -> Result Error (List Op)
+compileFuncApp env f args isRecursive =
     let
+        apCall =
+            if isRecursive then
+                RAP
+
+            else
+                AP
+
         checkArity : ( Maybe Int, List Op, FuncType ) -> Result Error ( List Op, FuncType )
         checkArity ( mArity, compiledFunction, funcType ) =
             if mArity == Just (List.length args) || mArity == Nothing then
@@ -336,10 +341,10 @@ compileFuncApp env f args =
                         Ok ( compiledFunction, funcType )
 
                     LambdaFunc ->
-                        Ok ( compiledFunction ++ [ AP ], funcType )
+                        Ok ( compiledFunction ++ [ apCall ], funcType )
 
                     LoadedFunc ->
-                        Ok ( compiledFunction ++ [ AP ], funcType )
+                        Ok ( compiledFunction ++ [ apCall ], funcType )
 
             else
                 Err <| "Invalid number of arguments"
@@ -357,12 +362,40 @@ compileFuncApp env f args =
         |> Result.andThen addArguments
 
 
+compileLambda : Environment -> List Token -> AST -> Result Error (List Op)
+compileLambda env vars body =
+    let
+        newEnv =
+            addVarNames (List.map AST.tokenToStr vars) env
+
+        compiledBody =
+            compile_ newEnv body
+    in
+    Result.map
+        (\compiledBodyOk -> [ LDF, NESTED (compiledBodyOk ++ [ RTN ]) ])
+        compiledBody
+
+
 
 -- A let function can be thought of as a lambda function application!
 
 
 compileLet : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
-compileLet env bindings body =
+compileLet =
+    compileLetHelper False
+
+
+compileLetrec : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
+compileLetrec =
+    compileLetHelper True
+
+
+
+-- extrapolates the similaries with compiling let and letrec
+
+
+compileLetHelper : Bool -> Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
+compileLetHelper isRecursive env bindings body =
     let
         vars =
             List.map Tuple.first bindings
@@ -376,22 +409,16 @@ compileLet env bindings body =
 
         lambdaBody =
             AST.Lambda vars body
+
+        compiled =
+            compileFuncApp newEnv lambdaBody vals isRecursive
     in
-    compileFuncApp newEnv lambdaBody vals
+    if isRecursive then
+        -- add DUM in front
+        Result.map ((::) DUM) compiled
 
-
-compileLambda : Environment -> List Token -> AST -> Result Error (List Op)
-compileLambda env vars body =
-    let
-        newEnv =
-            addVarNames (List.map AST.tokenToStr vars) env
-
-        compiledBody =
-            compile_ newEnv body
-    in
-    Result.map
-        (\compiledBodyOk -> [ LDF, NESTED (compiledBodyOk ++ [ RTN ]) ])
-        compiledBody
+    else
+        compiled
 
 
 
@@ -588,14 +615,14 @@ lookup var (Env env) =
                     Err <| "Unknown variable " ++ var ++ "!"
 
                 hd :: tl ->
-                    case searchLine hd y 1 of
+                    case searchLine hd y 0 of
                         Just op ->
                             Ok op
 
                         Nothing ->
                             helper tl (y + 1)
     in
-    helper env 1
+    helper env 0
 
 
 

@@ -35,7 +35,7 @@ init : ( Model, Cmd Msg )
 init =
     let
         vm =
-            VM.initRaw letLambda
+            VM.initRaw factorial
 
         currState =
             VM.initState vm
@@ -156,6 +156,29 @@ factorial =
 letLambda : Prog.Program
 letLambda =
     Prog.fromList [ NIL, LDF, NESTED [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ]
+
+
+
+-- I'm not sure how mutually recursive functions work, so let's try it out!
+
+
+mutuallyRecursiveIsEven : Int -> Prog.Program
+mutuallyRecursiveIsEven n =
+    let
+        isEven =
+            mutualRecursive [ NIL ] ( 1, 1 )
+
+        isOdd =
+            mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+
+        mutualRecursive onTrue letrecCoords =
+            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
+
+        body =
+            [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
+    in
+    Prog.fromList
+        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
 
 
 

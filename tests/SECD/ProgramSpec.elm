@@ -74,8 +74,9 @@ unitTests =
         , testCompileFuncApp
 
         -- note that lambda and let are compiled extremely siimlarly
-        , testCompileLet
         , testCompileLambda
+        , testCompileLet
+        , testCompileLetrec
         ]
 
 
@@ -228,52 +229,36 @@ testCompileFuncApp =
     Test.describe "Program.testCompileFunc"
         [ Test.test "Builtin (-)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ]
+                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ] False
                     |> Expect.equal (Ok [ LDC 2, LDC 1, FUNC SUB ])
         , Test.test "Builtin (CONS)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "cons") [ AST.int 1, AST.nil ]
+                compileFuncApp emptyEnv (AST.var "cons") [ AST.int 1, AST.nil ] False
                     |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS ])
         , Test.test "Builtin - fails for too many args 2 for ATOM)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "atom") [ AST.int 1, AST.nil ]
+                compileFuncApp emptyEnv (AST.var "atom") [ AST.int 1, AST.nil ] False
                     |> Expect.err
         , Test.test "Lambda fails with not enough args - ((lambda (x y) (+ x y)) 2)" <|
             \_ ->
-                compileFunc emptyEnv (FuncApp (Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])) [ AST.int 2 ])
+                compileFuncApp emptyEnv (Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])) [ AST.int 2 ] False
                     |> Expect.err
         , Test.test "Evaluate arithmetic (- 1 2)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ]
+                compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ] False
                     |> Expect.equal (Ok [ LDC 2, LDC 1, FUNC SUB ])
         , Test.test "Slightly more complex arithmetic - (+ (- 1 2) 3)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.int 2 ], AST.int 3 ]
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.int 2 ], AST.int 3 ] False
                     |> Expect.equal (Ok [ LDC 3, LDC 2, LDC 1, FUNC SUB, FUNC ADD ])
         , Test.test "Deeper nested arithmetic - (+ (- 1 (* 2 5)) 3)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5 ] ], AST.int 3 ]
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5 ] ], AST.int 3 ] False
                     |> Expect.equal (Ok [ LDC 3, LDC 5, LDC 2, FUNC MULT, LDC 1, FUNC SUB, FUNC ADD ])
         , Test.test "Deeper nested arithmetic fails for too many args - (+ (- 1 (* 2 5 3)) 3)" <|
             \_ ->
-                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5, AST.int 3 ] ], AST.int 3 ]
+                compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5, AST.int 3 ] ], AST.int 3 ] False
                     |> Expect.err
-        ]
-
-
-testCompileLet : Test
-testCompileLet =
-    Test.describe "Program.compileLet" <|
-        [ Test.test "compiled (let (x) (1) (+ x 2))" <|
-            \_ ->
-                compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
-                    |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 1, 1 ), FUNC ADD, RTN ], AP ])
-        , Test.test "lambda binding - (let (f) ((lambda (x) (+ x 1))) (f 3))" <|
-            \_ ->
-                compileLet emptyEnv
-                    [ ( AST.token "f", AST.Lambda [ AST.token "x" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.int 1 ]) ) ]
-                    (AST.FuncApp (AST.var "f") [ AST.int 3 ])
-                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 1, LD ( 1, 1 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 1, 1 ), AP, RTN ], AP ])
         ]
 
 
@@ -283,7 +268,7 @@ testCompileLambda =
         [ Test.test "compiled (lambda (x y) (+ x y))" <|
             \_ ->
                 compileLambda emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
-                    |> Expect.equal (Ok [ LDF, NESTED [ LD ( 1, 2 ), LD ( 1, 1 ), FUNC ADD, RTN ] ])
+                    |> Expect.equal (Ok [ LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ] ])
         , Test.test "Nested Lambda - (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5))" <|
             \_ ->
                 compileLambda emptyEnv
@@ -295,7 +280,75 @@ testCompileLambda =
                         [ AST.Val 3, AST.Val 5 ]
                     )
                     |> Expect.equal
-                        (Ok [ LDF, NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 2, 1 ), LD ( 1, 2 ), LD ( 1, 1 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
+                        (Ok [ LDF, NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 1, 0 ), LD ( 0, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
+        ]
+
+
+testCompileLet : Test
+testCompileLet =
+    Test.describe "Program.compileLet"
+        [ Test.test "compiled (let (x) (1) (+ x 2))" <|
+            \_ ->
+                compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
+                    |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 0, 0 ), FUNC ADD, RTN ], AP ])
+        , Test.test "lambda binding - (let (f) ((lambda (x) (+ x 1))) (f 3))" <|
+            \_ ->
+                compileLet emptyEnv
+                    [ ( AST.token "f", AST.Lambda [ AST.token "x" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.int 1 ]) ) ]
+                    (AST.FuncApp (AST.var "f") [ AST.int 3 ])
+                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ])
+        ]
+
+
+testCompileLetrec : Test
+testCompileLetrec =
+    Test.describe "Program.compileLetrec"
+        [ Test.test "Recursive Length Program" <|
+            \_ ->
+                let
+                    bindings =
+                        [ ( AST.token "f", AST.Lambda [ AST.token "x", AST.token "m" ] (AST.If (AST.FuncApp (AST.var "null") [ AST.var "x" ]) (AST.var "m") (AST.FuncApp (AST.var "f") [ AST.FuncApp (AST.var "cdr") [ AST.var "x" ], AST.FuncApp (AST.var "+") [ AST.var "m", AST.Val 1 ] ])) ) ]
+
+                    body =
+                        AST.FuncApp (AST.var "f") [ AST.Quote <| Cons.fromList [ 1, 2, 3 ], AST.Val 0 ]
+
+                    expected =
+                        [ DUM, NIL, LDF, NESTED [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ], RAP ]
+                in
+                compileLetrec emptyEnv bindings body
+                    |> Expect.equal (Ok expected)
+        , Test.test "Mutually recursive isEven" <|
+            \_ ->
+                let
+                    oddFunc =
+                        AST.Lambda [ AST.Token "n" ] (AST.If (AST.FuncApp (AST.var "eq") [ AST.var "n", AST.Val 0 ]) AST.nil (AST.FuncApp (AST.var "even") [ AST.FuncApp (AST.var "-") [ AST.var "n", AST.Val 1 ] ]))
+
+                    evenFunc =
+                        AST.Lambda [ AST.Token "n" ] (AST.If (AST.FuncApp (AST.var "eq") [ AST.var "n", AST.Val 0 ]) (AST.FuncApp (AST.var "atom") [ AST.nil ]) (AST.FuncApp (AST.var "odd") [ AST.FuncApp (AST.var "-") [ AST.var "n", AST.Val 1 ] ]))
+
+                    bindings =
+                        [ ( AST.token "odd", oddFunc ), ( AST.token "even", evenFunc ) ]
+
+                    astBody =
+                        AST.FuncApp (AST.var "even") [ AST.Val 4 ]
+
+                    isEven =
+                        mutualRecursive [ NIL ] ( 1, 1 )
+
+                    isOdd =
+                        mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+
+                    mutualRecursive onTrue letrecCoords =
+                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
+
+                    compiledBody =
+                        [ NIL, LDC 4, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
+
+                    expected =
+                        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED compiledBody, RAP ]
+                in
+                compileLetrec emptyEnv bindings astBody
+                    |> Expect.equal (Ok expected)
         ]
 
 
@@ -321,11 +374,11 @@ compiledEnvLookup =
         [ Test.test "lookup function - correctly looks up function closure" <|
             \_ ->
                 lookup "asdkjasdkas" testEnv
-                    |> Expect.equal (Ok <| LD ( 2, 3 ))
+                    |> Expect.equal (Ok <| LD ( 1, 2 ))
         , Test.test "lookup function - correctly looks up function closure - part 2" <|
             \_ ->
                 lookup "x" testEnv
-                    |> Expect.equal (Ok <| LD ( 1, 1 ))
+                    |> Expect.equal (Ok <| LD ( 0, 0 ))
         , Test.test "lookup function - correctly fails for unknown variable" <|
             \_ ->
                 lookup "pppppp" testEnv
@@ -349,15 +402,15 @@ testAddVarNames =
             \_ ->
                 addVarNames [ "pppppp", "x", "z" ] testEnv
                     |> lookup "pppppp"
-                    |> Expect.equal (Ok <| LD ( 1, 1 ))
+                    |> Expect.equal (Ok <| LD ( 0, 0 ))
         , Test.test "Query an earlier element after a let bind" <|
             \_ ->
                 addVarNames [ "pppppp" ] testEnv
                     |> lookup "w"
-                    |> Expect.equal (Ok <| LD ( 3, 1 ))
+                    |> Expect.equal (Ok <| LD ( 2, 0 ))
         , Test.test "More recent pushes to the env are treated with higher priority" <|
             \_ ->
                 addVarNames [ "pppppp", "x" ] testEnv
                     |> lookup "x"
-                    |> Expect.equal (Ok <| LD ( 1, 2 ))
+                    |> Expect.equal (Ok <| LD ( 0, 1 ))
         ]

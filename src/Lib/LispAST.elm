@@ -90,7 +90,8 @@ parser =
     let
         parseInParens =
             Parser.oneOf
-                [ parseFunctionApp
+                [ parseIf
+                , parseFunctionApp
                 , parseLambda
                 , parseLet
                 , parseLetrec
