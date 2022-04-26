@@ -30,6 +30,7 @@ integrations =
         , integrationFuncApps
         , integrationEdgeCases
         , integrationGeneral
+        , integrationSpacing
         ]
 
 
@@ -117,7 +118,7 @@ integrationGeneral =
             \_ ->
                 let
                     program =
-                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1) )))) (f '(1 2 3) 0))"
+                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))) (f '(1 2 3) 0))"
 
                     expected =
                         Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
@@ -138,6 +139,23 @@ integrationGeneral =
 
                     expected =
                         Letrec [ ( Token "odd", oddFunc ), ( Token "even", evenFunc ) ] (FuncApp (var "even") [ Val 4 ])
+                in
+                parse program
+                    |> Expect.equal (Ok expected)
+        ]
+
+
+integrationSpacing : Test
+integrationSpacing =
+    Test.describe "Parsing programs with lots of weird spacing"
+        [ Test.test "Recursive length program" <|
+            \_ ->
+                let
+                    program =
+                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))\n\t\t(f '(1 2 3) 0))"
+
+                    expected =
+                        Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
                 in
                 parse program
                     |> Expect.equal (Ok expected)

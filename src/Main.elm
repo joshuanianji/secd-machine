@@ -1,14 +1,15 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (..)
+import Html exposing (Html)
 import Html.Attributes as Attr
 import Html.Events as Events
-import Keyboard exposing (Key(..))
-import Keyboard.Arrows
-import List.Zipper as Zipper exposing (Zipper)
+import Lib.LispAST as AST exposing (AST)
+import Lib.Util as Util
+import Ports
+import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
-import SECD.VM as VM
+import VMView
 
 
 main : Program () Model Msg
@@ -26,30 +27,22 @@ main =
 
 
 type alias Model =
-    { states : Zipper VM.State
-    , pressedKeys : List Key
+    { code : String
+    , compiled : CompiledState
     }
+
+
+type CompiledState
+    = Idle
+    | ParseError Error
+    | CompileError AST Error
+    | CompileSuccess AST VMView.Model
 
 
 init : ( Model, Cmd Msg )
 init =
-    let
-        vm =
-            VM.initRaw <| mutuallyRecursiveIsEven 5
-
-        currState =
-            VM.initState vm
-
-        afters =
-            case currState of
-                VM.Unfinished nextState ->
-                    VM.evalList nextState
-
-                _ ->
-                    []
-    in
-    ( { states = Zipper.from [] currState afters
-      , pressedKeys = []
+    ( { code = ""
+      , compiled = Idle
       }
     , Cmd.none
     )
@@ -60,11 +53,9 @@ init =
 
 
 type Msg
-    = First
-    | Previous
-    | Step
-    | Last
-    | KeyMsg Keyboard.Msg
+    = CodeChanged String
+    | Compile
+    | VMViewMsg VMView.Msg
 
 
 
@@ -73,49 +64,32 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        First ->
-            ( { model | states = Zipper.first model.states }, Cmd.none )
+    case ( model.compiled, msg ) of
+        ( _, CodeChanged newCode ) ->
+            ( { model | code = newCode }, Cmd.none )
 
-        Previous ->
-            case Zipper.previous model.states of
-                Nothing ->
-                    ( model, Cmd.none )
+        ( _, Compile ) ->
+            case AST.parse model.code of
+                Err deadends ->
+                    ( { model | compiled = ParseError <| Util.deadEndsToString deadends }, Cmd.none )
 
-                Just newState ->
-                    ( { model | states = newState }, Cmd.none )
+                Ok ast ->
+                    case Prog.compile ast of
+                        Err err ->
+                            ( { model | compiled = CompileError ast err }, Cmd.none )
 
-        Step ->
-            case Zipper.next model.states of
-                Nothing ->
-                    ( model, Cmd.none )
+                        Ok prog ->
+                            ( { model | compiled = CompileSuccess ast (VMView.init prog) }, Cmd.none )
 
-                Just newState ->
-                    ( { model | states = newState }, Cmd.none )
-
-        Last ->
-            ( { model | states = Zipper.last model.states }, Cmd.none )
-
-        KeyMsg keyMsg ->
+        ( CompileSuccess ast vmModel, VMViewMsg subMsg ) ->
             let
-                newPressedKeys =
-                    Keyboard.update keyMsg model.pressedKeys
-
-                newModel =
-                    { model | pressedKeys = newPressedKeys }
-
-                arrows =
-                    Keyboard.Arrows.arrows newPressedKeys
+                ( newVMModel, newVMMsg ) =
+                    VMView.update subMsg vmModel
             in
-            if arrows.x == 1 then
-                -- right key
-                update Step newModel
+            ( { model | compiled = CompileSuccess ast newVMModel }, Cmd.map VMViewMsg newVMMsg )
 
-            else if arrows.x == -1 then
-                update Previous newModel
-
-            else
-                ( newModel, Cmd.none )
+        ( _, _ ) ->
+            ( model, Cmd.none )
 
 
 
@@ -187,14 +161,34 @@ mutuallyRecursiveIsEven n =
 
 view : Model -> Html Msg
 view model =
-    div [ Attr.class "container" ]
-        [ div [ Attr.class "btns" ]
-            [ button [ Events.onClick First ] [ text "first" ]
-            , button [ Events.onClick Previous ] [ text "previous" ]
-            , button [ Events.onClick Step ] [ text "step" ]
-            , button [ Events.onClick Last ] [ text "last" ]
+    Html.div [ Attr.class "container" ]
+        [ Html.div [ Attr.class "btns" ]
+            [ Html.button [ Events.onClick Compile ] [ Html.text "Parse + Compile" ]
             ]
-        , VM.viewState 6 <| Zipper.current model.states
+        , case model.compiled of
+            Idle ->
+                Html.text ""
+
+            ParseError err ->
+                Html.div []
+                    [ Html.h3 [] [ Html.text "Parse error!" ]
+                    , Html.p [] [ Html.text err ]
+                    ]
+
+            CompileError ast err ->
+                Html.div []
+                    [ Html.h3 [] [ Html.text "Parse success" ]
+                    , Html.p [] [ Html.text <| Debug.toString ast ]
+                    , Html.h3 [] [ Html.text "Compile error!" ]
+                    , Html.p [] [ Html.text err ]
+                    ]
+
+            CompileSuccess ast vmModel ->
+                Html.div [ Attr.class "fill-width" ]
+                    [ Html.h3 [] [ Html.text "Parse success" ]
+                    , Html.p [] [ Html.text <| Debug.toString ast ]
+                    , Html.map VMViewMsg <| VMView.view vmModel
+                    ]
         ]
 
 
@@ -203,5 +197,17 @@ view model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.map KeyMsg Keyboard.subscriptions
+subscriptions model =
+    let
+        vmModelSub =
+            case model.compiled of
+                CompileSuccess _ vmModel ->
+                    VMView.subscriptions vmModel
+
+                _ ->
+                    Sub.none
+    in
+    Sub.batch
+        [ Sub.map VMViewMsg vmModelSub
+        , Ports.updatedEditor CodeChanged
+        ]

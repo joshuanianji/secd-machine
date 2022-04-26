@@ -109,9 +109,9 @@ parser =
     Parser.oneOf
         [ Parser.succeed identity
             |. Parser.symbol "("
-            |. Parser.spaces
+            |. spaces
             |= parseInParens
-            |. Parser.spaces
+            |. spaces
             |. Parser.symbol ")"
         , parseWithoutParens
         ]
@@ -127,7 +127,7 @@ parseFunctionApp =
         parseArgs : Parser (List AST)
         parseArgs =
             Parser.succeed identity
-                |. Parser.spaces
+                |. spaces
                 |= Parser.loop [] argsHelp
 
         argsHelp : List AST -> Parser (Step (List AST) (List AST))
@@ -135,7 +135,7 @@ parseFunctionApp =
             Parser.oneOf
                 [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
                     |= Parser.lazy (\_ -> parser)
-                    |. Parser.spaces
+                    |. spaces
                 , Parser.succeed ()
                     |> Parser.map (\_ -> Done (List.reverse revStmts))
                 ]
@@ -160,7 +160,7 @@ parseFunctionApp =
             , Parser.map Var parseToken
             , Parser.lazy (\_ -> parser)
             ]
-        |. Parser.spaces
+        |. spaces
         |= parseArgs
 
 
@@ -168,13 +168,13 @@ parseIf : Parser AST
 parseIf =
     Parser.succeed If
         |. Parser.symbol "if"
-        |. Parser.spaces
+        |. spaces
         -- condition
         |= Parser.lazy (\_ -> parser)
-        |. Parser.spaces
+        |. spaces
         -- true branch
         |= Parser.lazy (\_ -> parser)
-        |. Parser.spaces
+        |. spaces
         -- false branch
         |= Parser.lazy (\_ -> parser)
 
@@ -224,9 +224,9 @@ parseGeneralLet letKeyword toLet =
         parseLetBindings : Parser (List ( Token, AST ))
         parseLetBindings =
             Parser.succeed (\a b -> ( a, b ))
-                |. Parser.spaces
+                |. spaces
                 |= parseList parseToken
-                |. Parser.spaces
+                |. spaces
                 |= parseList (Parser.lazy (\_ -> parser))
                 |> Parser.andThen
                     (\( tokens, vals ) ->
@@ -264,9 +264,9 @@ quoteParseCons =
             [ Parser.map Cons.single <| parseInt
             , Parser.succeed identity
                 |. Parser.symbol "("
-                |. Parser.spaces
+                |. spaces
                 |= Parser.lazy (\_ -> quoteParseInParens)
-                |. Parser.spaces
+                |. spaces
                 |. Parser.symbol ")"
             ]
 
@@ -288,7 +288,7 @@ quoteInParensHelper revStmts =
     Parser.oneOf
         [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
             |= quoteParseCons
-            |. Parser.spaces
+            |. spaces
         , Parser.succeed ()
             |> Parser.map (\_ -> Done (List.reverse revStmts))
         ]
@@ -313,19 +313,17 @@ parseNil : Parser AST
 parseNil =
     Parser.succeed nil
         |. Parser.symbol "nil"
-        |. Parser.spaces
+        |. spaces
 
 
 
 ---- UTIL ----
--- parse one or more spaces
+-- parse zero or more spaces, with tabs
 
 
 spaces : Parser ()
 spaces =
-    Parser.succeed ()
-        |. Parser.token " "
-        |. Parser.spaces
+    Parser.chompWhile (\c -> c == ' ' || c == '\n' || c == '\u{000D}' || c == '\t')
 
 
 
@@ -336,7 +334,7 @@ parseList : Parser a -> Parser (List a)
 parseList parseListItem =
     Parser.succeed identity
         |. Parser.token "("
-        |. Parser.spaces
+        |. spaces
         |= Parser.loop [] (tokensHelp parseListItem)
 
 
@@ -345,7 +343,7 @@ tokensHelp parseListItem revStmts =
     Parser.oneOf
         [ Parser.succeed (\stmt -> Loop (stmt :: revStmts))
             |= parseListItem
-            |. Parser.spaces
+            |. spaces
         , Parser.token ")"
             |> Parser.map (\_ -> Done (List.reverse revStmts))
         ]
