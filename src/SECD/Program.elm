@@ -269,6 +269,11 @@ compile_ env ast =
         AST.Var (AST.Token "nil") ->
             Ok [ NIL ]
 
+        -- truthy
+        -- don't want to add another SECD operand, and this solved the issue of adding a True to the top of the stack
+        AST.Truthy ->
+            Ok [ NIL, FUNC ATOM ]
+
         AST.Var (AST.Token var) ->
             Result.map List.singleton <| lookup var env
 

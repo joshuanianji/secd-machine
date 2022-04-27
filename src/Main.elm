@@ -124,7 +124,9 @@ programs =
         , ( "Letrec Statements", "(letrec ((x 1)) (+ x 2))" )
         ]
     , complex =
-        [ ( "Length of a List - Recursion", "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))\n\t\t(f '(1 2 3) 0))" ) ]
+        [ ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
+        , ( "Mutual Recursion", "(letrec\n\t((odd \t(lambda (n) (if (eq n 0) nil (even (- n 1)))))\n\t (even \t(lambda (n) (if (eq n 0) t\t (odd  (- n 1)))))) \n \t(even 4))" )
+        ]
     }
 
 

@@ -5,7 +5,6 @@ import Fuzz
 import Lib.Cons as Cons
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
-import SECD.Program exposing (Func)
 import Test exposing (Test)
 
 
@@ -53,6 +52,9 @@ integrationBasics =
         , Test.test "Fails on variable name 'A-B'" <|
             \_ ->
                 Expect.err (parse "A-B")
+        , Test.test "Correctly parses a truthy value (does not parse it as a variable)" <|
+            \_ ->
+                Expect.equal (parse "t") (Ok Truthy)
         ]
 
 
@@ -189,6 +191,12 @@ testBasics =
         , Test.test "Variable" <|
             \_ ->
                 Expect.equal (Parser.run parseToken "x") (Ok <| token "x")
+        , Test.test "Truthy" <|
+            \_ ->
+                Expect.equal (Parser.run parseTruthy "t") (Ok Truthy)
+        , Test.test "Truthy" <|
+            \_ ->
+                Expect.err (Parser.run parseTruthy "f")
         ]
 
 

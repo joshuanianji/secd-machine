@@ -20,6 +20,7 @@ type AST
     | Quote (Cons Int) -- quote function (can be nested)
     | Val Int -- an integer constant
     | Var Token -- variable
+    | Truthy -- opposite of nil.
 
 
 
@@ -101,6 +102,7 @@ parser =
         parseWithoutParens =
             Parser.oneOf
                 [ parseNil
+                , parseTruthy
                 , parseValue
                 , parseVariable
                 , parseQuote
@@ -192,6 +194,16 @@ parseToken =
         , reserved = Set.fromList [ "lambda", "let", "letrec" ]
         }
         |> Parser.map Token
+
+
+
+-- parses 't'
+
+
+parseTruthy : Parser AST
+parseTruthy =
+    Parser.keyword "t"
+        |> Parser.map (\_ -> Truthy)
 
 
 
