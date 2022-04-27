@@ -1,11 +1,17 @@
 module Main exposing (main)
 
 import Browser
+import Element exposing (Element)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Events as Events
+import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes as Attr
-import Html.Events as Events
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util
+import Lib.Views
 import Ports
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
@@ -44,7 +50,7 @@ init =
     ( { code = ""
       , compiled = Idle
       }
-    , Cmd.none
+    , Ports.initialized ""
     )
 
 
@@ -53,7 +59,11 @@ init =
 
 
 type Msg
-    = CodeChanged String
+    = Remonke
+      -- code changed from JS side
+    | CodeChanged String
+      -- code changed from Elm side
+    | UpdateCode String
     | Compile
     | VMViewMsg VMView.Msg
 
@@ -65,8 +75,14 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( model.compiled, msg ) of
+        ( _, Remonke ) ->
+            ( model, Ports.initialized model.code )
+
         ( _, CodeChanged newCode ) ->
             ( { model | code = newCode }, Cmd.none )
+
+        ( _, UpdateCode newCode ) ->
+            ( model, Ports.updateCode newCode )
 
         ( _, Compile ) ->
             case AST.parse model.code of
@@ -92,67 +108,24 @@ update msg model =
             ( model, Cmd.none )
 
 
-
--- recursively calculates the length of a list
-{--
-(letrec (f (λx m | (if (null x) m (f (cdr x) (+ m 1) )) ) )
-(f '(1 2 3) 0) )
---}
+type alias Programs =
+    { basics : List ( String, String )
+    , complex : List ( String, String )
+    }
 
 
-recLength : Prog.Program
-recLength =
-    let
-        func =
-            [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-        -- (f '(1 2 3) 0)
-        funcApply =
-            [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-    in
-    Prog.fromList
-        [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
-
-
-factorial : Prog.Program
-factorial =
-    let
-        fact =
-            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-        -- I actually don't really know what this does
-        factCreateClosure =
-            [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-    in
-    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 6, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
-
-
-letLambda : Prog.Program
-letLambda =
-    Prog.fromList [ NIL, LDF, NESTED [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ]
-
-
-
--- I'm not sure how mutually recursive functions work, so let's try it out!
-
-
-mutuallyRecursiveIsEven : Int -> Prog.Program
-mutuallyRecursiveIsEven n =
-    let
-        isEven =
-            mutualRecursive [ NIL ] ( 1, 1 )
-
-        isOdd =
-            mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
-
-        mutualRecursive onTrue letrecCoords =
-            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
-
-        body =
-            [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
-    in
-    Prog.fromList
-        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
+programs : Programs
+programs =
+    { basics =
+        [ ( "Arithmetic", "(* (+ 1 2) (+ 3 4))" )
+        , ( "Comparison", "(<= 1 2)" )
+        , ( "Let Statements", "(let ((x 1)) (+ x 2))" )
+        , ( "If Statements", "(if (> 1 2) 1 2)" )
+        , ( "Letrec Statements", "(letrec ((x 1)) (+ x 2))" )
+        ]
+    , complex =
+        [ ( "Length of a List - Recursion", "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))\n\t\t(f '(1 2 3) 0))" ) ]
+    }
 
 
 
@@ -161,34 +134,100 @@ mutuallyRecursiveIsEven n =
 
 view : Model -> Html Msg
 view model =
-    Html.div [ Attr.class "container" ]
-        [ Html.div [ Attr.class "btns" ]
-            [ Html.button [ Events.onClick Compile ] [ Html.text "Parse + Compile" ]
+    Element.layout
+        [ Font.family
+            [ Font.typeface "Avenir"
+            , Font.typeface "Helvetica"
+            , Font.typeface "Arial"
+            , Font.sansSerif
             ]
-        , case model.compiled of
-            Idle ->
-                Html.text ""
+        ]
+    <|
+        Element.column
+            [ Element.width Element.fill
+            , Element.height Element.fill
+            , Element.spacing 8
+            ]
+            [ codeEditor model
+            , Element.row
+                [ Element.spacing 8
+                , Element.centerX
+                ]
+                [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
+                , Lib.Views.button Compile <| Element.text "Parse + Compile"
+                ]
+            , case model.compiled of
+                Idle ->
+                    Element.none
 
-            ParseError err ->
-                Html.div []
-                    [ Html.h3 [] [ Html.text "Parse error!" ]
-                    , Html.p [] [ Html.text err ]
-                    ]
+                ParseError err ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.el [ Font.size 24 ] <| Element.text "Parse error!"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                        ]
 
-            CompileError ast err ->
-                Html.div []
-                    [ Html.h3 [] [ Html.text "Parse success" ]
-                    , Html.p [] [ Html.text <| Debug.toString ast ]
-                    , Html.h3 [] [ Html.text "Compile error!" ]
-                    , Html.p [] [ Html.text err ]
-                    ]
+                CompileError ast err ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Parse success"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text <| Debug.toString ast ]
+                        , Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                        ]
 
-            CompileSuccess ast vmModel ->
-                Html.div [ Attr.class "fill-width" ]
-                    [ Html.h3 [] [ Html.text "Parse success" ]
-                    , Html.p [] [ Html.text <| Debug.toString ast ]
-                    , Html.map VMViewMsg <| VMView.view vmModel
-                    ]
+                CompileSuccess ast vmModel ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
+                        , Element.map VMViewMsg <| VMView.view vmModel
+                        ]
+            ]
+
+
+codeEditor : Model -> Element Msg
+codeEditor model =
+    let
+        viewPrograms : List ( String, String ) -> Element Msg
+        viewPrograms progValues =
+            Element.column
+                [ Element.width Element.fill ]
+            <|
+                List.map
+                    (\( name, prog ) ->
+                        Input.button
+                            [ Element.paddingXY 12 16 ]
+                            { onPress = Just <| UpdateCode prog
+                            , label = Element.text name
+                            }
+                    )
+                    progValues
+    in
+    Element.row
+        [ Element.width Element.fill ]
+        [ Element.el
+            [ Element.width <| Element.fillPortion 5
+            , Background.color <| Element.rgb255 38 50 56
+            , Element.height Element.fill
+            , Element.paddingXY 0 12
+            ]
+          <|
+            Element.html <|
+                Html.div [ Attr.id "editor" ] []
+        , Element.column
+            [ Element.width <| Element.fillPortion 2 ]
+            [ viewPrograms programs.basics
+            , viewPrograms programs.complex
+            ]
         ]
 
 

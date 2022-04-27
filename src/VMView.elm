@@ -1,11 +1,16 @@
 module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
 import Browser.Navigation exposing (Key)
+import Element exposing (Element)
+import Element.Events as Events
+import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Html.Events as Events
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
+import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import SECD.Program exposing (Program)
 import SECD.VM as VM
@@ -110,16 +115,24 @@ update msg model =
 ---- VIEW ----
 
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
-    Html.div [ Attr.class "container" ]
-        [ Html.div [ Attr.class "btns" ]
-            [ Html.button [ Events.onClick First ] [ Html.text "first" ]
-            , Html.button [ Events.onClick Previous ] [ Html.text "previous" ]
-            , Html.button [ Events.onClick Step ] [ Html.text "step" ]
-            , Html.button [ Events.onClick Last ] [ Html.text "last" ]
+    Element.column
+        [ Element.width Element.fill
+        , Element.height Element.fill
+        , Element.spacing 8
+        , Element.spacingXY 8 12
+        ]
+        [ Element.row
+            [ Element.width Element.fill
+            , Element.spacing 8
             ]
-        , VM.viewState 6 <| Zipper.current model.states
+            [ Lib.Views.button First <| Element.text "First"
+            , Lib.Views.button Previous <| Element.text "Previous"
+            , Lib.Views.button Step <| Element.text "Step"
+            , Lib.Views.button Last <| Element.text "Last"
+            ]
+        , Element.html <| VM.viewState 6 <| Zipper.current model.states
         ]
 
 

@@ -102,7 +102,7 @@ integrationEdgeCases =
                 Expect.equal (parse "(+)") (Ok <| FuncApp (var "+") [])
         , Test.test "Function in let binding" <|
             \_ ->
-                parse "(let (f) ((lambda (x) (+ x 1))) (f 3))"
+                parse "(let ((f (lambda (x) (+ x 1)))) (f 3))"
                     |> Expect.equal
                         (Ok <|
                             Let [ ( token "f", Lambda [ token "x" ] (FuncApp (var "+") [ var "x", int 1 ]) ) ]
@@ -118,7 +118,7 @@ integrationGeneral =
             \_ ->
                 let
                     program =
-                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))) (f '(1 2 3) 0))"
+                        "(letrec ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))) (f '(1 2 3) 0))"
 
                     expected =
                         Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
@@ -129,7 +129,7 @@ integrationGeneral =
             \_ ->
                 let
                     program =
-                        "(letrec (odd even) ((lambda (n) (if (eq n 0) nil (even (- n 1)))) (lambda (n) (if (eq n 0) (atom nil) (odd (- n 1))))) (even 4))"
+                        "(letrec ((odd (lambda (n) (if (eq n 0) nil (even (- n 1))))) (even (lambda (n) (if (eq n 0) (atom nil) (odd (- n 1)))))) (even 4))"
 
                     oddFunc =
                         Lambda [ Token "n" ] (If (FuncApp (var "eq") [ var "n", Val 0 ]) nil (FuncApp (var "even") [ FuncApp (var "-") [ var "n", Val 1 ] ]))
@@ -152,7 +152,7 @@ integrationSpacing =
             \_ ->
                 let
                     program =
-                        "(letrec (f) ((lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))\n\t\t(f '(1 2 3) 0))"
+                        "(letrec ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))(f '(1 2 3) 0))"
 
                     expected =
                         Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
@@ -323,17 +323,17 @@ testLetSuccess =
     Test.describe "Let statements that should succeed" <|
         List.map
             (\( input, expected ) -> parseExpect parseLet input (Ok expected))
-            [ ( "let (x y) (1 2) (+ x y)"
+            [ ( "let ((x 1) (y 2)) (+ x y)"
               , Let
                     [ ( token "x", int 1 ), ( token "y", int 2 ) ]
                     (FuncApp (var "+") [ var "x", var "y" ])
               )
-            , ( "let (x y )(1 2)   (+ x y )"
+            , ( "let (  (x 1)(  y 2  ))   (+ x y )"
               , Let
                     [ ( token "x", int 1 ), ( token "y", int 2 ) ]
                     (FuncApp (var "+") [ var "x", var "y" ])
               )
-            , ( "let (x) (((lambda (y) (+ y 1)) 2)) (* x x)"
+            , ( "let ((x ((lambda (y) (+ y 1)) 2))) (* x x)"
               , Let
                     [ ( token "x", FuncApp (Lambda [ token "y" ] (FuncApp (var "+") [ var "y", int 1 ])) [ int 2 ] ) ]
                     (FuncApp (var "*") [ var "x", var "x" ])
@@ -362,7 +362,7 @@ testLetRec =
                         Parser.run parseFunctionApp lenApp
 
                     input =
-                        "letrec (len) ((" ++ lambda ++ ")) (" ++ lenApp ++ ")"
+                        "letrec ((len (" ++ lambda ++ "))) (" ++ lenApp ++ ")"
 
                     expected =
                         Result.map2 (\lExp lAppExp -> Letrec [ ( token "len", lExp ) ] lAppExp) lambdaExpected lenAppExpected
@@ -390,7 +390,7 @@ testLetRec =
                         Parser.run parseFunctionApp factApp
 
                     input =
-                        "letrec (fact) ((" ++ factDef ++ ")) (" ++ factApp ++ ")"
+                        "letrec ((fact (" ++ factDef ++ "))) (" ++ factApp ++ ")"
 
                     expected =
                         Result.map2 (\lExp lAppExp -> Letrec [ ( token "fact", lExp ) ] lAppExp) defExpected appExpected
@@ -411,7 +411,7 @@ testLetRec =
                         Parser.run parseLambda fibDef
 
                     input =
-                        "letrec (fib) ((" ++ fibDef ++ ")) (fib 10)"
+                        "letrec ((fib (" ++ fibDef ++ "))) (fib 10)"
 
                     expected =
                         Result.map (\def -> Letrec [ ( token "fib", def ) ] (FuncApp (var "fib") [ int 10 ])) defExpected

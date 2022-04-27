@@ -11,18 +11,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const root = document.getElementById("app");
   const app = Elm.Main.init({ node: root });
 
-  const cm = CodeMirror(document.getElementById("editor"), {
-    value: "",
-    mode: "commonlisp",
-    lineNumbers: true,
-    lineWrapping: true,
-    theme: "material",
-    autofocus: true,
-    autoCloseBrackets: true,
-    matchBrackets: true,
-  });
+  let cm = null;
 
-  cm.on("change", (instance, changeObj) => {
-    app.ports.updatedEditor.send(cm.getValue());
+  // wait for Elm to load in #editor for us to initialize code mirror
+  app.ports.initialized.subscribe((val) => {
+    cm = CodeMirror(document.getElementById("editor"), {
+      value: val,
+      mode: "commonlisp",
+      lineNumbers: true,
+      lineWrapping: true,
+      theme: "material",
+      autofocus: true,
+      autoCloseBrackets: true,
+      matchBrackets: true,
+    });
+
+    cm.on("change", (_) => {
+      app.ports.updatedEditor.send(cm.getValue());
+    });
+
+    app.ports.updateCode.subscribe((val) => {
+      cm.setValue(val);
+    });
   });
 });

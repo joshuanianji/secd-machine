@@ -223,19 +223,19 @@ parseGeneralLet letKeyword toLet =
     let
         parseLetBindings : Parser (List ( Token, AST ))
         parseLetBindings =
-            Parser.succeed (\a b -> ( a, b ))
+            Parser.succeed identity
                 |. spaces
-                |= parseList parseToken
-                |. spaces
-                |= parseList (Parser.lazy (\_ -> parser))
-                |> Parser.andThen
-                    (\( tokens, vals ) ->
-                        if List.length tokens /= List.length vals then
-                            Parser.problem <| "Unequal number of tokens and values in " ++ letKeyword ++ "!"
-
-                        else
-                            Parser.succeed (List.Extra.zip tokens vals)
+                |= parseList
+                    (Parser.succeed Tuple.pair
+                        |. Parser.token "("
+                        |. spaces
+                        |= parseToken
+                        |. spaces
+                        |= Parser.lazy (\_ -> parser)
+                        |. spaces
+                        |. Parser.token ")"
                     )
+                |. spaces
     in
     Parser.succeed toLet
         |. Parser.keyword letKeyword
