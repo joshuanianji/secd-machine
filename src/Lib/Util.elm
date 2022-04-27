@@ -8,6 +8,20 @@ wrapAdd first last l =
     first :: l ++ [ last ]
 
 
+showMaybeInt : Maybe Int -> String
+showMaybeInt mn =
+    case mn of
+        Just n ->
+            String.fromInt n
+
+        Nothing ->
+            "unknown"
+
+
+
+-- taken from an Elm-compiler PR
+
+
 deadEndsToString : List DeadEnd -> String
 deadEndsToString deadEnds =
     String.concat (List.intersperse "; " (List.map deadEndToString deadEnds))

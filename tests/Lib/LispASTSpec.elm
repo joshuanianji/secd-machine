@@ -149,18 +149,29 @@ integrationGeneral =
 
 integrationSpacing : Test
 integrationSpacing =
-    Test.describe "Parsing programs with lots of weird spacing"
+    Test.describe "Parsing programs with lots of weird spacing and comments"
         [ Test.test "Recursive length program" <|
             \_ ->
                 let
                     program =
                         "(letrec ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))(f '(1 2 3) 0))"
 
-                    expected =
-                        Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
+                    programWithSpacing =
+                        "(letrec\n\n((f    (\t\tlambda (x m) (if (\n\nnull \t\t\tx) m (f(\t\tcdr x)(+ m 1)))\t\t)))(f'(1 2 3)0)\t\t)"
                 in
                 parse program
-                    |> Expect.equal (Ok expected)
+                    |> Expect.equal (parse programWithSpacing)
+        , Test.test "Comments" <|
+            \_ ->
+                let
+                    program =
+                        ";comment without a space in front\n(let; comment without a space in front\n \t((curriedAdd (lambda (x) (lambda (y) (+ x y)))))\t ; comment with a space and tab\n \t((curriedAdd 5) 10)) ;ree"
+
+                    programWithoutComments =
+                        "(let\n \t((curriedAdd (lambda (x) (lambda (y) (+ x y)))))\t\n \t((curriedAdd 5) 10))"
+                in
+                parse program
+                    |> Expect.equal (parse programWithoutComments)
         ]
 
 
@@ -191,10 +202,10 @@ testBasics =
         , Test.test "Variable" <|
             \_ ->
                 Expect.equal (Parser.run parseToken "x") (Ok <| token "x")
-        , Test.test "Truthy" <|
+        , Test.test "Truthy - parser success" <|
             \_ ->
                 Expect.equal (Parser.run parseTruthy "t") (Ok Truthy)
-        , Test.test "Truthy" <|
+        , Test.test "Truthy - parser failure" <|
             \_ ->
                 Expect.err (Parser.run parseTruthy "f")
         ]

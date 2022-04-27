@@ -2,7 +2,6 @@ module Lib.LispAST exposing (..)
 
 import Char
 import Lib.Cons as Cons exposing (Cons)
-import List.Extra
 import Parser exposing ((|.), (|=), DeadEnd, Parser, Step(..))
 import Set
 
@@ -81,7 +80,9 @@ parse : String -> Result (List DeadEnd) AST
 parse =
     Parser.run <|
         Parser.succeed identity
+            |. spaces
             |= parser
+            |. spaces
             -- when parsing, ensure we parse the entire string
             |. Parser.end
 
@@ -115,7 +116,8 @@ parser =
             |= parseInParens
             |. spaces
             |. Parser.symbol ")"
-        , parseWithoutParens
+        , Parser.succeed identity
+            |= parseWithoutParens
         ]
 
 
@@ -328,6 +330,13 @@ parseNil =
         |. spaces
 
 
+parseComment : Parser ()
+parseComment =
+    Parser.succeed ()
+        |. Parser.lineComment ";"
+        |. Parser.lazy (\_ -> spaces)
+
+
 
 ---- UTIL ----
 -- parse zero or more spaces, with tabs
@@ -335,7 +344,12 @@ parseNil =
 
 spaces : Parser ()
 spaces =
-    Parser.chompWhile (\c -> c == ' ' || c == '\n' || c == '\u{000D}' || c == '\t')
+    Parser.succeed ()
+        |. Parser.chompWhile (\c -> c == ' ' || c == '\n' || c == '\u{000D}' || c == '\t')
+        |. Parser.oneOf
+            [ Parser.lazy (\_ -> parseComment)
+            , Parser.spaces
+            ]
 
 
 

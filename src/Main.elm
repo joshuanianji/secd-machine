@@ -126,6 +126,7 @@ programs =
     , complex =
         [ ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
         , ( "Mutual Recursion", "(letrec\n\t((odd \t(lambda (n) (if (eq n 0) nil (even (- n 1)))))\n\t (even \t(lambda (n) (if (eq n 0) t\t (odd  (- n 1)))))) \n \t(even 4))" )
+        , ( "Manual Currying", "(let\n \t((curriedAdd (lambda (x) (lambda (y) (+ x y)))))\n \t((curriedAdd 5) 10))" )
         ]
     }
 

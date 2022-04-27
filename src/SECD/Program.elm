@@ -352,7 +352,7 @@ compileFuncApp env f args isRecursive =
                         Ok ( compiledFunction ++ [ apCall ], funcType )
 
             else
-                Err <| "Invalid number of arguments"
+                Err <| "Invalid number of arguments! Expecting: " ++ Util.showMaybeInt mArity ++ ", and got :" ++ String.fromInt (List.length args)
 
         addArguments : ( List Op, FuncType ) -> Result Error (List Op)
         addArguments ( compiledFunction, funcType ) =
@@ -499,12 +499,15 @@ compileFunc env f =
         AST.Quote _ ->
             Err "Illegal function call - attempting to call a quote value!"
 
-        -- do NOT allow currying
+        AST.Truthy ->
+            Err "Illegal function call - attempting to call a truthy value!"
+
+        -- do NOT allow automatic currying
         AST.FuncApp f_ args_ ->
             let
                 checkArity : ( Maybe Int, List Op, FuncType ) -> Result Error ( Maybe Int, List Op, FuncType )
                 checkArity ( funcArity, compiledFunc, funcType ) =
-                    if funcArity == Just (List.length args_) then
+                    if funcArity == Just (List.length args_) || funcArity == Nothing then
                         Ok ( Just 0, compiledFunc, funcType )
 
                     else
