@@ -191,7 +191,9 @@ view model =
                         , Element.height Element.fill
                         , Element.spacing 8
                         ]
-                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Parse success"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text <| Debug.toString ast ]
+                        , Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
                         , Element.map VMViewMsg <| VMView.view vmModel
                         ]
             ]

@@ -330,6 +330,10 @@ parseNil =
         |. spaces
 
 
+
+-- parse comment also parses spaces before and after (including newlines after a comment)
+
+
 parseComment : Parser ()
 parseComment =
     Parser.succeed ()
@@ -340,6 +344,7 @@ parseComment =
 
 ---- UTIL ----
 -- parse zero or more spaces, with tabs
+-- also parses comments before and after
 
 
 spaces : Parser ()

@@ -507,8 +507,11 @@ compileFunc env f =
             let
                 checkArity : ( Maybe Int, List Op, FuncType ) -> Result Error ( Maybe Int, List Op, FuncType )
                 checkArity ( funcArity, compiledFunc, funcType ) =
-                    if funcArity == Just (List.length args_) || funcArity == Nothing then
+                    if funcArity == Just (List.length args_) then
                         Ok ( Just 0, compiledFunc, funcType )
+
+                    else if funcArity == Nothing then
+                        Ok ( Nothing, compiledFunc, funcType )
 
                     else
                         Err "Incorrect number of arguments in function application!"
@@ -530,7 +533,6 @@ compileFunc env f =
             compileLambda env args f_
                 |> Result.map (\ops -> ( Just <| List.length args, ops, LambdaFunc ))
 
-        -- idk how do compile user defined functions yet
         _ ->
             Err "Compile Function - not implemented yet."
 

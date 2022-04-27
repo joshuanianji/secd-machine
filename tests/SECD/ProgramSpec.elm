@@ -307,11 +307,11 @@ testCompileLambda =
 testCompileLet : Test
 testCompileLet =
     Test.describe "Program.compileLet"
-        [ Test.test "compiled (let (x) (1) (+ x 2))" <|
+        [ Test.test "compiled (let ((x 1)) (+ x 2))" <|
             \_ ->
                 compileLet emptyEnv [ ( AST.token "x", AST.Val 1 ) ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.Val 2 ])
                     |> Expect.equal (Ok [ NIL, LDC 1, FUNC CONS, LDF, NESTED [ LDC 2, LD ( 0, 0 ), FUNC ADD, RTN ], AP ])
-        , Test.test "lambda binding - (let (f) ((lambda (x) (+ x 1))) (f 3))" <|
+        , Test.test "lambda binding - (let ((f (lambda (x) (+ x 1)))) (f 3))" <|
             \_ ->
                 compileLet emptyEnv
                     [ ( AST.token "f", AST.Lambda [ AST.token "x" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.int 1 ]) ) ]
