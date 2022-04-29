@@ -7,14 +7,16 @@ import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import FeatherIcons
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Lib.LispAST as AST exposing (AST)
-import Lib.Util as Util
+import Lib.Util as Util exposing (eachZero)
 import Lib.Views
 import Ports
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
+import Set exposing (Set)
 import VMView
 
 
@@ -34,6 +36,7 @@ main =
 
 type alias Model =
     { code : String
+    , openTabs : Set String
     , compiled : CompiledState
     }
 
@@ -48,6 +51,7 @@ type CompiledState
 init : ( Model, Cmd Msg )
 init =
     ( { code = ""
+      , openTabs = Set.empty
       , compiled = Idle
       }
     , Ports.initialized ""
@@ -60,6 +64,7 @@ init =
 
 type Msg
     = Remonke
+    | ToggleTab String
       -- code changed from JS side
     | CodeChanged String
       -- code changed from Elm side
@@ -77,6 +82,13 @@ update msg model =
     case ( model.compiled, msg ) of
         ( _, Remonke ) ->
             ( model, Ports.initialized model.code )
+
+        ( _, ToggleTab tab ) ->
+            if Set.member tab model.openTabs then
+                ( { model | openTabs = Set.remove tab model.openTabs }, Cmd.none )
+
+            else
+                ( { model | openTabs = Set.insert tab model.openTabs }, Cmd.none )
 
         ( _, CodeChanged newCode ) ->
             ( { model | code = newCode }, Cmd.none )
@@ -109,26 +121,31 @@ update msg model =
 
 
 type alias Programs =
-    { basics : List ( String, String )
-    , complex : List ( String, String )
-    }
+    List ( String, List ( String, String ) )
 
 
 programs : Programs
 programs =
-    { basics =
-        [ ( "Arithmetic", "(* (+ 1 2) (+ 3 4))" )
+    [ ( "Basics"
+      , [ ( "Arithmetic", "(* (+ 1 2) (+ 3 4))" )
         , ( "Comparison", "(<= 1 2)" )
         , ( "Let Statements", "(let ((x 1)) (+ x 2))" )
         , ( "If Statements", "(if (> 1 2) 1 2)" )
         , ( "Letrec Statements", "(letrec ((x 1)) (+ x 2))" )
         ]
-    , complex =
-        [ ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
-        , ( "Mutual Recursion", "(letrec\n\t((odd \t(lambda (n) (if (eq n 0) nil (even (- n 1)))))\n\t (even \t(lambda (n) (if (eq n 0) t\t (odd  (- n 1)))))) \n \t(even 4))" )
+      )
+    , ( "Lists"
+      , [ ( "Sum a list", "(letrec \n \t((sumlist (lambda (l) (if (null l) 0 (+ (car l) (sumlist (cdr l)))))))\n\t(sumlist '(1 2 3)) \n)" )
+        , ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
+        , ( "Map list - recursion", "(letrec \n \t((maplist (lambda (f l) (if (null l) nil (cons (f (car l)) (maplist f (cdr l))))))\n\t (add1 (lambda (x) (+ x 1))))\n\t(maplist add1 '(1 2 3)) \n)" )
+        ]
+      )
+    , ( "Complex"
+      , [ ( "Mutual Recursion", "(letrec\n\t((odd \t(lambda (n) (if (eq n 0) nil (even (- n 1)))))\n\t (even \t(lambda (n) (if (eq n 0) t\t (odd  (- n 1)))))) \n \t(even 4))" )
         , ( "Manual Currying", "(let\n \t((curriedAdd (lambda (x) (lambda (y) (+ x y)))))\n \t((curriedAdd 5) 10))" )
         ]
-    }
+      )
+    ]
 
 
 
@@ -202,15 +219,49 @@ view model =
 codeEditor : Model -> Element Msg
 codeEditor model =
     let
-        viewPrograms : List ( String, String ) -> Element Msg
-        viewPrograms progValues =
+        viewPrograms : List ( String, List ( String, String ) ) -> Element Msg
+        viewPrograms progs =
+            Element.column
+                [ Element.height Element.fill
+                , Element.width Element.fill
+                , Element.paddingXY 4 12
+                ]
+            <|
+                List.map
+                    (\( name, progTuples ) ->
+                        let
+                            ( icon, content ) =
+                                if Set.member name model.openTabs then
+                                    ( FeatherIcons.chevronUp, Element.el [ Element.paddingEach { eachZero | left = 16 } ] <| viewProgramsTab progTuples )
+
+                                else
+                                    ( FeatherIcons.chevronDown, Element.none )
+                        in
+                        Element.column
+                            [ Element.width Element.fill ]
+                            [ Element.row
+                                [ Element.paddingXY 16 12
+                                , Events.onClick <| ToggleTab name
+                                , Element.pointer
+                                , Element.spacing 4
+                                ]
+                                [ Element.text name
+                                , Util.viewIcon [] icon
+                                ]
+                            , content
+                            ]
+                    )
+                    progs
+
+        viewProgramsTab : List ( String, String ) -> Element Msg
+        viewProgramsTab progValues =
             Element.column
                 [ Element.width Element.fill ]
             <|
                 List.map
                     (\( name, prog ) ->
                         Input.button
-                            [ Element.paddingXY 12 16 ]
+                            [ Element.paddingXY 12 8 ]
                             { onPress = Just <| UpdateCode prog
                             , label = Element.text name
                             }
@@ -223,16 +274,16 @@ codeEditor model =
             [ Element.width <| Element.fillPortion 5
             , Background.color <| Element.rgb255 38 50 56
             , Element.height Element.fill
-            , Element.paddingXY 0 12
             ]
           <|
-            Element.html <|
-                Html.div [ Attr.id "editor" ] []
-        , Element.column
-            [ Element.width <| Element.fillPortion 2 ]
-            [ viewPrograms programs.basics
-            , viewPrograms programs.complex
+            Element.html (Html.div [ Attr.id "editor" ] [])
+        , Element.el
+            [ Element.width <| Element.fillPortion 2
+            , Element.height <| Element.px 300
+            , Element.scrollbars
             ]
+          <|
+            viewPrograms programs
         ]
 
 

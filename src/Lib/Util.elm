@@ -1,6 +1,18 @@
 module Lib.Util exposing (..)
 
+import Element exposing (Attribute, Element)
+import FeatherIcons exposing (Icon)
 import Parser exposing (DeadEnd, Problem(..))
+
+
+viewIcon : List (Attribute msg) -> Icon -> Element msg
+viewIcon attrs =
+    FeatherIcons.toHtml [] >> Element.html >> Element.el attrs
+
+
+eachZero : { top : Int, right : Int, bottom : Int, left : Int }
+eachZero =
+    { top = 0, right = 0, bottom = 0, left = 0 }
 
 
 wrapAdd : a -> a -> List a -> List a
