@@ -126,19 +126,19 @@ testCompileArgsBuiltin =
     Test.describe "Program.compileArgs for builtin functions"
         [ Test.test "Empty args" <|
             \_ ->
-                compileArgs emptyEnv BuiltinFunc []
+                compileArgs emptyEnv True []
                     |> Expect.equal (Ok <| [])
         , Test.test "Singleton" <|
             \_ ->
-                compileArgs emptyEnv BuiltinFunc [ AST.int 1 ]
+                compileArgs emptyEnv True [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ LDC 1 ])
         , Test.test "[2,3]" <|
             \_ ->
-                compileArgs emptyEnv BuiltinFunc [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv True [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2 ])
         , Test.test "[1,2,3]" <|
             \_ ->
-                compileArgs emptyEnv BuiltinFunc [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv True [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ LDC 3, LDC 2, LDC 1 ])
         ]
 
@@ -148,35 +148,35 @@ testCompileArgsNonbuiltin =
     Test.describe "Program.compileArgs for user defined/lambda functions"
         [ Test.test "Empty args - Lambda" <|
             \_ ->
-                compileArgs emptyEnv LambdaFunc []
+                compileArgs emptyEnv False []
                     |> Expect.equal (Ok <| [])
         , Test.test "Empty args - Loaded" <|
             \_ ->
-                compileArgs emptyEnv LoadedFunc []
+                compileArgs emptyEnv False []
                     |> Expect.equal (Ok <| [])
         , Test.test "Singleton - Lambda" <|
             \_ ->
-                compileArgs emptyEnv LambdaFunc [ AST.int 1 ]
+                compileArgs emptyEnv False [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
         , Test.test "Singleton - Loaded" <|
             \_ ->
-                compileArgs emptyEnv LoadedFunc [ AST.int 1 ]
+                compileArgs emptyEnv False [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
         , Test.test "[2,3] - Lambda" <|
             \_ ->
-                compileArgs emptyEnv LambdaFunc [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
         , Test.test "[2,3] - Loaded" <|
             \_ ->
-                compileArgs emptyEnv LoadedFunc [ AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
         , Test.test "[1,2,3] - Lambda" <|
             \_ ->
-                compileArgs emptyEnv LambdaFunc [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         , Test.test "[1,2,3] - Loaded" <|
             \_ ->
-                compileArgs emptyEnv LoadedFunc [ AST.int 1, AST.int 2, AST.int 3 ]
+                compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
         ]
 
@@ -201,7 +201,7 @@ testCompileFuncBuiltins =
                 Test.test ("Compiles " ++ token) <|
                     \_ ->
                         compileFunc emptyEnv (AST.var token)
-                            |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ], BuiltinFunc ))
+                            |> Expect.equal (Ok ( Just expectedArgs, [ expectedFunc ], True ))
             )
             [ ( "+", 2, FUNC ADD )
             , ( "-", 2, FUNC SUB )
