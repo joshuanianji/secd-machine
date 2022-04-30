@@ -135,9 +135,9 @@ programs =
         ]
       )
     , ( "Lists"
-      , [ ( "Sum a list", "(letrec \n \t((sumlist (lambda (l) (if (null l) 0 (+ (car l) (sumlist (cdr l)))))))\n\t(sumlist '(1 2 3)) \n)" )
-        , ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
-        , ( "Map list - recursion", "(letrec \n \t((maplist (lambda (f l) (if (null l) nil (cons (f (car l)) (maplist f (cdr l))))))\n\t (add1 (lambda (x) (+ x 1))))\n\t(maplist add1 '(1 2 3)) \n)" )
+      , [ ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
+        , ( "Map list - Recursion", "(letrec \n \t((maplist (lambda (f l) (if (null l) nil (cons (f (car l)) (maplist f (cdr l))))))\n\t (add1 (lambda (x) (+ x 1))))\n\t(maplist add1 '(1 2 3)) \n)" )
+        , ( "Sum a list (Recursion and foldr)", "(letrec \n \t ; sums a list directly (using recursion)\n \t((sumlistDirect (lambda (l) (if (null l) 0 (+ (car l) (sumlist (cdr l))))))\n \t (foldr (lambda (f z l) (if (null l) z (foldr f (f z (car l)) (cdr l)))))\n \t ; rewriting add using lambdas - this allows us to use higher order functions\n \t (add (lambda (x y) (+ x y)))\n \t ; sums a list using foldr\n \t (sumlist (lambda (l) (foldr add 0 l))))\n \n \t; update the line from calling `sumlistDirect` to `sumList`!\n \t; note how both function calls produce the same value\n\t(sumlist '(1 2 3)) \n)" )
         ]
       )
     , ( "Complex"
@@ -168,7 +168,23 @@ view model =
             , Element.height Element.fill
             , Element.spacing 8
             ]
-            [ codeEditor model
+            [ Element.el
+                [ Font.size 36
+                , Font.bold
+                , Element.centerX
+                , Element.paddingXY 0 16
+                ]
+              <|
+                Element.text "SECD Machine"
+            , Element.el
+                [ Font.size 18
+                , Font.bold
+                , Element.centerX
+                , Element.paddingXY 0 8
+                ]
+              <|
+                Element.text "An implementation as seen in Ualberta's CMPUT 325"
+            , codeEditor model
             , Element.row
                 [ Element.spacing 8
                 , Element.centerX
