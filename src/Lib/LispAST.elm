@@ -192,7 +192,7 @@ parseToken : Parser Token
 parseToken =
     Parser.variable
         { start = Char.isAlpha
-        , inner = \c -> Char.isAlphaNum c || c == '_'
+        , inner = \c -> Char.isAlphaNum c || c == '_' || c == '-'
         , reserved = Set.fromList [ "lambda", "let", "letrec" ]
         }
         |> Parser.map Token
@@ -318,9 +318,29 @@ parseInt =
     Parser.oneOf
         [ Parser.succeed negate
             |. Parser.symbol "-"
-            |= Parser.int
-        , Parser.int
+            |= parseNumeral
+        , parseNumeral
         ]
+
+
+
+-- custom number parser that only looks at digits
+-- Elm's parser also looks at "e", which messes up some stuff, like a variable name starting with "e"
+
+
+parseNumeral : Parser Int
+parseNumeral =
+    Parser.getChompedString (Parser.chompWhile (\c -> Char.isDigit c))
+        |> Parser.map String.toInt
+        |> Parser.andThen
+            (\num ->
+                case num of
+                    Just n ->
+                        Parser.succeed n
+
+                    Nothing ->
+                        Parser.problem "Expecting a number!"
+            )
 
 
 parseNil : Parser AST

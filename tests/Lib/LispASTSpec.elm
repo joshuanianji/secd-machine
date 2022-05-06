@@ -110,6 +110,17 @@ integrationEdgeCases =
                             Let [ ( token "f", Lambda [ token "x" ] (FuncApp (var "+") [ var "x", int 1 ]) ) ]
                                 (FuncApp (var "f") [ int 3 ])
                         )
+
+        -- my original parser would fail when it encountered a variable starting with an "e"
+        -- since it would try to parse it as a number lol
+        -- I then changed the parser to only parse digits and negative numbers.
+        , Test.test "Parses variables starting with 'e'" <|
+            \_ ->
+                parse "(let ((eVar 1)) (+ eVar 6))"
+                    |> Expect.equal
+                        (Ok <|
+                            Let [ ( token "eVar", int 1 ) ] (FuncApp (var "+") [ var "eVar", int 6 ])
+                        )
         ]
 
 
@@ -202,6 +213,12 @@ testBasics =
         , Test.test "Variable" <|
             \_ ->
                 Expect.equal (Parser.run parseToken "x") (Ok <| token "x")
+        , Test.test "Variable with dashes, underscores and numbers" <|
+            \_ ->
+                Expect.equal (Parser.run parseToken "x-awesome_poggies1") (Ok <| token "x-awesome_poggies1")
+        , Test.test "Fails when the variable does not start with a letter" <|
+            \_ ->
+                Expect.err (Parser.run parseToken "1x")
         , Test.test "Truthy - parser success" <|
             \_ ->
                 Expect.equal (Parser.run parseTruthy "t") (Ok Truthy)
