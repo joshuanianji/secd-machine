@@ -8,8 +8,10 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import FeatherIcons
+import Flags exposing (CodeExamples, Flags)
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as Decode
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero)
 import Lib.Views
@@ -20,10 +22,10 @@ import Set exposing (Set)
 import VMView
 
 
-main : Program () Model Msg
+main : Program Decode.Value Model Msg
 main =
     Browser.element
-        { init = \_ -> init
+        { init = init
         , update = update
         , view = view
         , subscriptions = subscriptions
@@ -34,10 +36,16 @@ main =
 ---- MODEL ----
 
 
-type alias Model =
+type Model
+    = Error Decode.Error
+    | Success SuccessModel
+
+
+type alias SuccessModel =
     { code : String
     , openTabs : Set String
     , compiled : CompiledState
+    , codeExamples : CodeExamples
     }
 
 
@@ -48,14 +56,21 @@ type CompiledState
     | CompileSuccess AST VMView.Model
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { code = ""
-      , openTabs = Set.empty
-      , compiled = Idle
-      }
-    , Ports.initialized ""
-    )
+init : Decode.Value -> ( Model, Cmd Msg )
+init flags =
+    case Decode.decodeValue Flags.decoder flags of
+        Err e ->
+            ( Error e, Cmd.none )
+
+        Ok f ->
+            ( Success
+                { code = ""
+                , openTabs = Set.empty
+                , compiled = Idle
+                , codeExamples = f.codeExamples
+                }
+            , Ports.initialized ""
+            )
 
 
 
@@ -79,6 +94,17 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    case model of
+        Error _ ->
+            ( model, Cmd.none )
+
+        Success m ->
+            updateSuccess msg m
+                |> Tuple.mapFirst Success
+
+
+updateSuccess : Msg -> SuccessModel -> ( SuccessModel, Cmd Msg )
+updateSuccess msg model =
     case ( model.compiled, msg ) of
         ( _, Remonke ) ->
             ( model, Ports.initialized model.code )
@@ -120,40 +146,22 @@ update msg model =
             ( model, Cmd.none )
 
 
-type alias Programs =
-    List ( String, List ( String, String ) )
-
-
-programs : Programs
-programs =
-    [ ( "Basics"
-      , [ ( "Arithmetic", "(* (+ 1 2) (+ 3 4))" )
-        , ( "Comparison", "(<= 1 2)" )
-        , ( "Let Statements", "(let ((x 1)) (+ x 2))" )
-        , ( "If Statements", "(if (> 1 2) 1 2)" )
-        , ( "Letrec Statements", "(letrec ((x 1)) (+ x 2))" )
-        ]
-      )
-    , ( "Lists"
-      , [ ( "Length of a List - Recursion", "(letrec\n \t((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))\n\t(f '(1 2 3) 0))" )
-        , ( "Map list - Recursion", "(letrec \n \t((maplist (lambda (f l) (if (null l) nil (cons (f (car l)) (maplist f (cdr l))))))\n\t (add1 (lambda (x) (+ x 1))))\n\t(maplist add1 '(1 2 3)) \n)" )
-        , ( "Sum a list (Recursion and foldr)", "(letrec \n \t ; sums a list directly (using recursion)\n \t((sumlistDirect (lambda (l) (if (null l) 0 (+ (car l) (sumlist (cdr l))))))\n \t (foldr (lambda (f z l) (if (null l) z (foldr f (f z (car l)) (cdr l)))))\n \t ; rewriting add using lambdas - this allows us to use higher order functions\n \t (add (lambda (x y) (+ x y)))\n \t ; sums a list using foldr\n \t (sumlist (lambda (l) (foldr add 0 l))))\n \n \t; update the line from calling `sumlistDirect` to `sumList`!\n \t; note how both function calls produce the same value\n\t(sumlist '(1 2 3)) \n)" )
-        ]
-      )
-    , ( "Complex"
-      , [ ( "Mutual Recursion", "(letrec\n\t((odd \t(lambda (n) (if (eq n 0) nil (even (- n 1)))))\n\t (even \t(lambda (n) (if (eq n 0) t\t (odd  (- n 1)))))) \n \t(even 4))" )
-        , ( "Manual Currying", "(let\n \t((curriedAdd (lambda (x) (lambda (y) (+ x y)))))\n \t((curriedAdd 5) 10))" )
-        ]
-      )
-    ]
-
-
 
 ---- VIEW ----
 
 
 view : Model -> Html Msg
 view model =
+    case model of
+        Error e ->
+            Html.text <| Decode.errorToString e
+
+        Success m ->
+            viewSuccess m
+
+
+viewSuccess : SuccessModel -> Html Msg
+viewSuccess model =
     Element.layout
         [ Font.family
             [ Font.typeface "Avenir"
@@ -232,11 +240,11 @@ view model =
             ]
 
 
-codeEditor : Model -> Element Msg
+codeEditor : SuccessModel -> Element Msg
 codeEditor model =
     let
-        viewPrograms : List ( String, List ( String, String ) ) -> Element Msg
-        viewPrograms progs =
+        viewCodeExamples : CodeExamples -> Element Msg
+        viewCodeExamples progs =
             Element.column
                 [ Element.height Element.fill
                 , Element.width Element.fill
@@ -248,7 +256,7 @@ codeEditor model =
                         let
                             ( icon, content ) =
                                 if Set.member name model.openTabs then
-                                    ( FeatherIcons.chevronUp, Element.el [ Element.paddingEach { eachZero | left = 16 } ] <| viewProgramsTab progTuples )
+                                    ( FeatherIcons.chevronUp, Element.el [ Element.paddingEach { eachZero | left = 16 } ] <| viewCodeExamplesTab progTuples )
 
                                 else
                                     ( FeatherIcons.chevronDown, Element.none )
@@ -269,8 +277,8 @@ codeEditor model =
                     )
                     progs
 
-        viewProgramsTab : List ( String, String ) -> Element Msg
-        viewProgramsTab progValues =
+        viewCodeExamplesTab : List ( String, String ) -> Element Msg
+        viewCodeExamplesTab progValues =
             Element.column
                 [ Element.width Element.fill ]
             <|
@@ -299,7 +307,7 @@ codeEditor model =
             , Element.scrollbars
             ]
           <|
-            viewPrograms programs
+            viewCodeExamples model.codeExamples
         ]
 
 
@@ -309,16 +317,21 @@ codeEditor model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        vmModelSub =
-            case model.compiled of
-                CompileSuccess _ vmModel ->
-                    VMView.subscriptions vmModel
+    case model of
+        Error _ ->
+            Sub.none
 
-                _ ->
-                    Sub.none
-    in
-    Sub.batch
-        [ Sub.map VMViewMsg vmModelSub
-        , Ports.updatedEditor CodeChanged
-        ]
+        Success m ->
+            let
+                vmModelSub =
+                    case m.compiled of
+                        CompileSuccess _ vmModel ->
+                            VMView.subscriptions vmModel
+
+                        _ ->
+                            Sub.none
+            in
+            Sub.batch
+                [ Sub.map VMViewMsg vmModelSub
+                , Ports.updatedEditor CodeChanged
+                ]

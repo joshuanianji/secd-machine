@@ -20,14 +20,28 @@ import { plainText as mutualrec } from "./complex/mutualrec.lisp";
 export const examples = [
   {
     type: "basics",
-    examples: [arithmetic, comparison, ifStmt, letStmt, letrec],
+    examples: [
+      ["Arithmetic", arithmetic],
+      ["Value Comparison", comparison],
+      ["If Statement", ifStmt],
+      ["Let Statements", letStmt],
+      ["Letrec", letrec],
+    ],
   },
   {
     type: "lists",
-    examples: [listLength, mapList, sumList],
+    examples: [
+      ["Length of a List - Recursion", listLength],
+      ["List Map", mapList],
+      ["Summing a List", sumList],
+    ],
   },
   {
     type: "complex",
-    examples: [currying, infiniteList, mutualrec],
+    examples: [
+      ["Currying", currying],
+      ["Lazy Infinite Lists", infiniteList],
+      ["Mutual Recursion", mutualrec],
+    ],
   },
 ];
