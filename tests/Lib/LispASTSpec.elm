@@ -49,9 +49,9 @@ integrationBasics =
         , Test.test "Parses variable name 'A_B'" <|
             \_ ->
                 Expect.equal (parse "A_B") (Ok <| var "A_B")
-        , Test.test "Fails on variable name 'A-B'" <|
+        , Test.test "Passes on variable name 'A-B'" <|
             \_ ->
-                Expect.err (parse "A-B")
+                Expect.equal (parse "A-B") (Ok <| var "A-B")
         , Test.test "Correctly parses a truthy value (does not parse it as a variable)" <|
             \_ ->
                 Expect.equal (parse "t") (Ok Truthy)
