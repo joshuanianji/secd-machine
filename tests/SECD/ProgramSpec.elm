@@ -58,6 +58,10 @@ integrationComplex =
             \_ ->
                 (compile_ emptyEnv <| AST.If (AST.FuncApp (AST.var "atom") [ AST.int 1 ]) (AST.int 1) (AST.int 2))
                     |> Expect.equal (Ok [ LDC 1, FUNC ATOM, SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ])
+        , Test.test "Lambda with no args ((lambda () 2))" <|
+            \_ ->
+                (compile_ emptyEnv <| AST.FuncApp (AST.Lambda [] (AST.int 2)) [])
+                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 2, RTN ], AP ])
         , Test.test "Pseudo currying - ((lambda (x) ((lambda (x y) (+ x y)) 4 x)) 5)" <|
             \_ ->
                 let
@@ -146,35 +150,19 @@ testCompileArgsBuiltin =
 testCompileArgsNonbuiltin : Test
 testCompileArgsNonbuiltin =
     Test.describe "Program.compileArgs for user defined/lambda functions"
-        [ Test.test "Empty args - Lambda" <|
+        [ Test.test "Empty args" <|
             \_ ->
                 compileArgs emptyEnv False []
-                    |> Expect.equal (Ok <| [])
-        , Test.test "Empty args - Loaded" <|
-            \_ ->
-                compileArgs emptyEnv False []
-                    |> Expect.equal (Ok <| [])
-        , Test.test "Singleton - Lambda" <|
+                    |> Expect.equal (Ok <| [ NIL ])
+        , Test.test "Singleton" <|
             \_ ->
                 compileArgs emptyEnv False [ AST.int 1 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
-        , Test.test "Singleton - Loaded" <|
-            \_ ->
-                compileArgs emptyEnv False [ AST.int 1 ]
-                    |> Expect.equal (Ok <| [ NIL, LDC 1, FUNC CONS ])
-        , Test.test "[2,3] - Lambda" <|
+        , Test.test "[2,3]" <|
             \_ ->
                 compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
-        , Test.test "[2,3] - Loaded" <|
-            \_ ->
-                compileArgs emptyEnv False [ AST.int 2, AST.int 3 ]
-                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS ])
-        , Test.test "[1,2,3] - Lambda" <|
-            \_ ->
-                compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
-                    |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
-        , Test.test "[1,2,3] - Loaded" <|
+        , Test.test "[1,2,3]" <|
             \_ ->
                 compileArgs emptyEnv False [ AST.int 1, AST.int 2, AST.int 3 ]
                     |> Expect.equal (Ok <| [ NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS ])
@@ -263,6 +251,10 @@ testCompileFuncApp =
             \_ ->
                 compileFuncApp emptyEnv (Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])) [ AST.int 2 ] False
                     |> Expect.err
+        , Test.test "Lambda fails with too many args - ((lambda (x y) (+ x y)) 2 3 4)" <|
+            \_ ->
+                compileFuncApp emptyEnv (Lambda [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])) [ AST.int 2, AST.int 3, AST.int 4 ] False
+                    |> Expect.err
         , Test.test "Evaluate arithmetic (- 1 2)" <|
             \_ ->
                 compileFuncApp emptyEnv (AST.var "-") [ AST.int 1, AST.int 2 ] False
@@ -279,6 +271,10 @@ testCompileFuncApp =
             \_ ->
                 compileFuncApp emptyEnv (AST.var "+") [ AST.FuncApp (AST.var "-") [ AST.int 1, AST.FuncApp (AST.var "*") [ AST.int 2, AST.int 5, AST.int 3 ] ], AST.int 3 ] False
                     |> Expect.err
+        , Test.test "Lambda app with no args - ((lambda () 3))" <|
+            \_ ->
+                compileFuncApp emptyEnv (Lambda [] (AST.int 3)) [] False
+                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 3, RTN ], AP ])
         ]
 
 
@@ -289,6 +285,10 @@ testCompileLambda =
             \_ ->
                 compileLambda emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
                     |> Expect.equal (Ok [ LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ] ])
+        , Test.test "No args - (lambda () 3)" <|
+            \_ ->
+                compileLambda emptyEnv [] (AST.int 3)
+                    |> Expect.equal (Ok [ LDF, NESTED [ LDC 3, RTN ] ])
         , Test.test "Nested Lambda - (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5))" <|
             \_ ->
                 compileLambda emptyEnv

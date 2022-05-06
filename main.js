@@ -7,9 +7,13 @@ import "codemirror/mode/commonlisp/commonlisp";
 import "codemirror/addon/edit/matchbrackets";
 import "codemirror/addon/edit/closebrackets";
 
+import { examples as codeExamples } from "./examples/";
+
 document.addEventListener("DOMContentLoaded", () => {
   const root = document.getElementById("app");
-  const app = Elm.Main.init({ node: root });
+  const app = Elm.Main.init({
+    node: root,
+  });
 
   let cm = null;
 

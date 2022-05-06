@@ -353,9 +353,7 @@ compileFuncApp env f args isRecursive =
         addArguments : ( List Op, Bool ) -> Result Error (List Op)
         addArguments ( compiledFunction, isBuiltin ) =
             Result.map
-                (\compiledArgs ->
-                    compiledArgs ++ compiledFunction
-                )
+                (\compiledArgs -> compiledArgs ++ compiledFunction)
                 (compileArgs env isBuiltin args)
     in
     compileFunc env f
@@ -531,7 +529,7 @@ compileFunc env f =
 
 
 
--- ifthe arguments are from a builtin function, we can just push them onto the stack
+-- if the arguments are from a builtin function, we can just push them onto the stack
 -- otherwise, make a list out of the arguments.
 
 
@@ -562,10 +560,7 @@ compileArgs env isBuiltin args =
                         (compile_ env arg)
                         (compileBuiltin xs)
     in
-    if List.length args == 0 then
-        Ok []
-
-    else if isBuiltin then
+    if isBuiltin then
         -- we want to push the arguments on the stack in REVERSE order
         compileBuiltin <| List.reverse args
 

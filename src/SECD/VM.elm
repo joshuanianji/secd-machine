@@ -154,8 +154,8 @@ vmCons head tail =
         ( h, Array ct ) ->
             Ok <| Array (Cons.cons (Cons.single h) ct)
 
-        _ ->
-            Err <| "cons: Expecting an array and a value, got " ++ valueToString head ++ " and " ++ valueToString tail
+        ( h, t ) ->
+            Ok <| Array (Cons.cons (Cons.single h) (Cons.single t))
 
 
 vmCar : Value -> Result String Value
@@ -538,6 +538,7 @@ applyFunction (VM ctx s e c d) =
     in
     case s of
         -- vals is a list of the values of the arguments
+        -- if there are no arguments, such as `lambda () ...`, then vals is Nil
         (Closure funcBody env) :: (Array vals) :: s_ ->
             case Cons.toList vals of
                 Nothing ->
