@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Events
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
@@ -8,12 +9,12 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import FeatherIcons
-import Flags exposing (CodeExamples, Flags)
+import Flags exposing (CodeExamples, Screen)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Decode as Decode
 import Lib.LispAST as AST exposing (AST)
-import Lib.Util as Util exposing (eachZero)
+import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
 import Ports
 import SECD.Error exposing (Error)
@@ -46,6 +47,7 @@ type alias SuccessModel =
     , openTabs : Set String
     , compiled : CompiledState
     , codeExamples : CodeExamples
+    , screen : Screen
     }
 
 
@@ -68,6 +70,7 @@ init flags =
                 , openTabs = Set.empty
                 , compiled = Idle
                 , codeExamples = f.codeExamples
+                , screen = f.screen
                 }
             , Ports.initialized ""
             )
@@ -86,6 +89,8 @@ type Msg
     | UpdateCode String
     | Compile
     | VMViewMsg VMView.Msg
+      -- other
+    | UpdateScreen Screen
 
 
 
@@ -141,6 +146,9 @@ updateSuccess msg model =
                     VMView.update subMsg vmModel
             in
             ( { model | compiled = CompileSuccess ast newVMModel }, Cmd.map VMViewMsg newVMMsg )
+
+        ( _, UpdateScreen newScreen ) ->
+            ( { model | screen = newScreen }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
@@ -243,6 +251,20 @@ viewSuccess model =
 codeEditor : SuccessModel -> Element Msg
 codeEditor model =
     let
+        ( surroundSize, mainSize ) =
+            case .class (Element.classifyDevice model.screen) of
+                Element.Desktop ->
+                    ( 1, 5 )
+
+                Element.Phone ->
+                    ( 1, 10 )
+
+                Element.Tablet ->
+                    ( 1, 8 )
+
+                Element.BigDesktop ->
+                    ( 1, 3 )
+
         viewCodeExamples : CodeExamples -> Element Msg
         viewCodeExamples progs =
             Element.column
@@ -296,19 +318,30 @@ codeEditor model =
         [ Element.width Element.fill ]
         [ Element.el
             [ Element.width <| Element.fillPortion 5
+            , Element.height <| Element.px 400
+            , Border.roundEach { eachZeroBorder | topLeft = 16, bottomLeft = 16 }
             , Background.color <| Element.rgb255 38 50 56
-            , Element.height Element.fill
+            , Element.padding 16
             ]
           <|
             Element.html (Html.div [ Attr.id "editor" ] [])
         , Element.el
             [ Element.width <| Element.fillPortion 2
-            , Element.height <| Element.px 300
+            , Element.height <| Element.px 400
             , Element.scrollbars
+            , Border.width 2
+            , Border.roundEach { eachZeroBorder | topRight = 16, bottomRight = 16 }
+            , Border.color <| Element.rgb255 38 50 56
             ]
           <|
             viewCodeExamples model.codeExamples
         ]
+        |> Util.surround
+            [ Element.paddingXY 0 24 ]
+            { left = surroundSize
+            , middle = mainSize
+            , right = surroundSize
+            }
 
 
 
@@ -334,4 +367,5 @@ subscriptions model =
             Sub.batch
                 [ Sub.map VMViewMsg vmModelSub
                 , Ports.updatedEditor CodeChanged
+                , Browser.Events.onResize (\w h -> UpdateScreen <| Screen w h)
                 ]

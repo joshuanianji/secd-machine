@@ -15,6 +15,11 @@ eachZero =
     { top = 0, right = 0, bottom = 0, left = 0 }
 
 
+eachZeroBorder : { topLeft : Int, topRight : Int, bottomRight : Int, bottomLeft : Int }
+eachZeroBorder =
+    { topLeft = 0, topRight = 0, bottomRight = 0, bottomLeft = 0 }
+
+
 wrapAdd : a -> a -> List a -> List a
 wrapAdd first last l =
     first :: l ++ [ last ]
@@ -28,6 +33,21 @@ showMaybeInt mn =
 
         Nothing ->
             "unknown"
+
+
+
+-- view utils
+
+
+surround : List (Attribute msg) -> { left : Int, middle : Int, right : Int } -> Element msg -> Element msg
+surround attrs { left, middle, right } =
+    \el ->
+        Element.row
+            (Element.width Element.fill :: attrs)
+            [ Element.el [ Element.width <| Element.fillPortion left, Element.height Element.fill ] Element.none
+            , Element.el [ Element.width <| Element.fillPortion middle, Element.height Element.fill ] el
+            , Element.el [ Element.width <| Element.fillPortion right, Element.height Element.fill ] Element.none
+            ]
 
 
 

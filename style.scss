@@ -19,7 +19,10 @@
   font-family: "Fira Code", monospace;
 
   .CodeMirror-line {
-    line-height: 1.25;
+    line-height: 1.66;
+  }
+  .CodeMirror-gutter-wrapper {
+    line-height: 1.66;
   }
 }
 
