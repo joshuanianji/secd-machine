@@ -16,6 +16,11 @@
 #editor,
 .CodeMirror {
   height: 100%;
+  font-family: "Fira Code", monospace;
+
+  .CodeMirror-line {
+    line-height: 1.25;
+  }
 }
 
 .container {

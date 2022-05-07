@@ -1,4 +1,3 @@
-import "./style.scss";
 import { Elm } from "./src/Main.elm";
 import CodeMirror from "codemirror";
 import "codemirror/theme/material.css";
@@ -6,6 +5,9 @@ import "codemirror/lib/codemirror.css";
 import "codemirror/mode/commonlisp/commonlisp";
 import "codemirror/addon/edit/matchbrackets";
 import "codemirror/addon/edit/closebrackets";
+
+// loading styles after codemirror styles, so our styles override.
+import "./style.scss";
 
 import { examples as codeExamples } from "./examples/";
 
