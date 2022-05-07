@@ -1,5 +1,6 @@
-
+; Even and odd reference each other!
+; NOTE: This is quite an inefficient way to determine if a number is even or odd.
 (letrec
-    ((odd 	(lambda (n) (if (eq n 0) nil (even (- n 1)))))
-     (even 	(lambda (n) (if (eq n 0) t	 (odd  (- n 1)))))) 
-    (even 4))
+    ((isOdd 	(lambda (n) (if (eq n 0) nil (isEven (- n 1)))))
+     (isEven 	(lambda (n) (if (eq n 0) t	 (isOdd  (- n 1)))))) 
+    (isEven 4))

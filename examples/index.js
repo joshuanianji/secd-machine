@@ -5,7 +5,7 @@ import { plainText as arithmetic } from "./basics/arithmetic.lisp";
 import { plainText as comparison } from "./basics/comparison.lisp";
 import { plainText as ifStmt } from "./basics/if.lisp";
 import { plainText as letStmt } from "./basics/let.lisp";
-import { plainText as letrec } from "./basics/letrec.lisp";
+import { plainText as letstar } from "./basics/letstar.lisp";
 
 // Lists
 import { plainText as listLength } from "./lists/listLength.lisp";
@@ -16,6 +16,7 @@ import { plainText as sumList } from "./lists/sumList.lisp";
 import { plainText as currying } from "./complex/currying.lisp";
 import { plainText as infiniteList } from "./complex/infiniteList.lisp";
 import { plainText as mutualrec } from "./complex/mutualrec.lisp";
+import { plainText as shadowing } from "./complex/shadowing.lisp";
 
 export const examples = [
   {
@@ -25,7 +26,7 @@ export const examples = [
       ["Value Comparison", comparison],
       ["If Statement", ifStmt],
       ["Let Statements", letStmt],
-      ["Letrec", letrec],
+      ["Simulating Let*", letstar],
     ],
   },
   {
@@ -40,6 +41,7 @@ export const examples = [
     type: "complex",
     examples: [
       ["Currying", currying],
+      ["Shadowing", shadowing],
       ["Lazy Infinite Lists", infiniteList],
       ["Mutual Recursion", mutualrec],
     ],
