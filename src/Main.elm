@@ -11,7 +11,7 @@ import Element.Input as Input
 import FeatherIcons
 import Flags exposing (CodeExamples, Screen)
 import Html exposing (Html)
-import Html.Attributes as Attr
+import Html.Attributes
 import Json.Decode as Decode
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
@@ -270,7 +270,7 @@ codeEditor model =
             Element.column
                 [ Element.height Element.fill
                 , Element.width Element.fill
-                , Element.paddingXY 4 12
+                , Element.paddingXY 0 12
                 ]
             <|
                 List.map
@@ -278,21 +278,32 @@ codeEditor model =
                         let
                             ( icon, content ) =
                                 if Set.member name model.openTabs then
-                                    ( FeatherIcons.chevronUp, Element.el [ Element.paddingEach { eachZero | left = 16 } ] <| viewCodeExamplesTab progTuples )
+                                    ( FeatherIcons.chevronUp
+                                    , Element.el
+                                        [ Element.paddingEach { eachZero | left = 16 }
+                                        , Element.width Element.fill
+                                        ]
+                                        (viewCodeExamplesTab progTuples)
+                                    )
 
                                 else
                                     ( FeatherIcons.chevronDown, Element.none )
                         in
                         Element.column
-                            [ Element.width Element.fill ]
+                            [ Element.width Element.fill
+                            ]
                             [ Element.row
-                                [ Element.paddingXY 16 12
+                                [ Element.width Element.fill
+                                , Element.paddingXY 16 12
                                 , Events.onClick <| ToggleTab name
                                 , Element.pointer
                                 , Element.spacing 4
+                                , Element.htmlAttribute <| Html.Attributes.class "unselectable"
+                                , Element.mouseOver
+                                    [ Background.color (Element.rgba255 38 50 56 0.1) ]
                                 ]
                                 [ Element.text name
-                                , Util.viewIcon [] icon
+                                , Util.viewIcon [ Element.alignRight ] icon
                                 ]
                             , content
                             ]
@@ -302,12 +313,17 @@ codeEditor model =
         viewCodeExamplesTab : List ( String, String ) -> Element Msg
         viewCodeExamplesTab progValues =
             Element.column
-                [ Element.width Element.fill ]
+                [ Element.width Element.fill
+                ]
             <|
                 List.map
                     (\( name, prog ) ->
                         Input.button
-                            [ Element.paddingXY 12 8 ]
+                            [ Element.padding 12
+                            , Element.width Element.fill
+                            , Element.mouseOver
+                                [ Font.color (Element.rgba255 38 50 56 0.8) ]
+                            ]
                             { onPress = Just <| UpdateCode prog
                             , label = Element.text name
                             }
@@ -318,16 +334,16 @@ codeEditor model =
         [ Element.width Element.fill ]
         [ Element.el
             [ Element.width <| Element.fillPortion 5
-            , Element.height <| Element.px 400
+            , Element.height <| Element.px 500
             , Border.roundEach { eachZeroBorder | topLeft = 16, bottomLeft = 16 }
             , Background.color <| Element.rgb255 38 50 56
             , Element.padding 16
             ]
           <|
-            Element.html (Html.div [ Attr.id "editor" ] [])
+            Element.html (Html.div [ Html.Attributes.id "editor" ] [])
         , Element.el
             [ Element.width <| Element.fillPortion 2
-            , Element.height <| Element.px 400
+            , Element.height <| Element.px 500
             , Element.scrollbars
             , Border.width 2
             , Border.roundEach { eachZeroBorder | topRight = 16, bottomRight = 16 }

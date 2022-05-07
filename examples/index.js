@@ -20,7 +20,7 @@ import { plainText as shadowing } from "./complex/shadowing.lisp";
 
 export const examples = [
   {
-    type: "basics",
+    type: "Basics",
     examples: [
       ["Arithmetic", arithmetic],
       ["Value Comparison", comparison],
@@ -30,7 +30,7 @@ export const examples = [
     ],
   },
   {
-    type: "lists",
+    type: "Lists",
     examples: [
       ["Length of a List - Recursion", listLength],
       ["List Map", mapList],
@@ -38,7 +38,7 @@ export const examples = [
     ],
   },
   {
-    type: "complex",
+    type: "Complex",
     examples: [
       ["Currying", currying],
       ["Shadowing", shadowing],

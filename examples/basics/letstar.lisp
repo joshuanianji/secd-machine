@@ -5,7 +5,7 @@
 ; To "solve" this, can use a letrec binding, but wrap references in lambdas. For JS users, this is sometimes called a "thunk" (i think???).
 ; Anyway, we'll have to "evaluate the thunk" when referencing the variable in the let value.
 ; 
-; It's kinda dumb.
+; Yeah it's kinda dumb.
 (letrec
     ((x 1) 
      (w (lambda () (+ z 1))) 
