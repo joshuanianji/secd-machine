@@ -6,14 +6,16 @@ import Json.Decode as Decode exposing (Decoder)
 type alias Flags =
     { codeExamples : CodeExamples
     , screen : Screen
+    , initialCode : String
     }
 
 
 decoder : Decoder Flags
 decoder =
-    Decode.map2 Flags
+    Decode.map3 Flags
         (Decode.field "codeExamples" decodeCodeExamples)
         (Decode.field "screen" decodeScreen)
+        (Decode.field "initialCode" Decode.string)
 
 
 type alias CodeExamples =

@@ -21,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
         height: window.innerHeight,
       },
       codeExamples: codeExamples,
+      initialCode: codeExamples[0]["examples"][0][1], // starts off with the arithmetic example
     },
   });
 

@@ -66,13 +66,13 @@ init flags =
 
         Ok f ->
             ( Success
-                { code = ""
+                { code = f.initialCode
                 , openTabs = Set.empty
                 , compiled = Idle
                 , codeExamples = f.codeExamples
                 , screen = f.screen
                 }
-            , Ports.initialized ""
+            , Ports.initialized f.initialCode
             )
 
 
