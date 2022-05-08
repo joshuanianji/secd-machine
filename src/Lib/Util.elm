@@ -35,6 +35,16 @@ showMaybeInt mn =
             "unknown"
 
 
+foldResult : Result a a -> a
+foldResult r =
+    case r of
+        Ok a ->
+            a
+
+        Err a ->
+            a
+
+
 
 -- view utils
 

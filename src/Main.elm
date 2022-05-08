@@ -45,6 +45,12 @@ type Model
 type alias SuccessModel =
     { code : String
     , openTabs : Set String
+
+    -- making this a result (super weird) so i can know when the code change
+    -- is codemirror updating the code after the user clicks a new code example,
+    -- or when the user edits the code
+    -- when the user edits, we make the currCodeExample an empty string
+    , currCodeExample : Result String String
     , compiled : CompiledState
     , codeExamples : CodeExamples
     , screen : Screen
@@ -67,7 +73,8 @@ init flags =
         Ok f ->
             ( Success
                 { code = f.initialCode
-                , openTabs = Set.empty
+                , openTabs = Set.fromList [ "Basics" ]
+                , currCodeExample = Ok "Arithmetic"
                 , compiled = Idle
                 , codeExamples = f.codeExamples
                 , screen = f.screen
@@ -86,7 +93,8 @@ type Msg
       -- code changed from JS side
     | CodeChanged String
       -- code changed from Elm side
-    | UpdateCode String
+      -- first arg is name, second is the code
+    | UpdateCodeExample String String
     | Compile
     | VMViewMsg VMView.Msg
       -- other
@@ -122,10 +130,26 @@ updateSuccess msg model =
                 ( { model | openTabs = Set.insert tab model.openTabs }, Cmd.none )
 
         ( _, CodeChanged newCode ) ->
-            ( { model | code = newCode }, Cmd.none )
+            case model.currCodeExample of
+                Ok codeChangedExample ->
+                    ( { model
+                        | currCodeExample = Err codeChangedExample
+                        , code = newCode
+                      }
+                    , Cmd.none
+                    )
 
-        ( _, UpdateCode newCode ) ->
-            ( model, Ports.updateCode newCode )
+                Err _ ->
+                    ( { model
+                        | currCodeExample = Ok ""
+                        , code = newCode
+                      }
+                    , Cmd.none
+                    )
+
+        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
+        ( _, UpdateCodeExample name newCode ) ->
+            ( { model | currCodeExample = Ok name }, Ports.updateCode newCode )
 
         ( _, Compile ) ->
             case AST.parse model.code of
@@ -170,7 +194,15 @@ view model =
 
 viewSuccess : SuccessModel -> Html Msg
 viewSuccess model =
-    Element.layout
+    Element.layoutWith
+        { options =
+            [ Element.focusStyle
+                { borderColor = Nothing
+                , backgroundColor = Nothing
+                , shadow = Nothing
+                }
+            ]
+        }
         [ Font.family
             [ Font.typeface "Avenir"
             , Font.typeface "Helvetica"
@@ -279,19 +311,18 @@ codeEditor model =
                             ( icon, content ) =
                                 if Set.member name model.openTabs then
                                     ( FeatherIcons.chevronUp
-                                    , Element.el
+                                    , Element.column
                                         [ Element.paddingEach { eachZero | left = 16 }
                                         , Element.width Element.fill
                                         ]
-                                        (viewCodeExamplesTab progTuples)
+                                        (List.map viewCodeExampleTab progTuples)
                                     )
 
                                 else
                                     ( FeatherIcons.chevronDown, Element.none )
                         in
                         Element.column
-                            [ Element.width Element.fill
-                            ]
+                            [ Element.width Element.fill ]
                             [ Element.row
                                 [ Element.width Element.fill
                                 , Element.paddingXY 16 12
@@ -310,25 +341,38 @@ codeEditor model =
                     )
                     progs
 
-        viewCodeExamplesTab : List ( String, String ) -> Element Msg
-        viewCodeExamplesTab progValues =
-            Element.column
+        viewCodeExampleTab : ( String, String ) -> Element Msg
+        viewCodeExampleTab ( name, prog ) =
+            let
+                dotColor =
+                    if name == Util.foldResult model.currCodeExample then
+                        Element.rgb255 199 146 234
+
+                    else
+                        Element.rgba 0 0 0 0
+            in
+            Element.row
                 [ Element.width Element.fill
+                , Element.spacing 4
                 ]
-            <|
-                List.map
-                    (\( name, prog ) ->
-                        Input.button
-                            [ Element.padding 12
-                            , Element.width Element.fill
-                            , Element.mouseOver
-                                [ Font.color (Element.rgba255 38 50 56 0.8) ]
-                            ]
-                            { onPress = Just <| UpdateCode prog
-                            , label = Element.text name
-                            }
-                    )
-                    progValues
+                [ Element.el
+                    [ Element.height <| Element.px 10
+                    , Element.width <| Element.px 10
+                    , Background.color dotColor
+                    , Element.centerY
+                    , Border.rounded 16
+                    ]
+                    Element.none
+                , Input.button
+                    [ Element.padding 12
+                    , Element.width Element.fill
+                    , Element.mouseOver
+                        [ Font.color (Element.rgba255 38 50 56 0.8) ]
+                    ]
+                    { onPress = Just <| UpdateCodeExample name prog
+                    , label = Element.text name
+                    }
+                ]
     in
     Element.row
         [ Element.width Element.fill ]
