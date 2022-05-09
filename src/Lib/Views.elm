@@ -1,8 +1,12 @@
 module Lib.Views exposing (..)
 
-import Element exposing (Element)
+import Element exposing (Attribute, Element)
+import Element.Background as Background
 import Element.Border as Border
+import Element.Font as Font
 import Element.Input as Input
+import Html.Attributes
+import Lib.Colours as Colours
 
 
 
@@ -21,3 +25,32 @@ button msg label =
         { onPress = Just msg
         , label = label
         }
+
+
+
+-- inline code block
+
+
+link :
+    List (Attribute msg)
+    ->
+        { url : String
+        , label : String
+        }
+    -> Element msg
+link attrs { url, label } =
+    Element.link
+        ([ Font.color Colours.linkBlue
+         , Element.mouseDown [ Font.color Colours.linkIndigo ]
+         , Element.mouseOver [ Font.color Colours.linkLightBlue ]
+         ]
+            ++ attrs
+        )
+        { url = url
+        , label = Element.text label
+        }
+
+
+unselectable : Attribute msg
+unselectable =
+    Element.htmlAttribute <| Html.Attributes.class "unselectable"

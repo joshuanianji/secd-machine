@@ -13,6 +13,7 @@ import Flags exposing (CodeExamples, Screen)
 import Html exposing (Html)
 import Html.Attributes
 import Json.Decode as Decode
+import Lib.Colours as Colours
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
@@ -209,6 +210,8 @@ viewSuccess model =
             , Font.typeface "Arial"
             , Font.sansSerif
             ]
+        , Element.width Element.fill
+        , Element.height Element.fill
         ]
     <|
         Element.column
@@ -232,6 +235,7 @@ viewSuccess model =
                 ]
               <|
                 Element.text "An implementation as seen in Ualberta's CMPUT 325"
+            , description model
             , codeEditor model
             , Element.row
                 [ Element.spacing 8
@@ -280,19 +284,138 @@ viewSuccess model =
             ]
 
 
+
+-- contains the description of the SECD machine and stuff
+
+
+description : SuccessModel -> Element Msg
+description model =
+    let
+        ( surroundSize, mainSize ) =
+            case .class (Element.classifyDevice model.screen) of
+                Element.Desktop ->
+                    ( 1, 10 )
+
+                Element.Phone ->
+                    ( 0, 1 )
+
+                Element.Tablet ->
+                    ( 1, 16 )
+
+                Element.BigDesktop ->
+                    ( 1, 3 )
+
+        showTitleTab : String -> String -> Element Msg
+        showTitleTab id content =
+            Element.el
+                [ Font.size 32
+                , Font.color <|
+                    if Set.member id model.openTabs then
+                        Colours.grey
+
+                    else
+                        Colours.greyAlpha 0.5
+                , Font.bold
+                , Events.onClick (ToggleTab id)
+                , Lib.Views.unselectable
+                , Element.pointer
+                , Element.mouseOver
+                    [ Font.color <| Colours.lightGrey ]
+                ]
+                (Element.text content)
+
+        showConditional : String -> Element Msg -> Element Msg
+        showConditional id content =
+            if Set.member id model.openTabs then
+                content
+
+            else
+                Element.none
+
+        whatis =
+            Element.column
+                [ Element.spacing 16
+                , Font.size 18
+                , Element.width Element.fill
+                ]
+                [ showTitleTab "whatis" "What is an SECD Machine?"
+                , Element.column
+                    [ Element.spacing 12
+                    , Element.width Element.fill
+                    ]
+                    [ Element.paragraph
+                        [ Element.width Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.text "An SECD is a virtual machine designed primarily for running compiled code from functional languages.  It consists of four stacks: the "
+                        , Element.el [ Font.bold ] <| Element.text "S"
+                        , Element.text "tack, holding the 'values' of the code, "
+                        , Element.el [ Font.bold ] <| Element.text "E"
+                        , Element.text "nvironment, containing values of the current scope, "
+                        , Element.el [ Font.bold ] <| Element.text "C"
+                        , Element.text "ontrol, containing instructions to the machine, and "
+                        , Element.el [ Font.bold ] <| Element.text "D"
+                        , Element.text "ump stack, used for temporary storage."
+                        ]
+                    , Element.paragraph
+                        [ Element.width Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.text "The compiled code or instruction set, on the other hand, is relatively simple. For brevity, I won't state them here, nor expand on the SECD definition, but feel free to check the references below:" ]
+                    , Element.column
+                        [ Element.paddingXY 8 4
+                        , Element.spacing 8
+                        ]
+                      <|
+                        List.map
+                            (\( url, label ) ->
+                                Element.row
+                                    [ Element.spacing 8 ]
+                                    [ Element.el [ Lib.Views.unselectable ] <| Element.text "-"
+                                    , Lib.Views.link [] { url = url, label = label }
+                                    ]
+                            )
+                            [ ( "https://webdocs.cs.ualberta.ca/~rgreiner/C-325/2004/325/2004/Slides/HandoutPDF/SECD-1x2.pdf"
+                              , "SECD Notes from UAlberta CMPUT 325 - November 2004"
+                              )
+                            , ( "https://en.wikipedia.org/wiki/SECD_machine", "Wikipedia Article" )
+                            , ( "https://github.com/zachallaun/secd", "Zachallaun's implementation" )
+                            ]
+                    ]
+                    |> showConditional "whatis"
+                ]
+    in
+    Element.column
+        [ Element.spacing 16
+        , Element.paddingXY 8 0
+        , Element.width Element.fill
+        ]
+        [ whatis ]
+        |> Util.surround
+            [ Element.paddingXY 0 24 ]
+            { left = surroundSize
+            , middle = mainSize
+            , right = surroundSize
+            }
+
+
+
+-- contains the code editor and the code editor tabs
+
+
 codeEditor : SuccessModel -> Element Msg
 codeEditor model =
     let
         ( surroundSize, mainSize ) =
             case .class (Element.classifyDevice model.screen) of
                 Element.Desktop ->
-                    ( 1, 5 )
-
-                Element.Phone ->
                     ( 1, 10 )
 
+                Element.Phone ->
+                    ( 0, 1 )
+
                 Element.Tablet ->
-                    ( 1, 8 )
+                    ( 1, 16 )
 
                 Element.BigDesktop ->
                     ( 1, 3 )
@@ -329,9 +452,9 @@ codeEditor model =
                                 , Events.onClick <| ToggleTab name
                                 , Element.pointer
                                 , Element.spacing 4
-                                , Element.htmlAttribute <| Html.Attributes.class "unselectable"
+                                , Lib.Views.unselectable
                                 , Element.mouseOver
-                                    [ Background.color (Element.rgba255 38 50 56 0.1) ]
+                                    [ Background.color Colours.slateGrey ]
                                 ]
                                 [ Element.text name
                                 , Util.viewIcon [ Element.alignRight ] icon
@@ -346,10 +469,10 @@ codeEditor model =
             let
                 dotColor =
                     if name == Util.foldResult model.currCodeExample then
-                        Element.rgb255 199 146 234
+                        Colours.purple
 
                     else
-                        Element.rgba 0 0 0 0
+                        Colours.white
             in
             Element.row
                 [ Element.width Element.fill
@@ -367,7 +490,7 @@ codeEditor model =
                     [ Element.padding 12
                     , Element.width Element.fill
                     , Element.mouseOver
-                        [ Font.color (Element.rgba255 38 50 56 0.8) ]
+                        [ Font.color Colours.lightGrey ]
                     ]
                     { onPress = Just <| UpdateCodeExample name prog
                     , label = Element.text name
@@ -375,26 +498,26 @@ codeEditor model =
                 ]
     in
     Element.row
-        [ Element.width Element.fill ]
+        [ Element.width Element.fill
+        , Element.paddingXY 8 0
+        ]
         [ Element.el
             [ Element.width <| Element.fillPortion 5
             , Element.height <| Element.px 500
             , Border.roundEach { eachZeroBorder | topLeft = 16, bottomLeft = 16 }
-            , Background.color <| Element.rgb255 38 50 56
+            , Background.color Colours.grey
             , Element.padding 16
             ]
-          <|
-            Element.html (Html.div [ Html.Attributes.id "editor" ] [])
+            (Element.html <| Html.div [ Html.Attributes.id "editor" ] [])
         , Element.el
             [ Element.width <| Element.fillPortion 2
             , Element.height <| Element.px 500
             , Element.scrollbars
             , Border.width 2
             , Border.roundEach { eachZeroBorder | topRight = 16, bottomRight = 16 }
-            , Border.color <| Element.rgb255 38 50 56
+            , Border.color Colours.grey
             ]
-          <|
-            viewCodeExamples model.codeExamples
+            (viewCodeExamples model.codeExamples)
         ]
         |> Util.surround
             [ Element.paddingXY 0 24 ]
