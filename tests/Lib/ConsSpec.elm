@@ -2,6 +2,8 @@ module Lib.ConsSpec exposing (suite)
 
 import Expect
 import Fuzz
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Lib.Cons exposing (..)
 import Test exposing (Test)
 
@@ -13,6 +15,7 @@ suite =
         , testFromConsList
         , testToString
         , testToList
+        , testDecode
         ]
 
 
@@ -222,3 +225,23 @@ testToList =
                 in
                 Expect.equal actual expected
         ]
+
+
+testDecode : Test
+testDecode =
+    Test.describe "Cons.decode" <|
+        List.map
+            (\cons ->
+                Test.test ("Decode: " ++ toString String.fromInt cons) <|
+                    \_ ->
+                        Decode.decodeValue (decoder Decode.int) (encode Encode.int cons)
+                            |> Expect.equal (Ok cons)
+            )
+            [ Nil
+            , Val 2
+            , Cons (Val 1) (Val 2)
+            , Cons (Val 1) (Cons (Val 2) (Val 3))
+            , Cons (Val 1) (Cons (Val 2) (Cons (Val 3) (Val 4)))
+            , Cons (Cons (Val 2) (Val 10)) Nil
+            , fromList [ 4, 5, 6, 7, 8 ]
+            ]

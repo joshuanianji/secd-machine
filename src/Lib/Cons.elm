@@ -2,6 +2,8 @@ module Lib.Cons exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 
 
 type Cons a
@@ -162,3 +164,40 @@ viewHelper viewA c =
                 , Html.text " "
                 , viewHelper viewA rest
                 ]
+
+
+
+---- DECODER ----
+
+
+encode : (a -> Value) -> Cons a -> Value
+encode subEncoder c =
+    case c of
+        Nil ->
+            Encode.object [ ( "tag", Encode.string "Nil" ) ]
+
+        Val a ->
+            Encode.object [ ( "tag", Encode.string "Val" ), ( "val", subEncoder a ) ]
+
+        Cons hd tl ->
+            Encode.object [ ( "tag", Encode.string "Cons" ), ( "hd", encode subEncoder hd ), ( "tl", encode subEncoder tl ) ]
+
+
+decoder : Decoder a -> Decoder (Cons a)
+decoder subdecoder =
+    Decode.field "tag" Decode.string
+        |> Decode.andThen
+            (\tag ->
+                case tag of
+                    "Nil" ->
+                        Decode.succeed Nil
+
+                    "Val" ->
+                        Decode.map Val (Decode.field "val" subdecoder)
+
+                    "Cons" ->
+                        Decode.map2 Cons (Decode.field "hd" (decoder subdecoder)) (Decode.field "tl" (decoder subdecoder))
+
+                    _ ->
+                        Decode.fail <| "Unknown tag: " ++ tag
+            )
