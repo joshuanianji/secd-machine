@@ -2,6 +2,8 @@ module SECD.Program exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
@@ -630,3 +632,192 @@ lookup var (Env env) =
 addVarNames : List String -> Environment -> Environment
 addVarNames vars (Env env) =
     Env (vars :: env)
+
+
+
+-- JSON ENCODE/DECODE
+
+
+encode : Program -> Value
+encode (Program prog) =
+    Encode.list encodeSingle prog
+
+
+decoder : Decoder Program
+decoder =
+    Decode.map Program <| Decode.list decoderSingle
+
+
+encodeSingle : Op -> Value
+encodeSingle op =
+    case op of
+        NIL ->
+            Encode.string "NIL"
+
+        LD ( x, y ) ->
+            Encode.list Encode.int [ x, y ]
+
+        LDC x ->
+            Encode.int x
+
+        LDF ->
+            Encode.string "LDF"
+
+        AP ->
+            Encode.string "AP"
+
+        RTN ->
+            Encode.string "RTN"
+
+        SEL ->
+            Encode.string "SEL"
+
+        JOIN ->
+            Encode.string "JOIN"
+
+        RAP ->
+            Encode.string "RAP"
+
+        DUM ->
+            Encode.string "DUM"
+
+        FUNC func ->
+            encodeFunc func
+
+        NESTED ops ->
+            Encode.list encodeSingle ops
+
+
+encodeFunc : Func -> Value
+encodeFunc f =
+    case f of
+        ADD ->
+            Encode.string "ADD"
+
+        MULT ->
+            Encode.string "MULT"
+
+        SUB ->
+            Encode.string "SUB"
+
+        ATOM ->
+            Encode.string "ATOM"
+
+        CONS ->
+            Encode.string "CONS"
+
+        CAR ->
+            Encode.string "CAR"
+
+        CDR ->
+            Encode.string "CDR"
+
+        NULL ->
+            Encode.string "NULL"
+
+        COMPARE cmp ->
+            encodeCompare cmp
+
+
+encodeCompare : Cmp -> Value
+encodeCompare cmp =
+    case cmp of
+        CMP_EQ ->
+            Encode.string "CMP_EQ"
+
+        CMP_NE ->
+            Encode.string "CMP_NE"
+
+        CMP_LT ->
+            Encode.string "CMP_LT"
+
+        CMP_GT ->
+            Encode.string "CMP_GT"
+
+        CMP_LEQ ->
+            Encode.string "CMP_LEQ"
+
+        CMP_GEQ ->
+            Encode.string "CMP_GEQ"
+
+
+decoderSingle : Decoder Op
+decoderSingle =
+    Decode.oneOf
+        [ Decode.int |> Decode.andThen (LDC >> Decode.succeed)
+        , Decode.map2 (\x y -> LD ( x, y )) (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
+        , Decode.lazy <| \_ -> Decode.map NESTED (Decode.list decoderSingle)
+        , Decode.string
+            |> Decode.andThen
+                (\str ->
+                    case str of
+                        "NIL" ->
+                            Decode.succeed NIL
+
+                        "LDF" ->
+                            Decode.succeed LDF
+
+                        "AP" ->
+                            Decode.succeed AP
+
+                        "RTN" ->
+                            Decode.succeed RTN
+
+                        "SEL" ->
+                            Decode.succeed SEL
+
+                        "JOIN" ->
+                            Decode.succeed JOIN
+
+                        "RAP" ->
+                            Decode.succeed RAP
+
+                        "DUM" ->
+                            Decode.succeed DUM
+
+                        "ADD" ->
+                            Decode.succeed <| FUNC ADD
+
+                        "MULT" ->
+                            Decode.succeed <| FUNC MULT
+
+                        "SUB" ->
+                            Decode.succeed <| FUNC SUB
+
+                        "ATOM" ->
+                            Decode.succeed <| FUNC ATOM
+
+                        "CONS" ->
+                            Decode.succeed <| FUNC CONS
+
+                        "CAR" ->
+                            Decode.succeed <| FUNC CAR
+
+                        "CDR" ->
+                            Decode.succeed <| FUNC CDR
+
+                        "NULL" ->
+                            Decode.succeed <| FUNC NULL
+
+                        "CMP_EQ" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_EQ
+
+                        "CMP_NE" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_NE
+
+                        "CMP_LT" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_LT
+
+                        "CMP_GT" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_GT
+
+                        "CMP_LEQ" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_LEQ
+
+                        "CMP_GEQ" ->
+                            Decode.succeed <| FUNC <| COMPARE CMP_GEQ
+
+                        s ->
+                            Decode.fail <| "Unknown function " ++ s ++ "!"
+                )
+        ]

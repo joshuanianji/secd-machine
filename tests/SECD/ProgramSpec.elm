@@ -2,6 +2,7 @@ module SECD.ProgramSpec exposing (suite)
 
 import Expect
 import Fuzz
+import Json.Decode as Decode
 import Lib.Cons as Cons
 import Lib.LispAST as AST exposing (AST(..))
 import SECD.Program exposing (..)
@@ -13,6 +14,7 @@ suite =
     Test.describe "Program"
         [ testCompiler
         , testCompilerEnvironment
+        , testDecoder
         ]
 
 
@@ -434,3 +436,67 @@ testAddVarNames =
                     |> lookup "x"
                     |> Expect.equal (Ok <| LD ( 0, 1 ))
         ]
+
+
+
+---- DECODER ----
+
+
+testDecoder : Test
+testDecoder =
+    Test.describe "Op Decoder/Encoder"
+        [ testDecodeSingle
+        , testDecodePrograms
+        ]
+
+
+testDecodeSingle : Test
+testDecodeSingle =
+    Test.describe "encodeSingle" <|
+        List.map
+            (\op ->
+                Test.test ("Simple op: " ++ opToString op) <|
+                    \_ ->
+                        Decode.decodeValue decoderSingle (encodeSingle op)
+                            |> Expect.equal (Ok op)
+            )
+            [ NIL
+            , LDC 0
+            , LD ( 5, 6 )
+            , LDF
+            , AP
+            , RTN
+            , SEL
+            , JOIN
+            , RAP
+            , DUM
+            , FUNC ADD
+            , FUNC MULT
+            , FUNC SUB
+            , FUNC ATOM
+            , FUNC CONS
+            , FUNC CAR
+            , FUNC CDR
+            , FUNC NULL
+            , FUNC <| COMPARE CMP_EQ
+            , FUNC <| COMPARE CMP_NE
+            , FUNC <| COMPARE CMP_LT
+            , FUNC <| COMPARE CMP_GT
+            , FUNC <| COMPARE CMP_LEQ
+            , FUNC <| COMPARE CMP_GEQ
+            ]
+
+
+testDecodePrograms : Test
+testDecodePrograms =
+    Test.describe "Decoding simple programs" <|
+        List.map
+            (\( name, prog ) ->
+                Test.test ("Decoding for " ++ name) <|
+                    \_ ->
+                        Decode.decodeValue decoder (encode (Program prog))
+                            |> Expect.equal (Ok <| Program prog)
+            )
+            [ ( "((lambda () 3))", [ NIL, LDF, NESTED [ LDC 3, RTN ], AP ] )
+            , ( "Recursive Let Program", [ DUM, NIL, LDF, NESTED [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ], RAP ] )
+            ]

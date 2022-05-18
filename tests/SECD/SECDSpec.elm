@@ -3,11 +3,10 @@ module SECD.SECDSpec exposing (suite)
 -- testing the ENTIRE SECD machine - from compile to execution
 
 import Expect exposing (Expectation)
-import Fuzz
 import Lib.Cons as Cons
-import Lib.LispAST as AST exposing (AST)
+import Lib.LispAST as AST
 import Lib.Util as Util
-import SECD.Program as Prog exposing (Program)
+import SECD.Program as Prog
 import SECD.VM as VM
 import Test exposing (Test)
 
