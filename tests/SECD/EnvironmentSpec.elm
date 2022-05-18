@@ -2,6 +2,8 @@ module SECD.EnvironmentSpec exposing (suite)
 
 import Expect
 import Fuzz exposing (Fuzzer)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Lib.Cons as Cons
 import SECD.VMEnv as Env
 import Test exposing (Test)
@@ -14,6 +16,7 @@ suite =
         , testPush
         , testPushDummy
         , testReplaceDummy
+        , testDecode
         ]
 
 
@@ -127,3 +130,24 @@ testReplaceDummy =
 fuzzIntPairRange : Int -> Int -> Fuzzer ( Int, Int )
 fuzzIntPairRange start end =
     Fuzz.tuple ( Fuzz.intRange start end, Fuzz.intRange start end )
+
+
+
+---- DECODE ----
+
+
+testDecode : Test
+testDecode =
+    Test.describe "Decoder/Encoder" <|
+        List.map
+            (\( title, env ) ->
+                Test.test title <|
+                    \_ ->
+                        Expect.equal (Decode.decodeValue (Env.decoder Decode.int) (Env.encode Encode.int env)) (Ok env)
+            )
+            [ ( "empty env", Env.fromList [] )
+            , ( "single row", Env.fromList [ [ 1, 2 ] ] )
+            , ( "2D env", Env.fromList [ [ 5, 6 ], [ 3, 4 ] ] )
+            , ( "Single dummy", [ Env.Dummy ] )
+            , ( "Dummy in middle", [ Env.ListItem [ Cons.Val 1, Cons.Val 2, Cons.Val 3 ], Env.Dummy, Env.ListItem [ Cons.Val 1 ] ] )
+            ]

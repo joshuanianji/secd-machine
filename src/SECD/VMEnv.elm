@@ -2,6 +2,8 @@ module SECD.VMEnv exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 
@@ -136,3 +138,48 @@ replaceDummy newRow env =
 
         _ ->
             Err ""
+
+
+
+---- DECODE ----
+
+
+encode : (a -> Value) -> Environment a -> Value
+encode subencoder env =
+    Encode.list (encodeItem subencoder) env
+
+
+encodeItem : (a -> Value) -> EnvItem a -> Value
+encodeItem subencoder item =
+    case item of
+        ListItem cs ->
+            Encode.object
+                [ ( "val", Encode.string "ListItem" )
+                , ( "tag", Encode.list (Cons.encode subencoder) cs )
+                ]
+
+        Dummy ->
+            Encode.object [ ( "val", Encode.string "Dummy" ) ]
+
+
+decoder : Decoder a -> Decoder (Environment a)
+decoder subdecoder =
+    Decode.list (decodeItem subdecoder)
+
+
+decodeItem : Decoder a -> Decoder (EnvItem a)
+decodeItem subdecoder =
+    Decode.field "val" Decode.string
+        |> Decode.andThen
+            (\val ->
+                case val of
+                    "ListItem" ->
+                        Decode.field "tag" (Decode.list (Cons.decoder subdecoder))
+                            |> Decode.map ListItem
+
+                    "Dummy" ->
+                        Decode.succeed Dummy
+
+                    _ ->
+                        Decode.fail <| "Expected ListItem or Dummy, got " ++ val
+            )
