@@ -74,7 +74,7 @@ init flags =
         Ok f ->
             ( Success
                 { code = f.initialCode
-                , openTabs = Set.fromList [ "Basics" ]
+                , openTabs = Set.fromList [ "Basics", "howto" ]
                 , currCodeExample = Ok "Arithmetic"
                 , compiled = Idle
                 , codeExamples = f.codeExamples
@@ -331,72 +331,96 @@ description model =
 
             else
                 Element.none
-
-        whatis =
-            Element.column
-                [ Element.spacing 16
-                , Font.size 18
-                , Element.width Element.fill
-                ]
-                [ showTitleTab "whatis" "What is an SECD Machine?"
-                , Element.column
-                    [ Element.spacing 12
-                    , Element.width Element.fill
-                    ]
-                    [ Element.paragraph
-                        [ Element.width Element.fill
-                        , Element.spacing 8
-                        ]
-                        [ Element.text "An SECD is a virtual machine designed primarily for running compiled code from functional languages.  It consists of four stacks: the "
-                        , Element.el [ Font.bold ] <| Element.text "S"
-                        , Element.text "tack, holding the 'values' of the code, "
-                        , Element.el [ Font.bold ] <| Element.text "E"
-                        , Element.text "nvironment, containing values of the current scope, "
-                        , Element.el [ Font.bold ] <| Element.text "C"
-                        , Element.text "ontrol, containing instructions to the machine, and "
-                        , Element.el [ Font.bold ] <| Element.text "D"
-                        , Element.text "ump stack, used for temporary storage."
-                        ]
-                    , Element.paragraph
-                        [ Element.width Element.fill
-                        , Element.spacing 8
-                        ]
-                        [ Element.text "The compiled code or instruction set, on the other hand, is relatively simple. For brevity, I won't state them here, nor expand on the SECD definition, but feel free to check the references below:" ]
-                    , Element.column
-                        [ Element.paddingXY 8 4
-                        , Element.spacing 8
-                        ]
-                      <|
-                        List.map
-                            (\( url, label ) ->
-                                Element.row
-                                    [ Element.spacing 8 ]
-                                    [ Element.el [ Lib.Views.unselectable ] <| Element.text "-"
-                                    , Lib.Views.link [] { url = url, label = label }
-                                    ]
-                            )
-                            [ ( "https://webdocs.cs.ualberta.ca/~rgreiner/C-325/2004/325/2004/Slides/HandoutPDF/SECD-1x2.pdf"
-                              , "SECD Notes from UAlberta CMPUT 325 - November 2004"
-                              )
-                            , ( "https://en.wikipedia.org/wiki/SECD_machine", "Wikipedia Article" )
-                            , ( "https://github.com/zachallaun/secd", "Zachallaun's implementation" )
-                            ]
-                    ]
-                    |> showConditional "whatis"
-                ]
     in
     Element.column
-        [ Element.spacing 16
+        [ Element.spacing 32
         , Element.paddingXY 8 0
         , Element.width Element.fill
         ]
-        [ whatis ]
+        [ showTitleTab "whatis" "What is an SECD Machine?"
+        , showConditional "whatis" descriptionWhatis
+        , showTitleTab "howto" "How does this work?"
+        , showConditional "howto" descriptionHowto
+        ]
         |> Util.surround
             [ Element.paddingXY 0 24 ]
             { left = surroundSize
             , middle = mainSize
             , right = surroundSize
             }
+
+
+descriptionWhatis : Element Msg
+descriptionWhatis =
+    Element.column
+        [ Element.spacing 12
+        , Element.width Element.fill
+        ]
+        [ Element.paragraph
+            [ Element.width Element.fill
+            , Element.spacing 8
+            ]
+            [ Element.text "An SECD is a virtual machine designed primarily for running compiled code from functional languages.  It consists of four stacks: the "
+            , Lib.Views.bold "S"
+            , Element.text "tack, holding the 'values' of the code, "
+            , Lib.Views.bold "E"
+            , Element.text "nvironment, containing values of the current scope, "
+            , Lib.Views.bold "C"
+            , Element.text "ontrol, containing instructions to the machine, and "
+            , Lib.Views.bold "D"
+            , Element.text "ump stack, used for temporary storage."
+            ]
+        , Element.paragraph
+            [ Element.width Element.fill
+            , Element.spacing 8
+            ]
+            [ Element.text "The compiled code or instruction set, on the other hand, is relatively simple. For brevity, I won't state them here, nor expand on the SECD definition, but feel free to check the references below:" ]
+        , Element.column
+            [ Element.paddingXY 8 4
+            , Element.spacing 8
+            ]
+          <|
+            List.map
+                (\( url, label ) ->
+                    Element.row
+                        [ Element.spacing 8 ]
+                        [ Element.el [ Lib.Views.unselectable ] <| Element.text "-"
+                        , Lib.Views.link [] { url = url, label = label }
+                        ]
+                )
+                [ ( "https://webdocs.cs.ualberta.ca/~rgreiner/C-325/2004/325/2004/Slides/HandoutPDF/SECD-1x2.pdf"
+                  , "SECD Notes from UAlberta CMPUT 325 - November 2004"
+                  )
+                , ( "https://en.wikipedia.org/wiki/SECD_machine", "Wikipedia Article" )
+                , ( "https://github.com/zachallaun/secd", "Zachallaun's implementation" )
+                ]
+        ]
+
+
+descriptionHowto : Element Msg
+descriptionHowto =
+    Element.column
+        [ Element.spacing 12
+        , Element.width Element.fill
+        ]
+        [ Element.paragraph
+            [ Element.spacing 8
+            ]
+            [ Element.text "This implementation has two interactive parts, the \"code editor\", for a lisp-like language, and the \"machine\", which executes the compiled code."
+            ]
+        , Element.paragraph
+            [ Element.width Element.fill
+            , Element.spacing 8
+            ]
+            [ Element.text "To glue those two parts together, I split my program into three sections: "
+            , Lib.Views.bold "parsing"
+            , Element.text " my code into an AST, "
+            , Lib.Views.bold "compiling"
+            , Element.text " my code into the SECD instruction set, then "
+            , Lib.Views.bold "running"
+            , Element.text " it on the VM."
+            ]
+        ]
 
 
 

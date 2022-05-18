@@ -1,7 +1,6 @@
 module Lib.Views exposing (..)
 
 import Element exposing (Attribute, Element)
-import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
@@ -54,3 +53,12 @@ link attrs { url, label } =
 unselectable : Attribute msg
 unselectable =
     Element.htmlAttribute <| Html.Attributes.class "unselectable"
+
+
+
+-- Paragraph helpers
+
+
+bold : String -> Element msg
+bold =
+    Element.el [ Font.bold ] << Element.text
