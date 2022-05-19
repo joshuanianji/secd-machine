@@ -645,7 +645,7 @@ encode (Program prog) =
 
 decoder : Decoder Program
 decoder =
-    Decode.map Program <| Decode.list decoderSingle
+    Decode.map Program <| Decode.list singleDecoder
 
 
 encodeSingle : Op -> Value
@@ -741,12 +741,12 @@ encodeCompare cmp =
             Encode.string "CMP_GEQ"
 
 
-decoderSingle : Decoder Op
-decoderSingle =
+singleDecoder : Decoder Op
+singleDecoder =
     Decode.oneOf
         [ Decode.int |> Decode.andThen (LDC >> Decode.succeed)
         , Decode.map2 (\x y -> LD ( x, y )) (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
-        , Decode.lazy <| \_ -> Decode.map NESTED (Decode.list decoderSingle)
+        , Decode.lazy <| \_ -> Decode.map NESTED (Decode.list singleDecoder)
         , Decode.string
             |> Decode.andThen
                 (\str ->

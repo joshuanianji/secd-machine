@@ -2,6 +2,8 @@ module SECD.VM exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 import Lib.Cons as Cons exposing (Cons)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
@@ -727,4 +729,205 @@ viewDumpVal dv =
 
 
 
----- DECODERS ----
+---- ENCODERS/DECODERS ----
+
+
+encode : VM -> Encode.Value
+encode (VM ctx s e c d) =
+    Encode.object
+        [ ( "ctx", encodeContext ctx )
+        , ( "s", encodeStack s )
+        , ( "e", encodeEnvironment e )
+        , ( "c", encodeControl c )
+        , ( "d", encodeDump d )
+        ]
+
+
+decoder : Decoder VM
+decoder =
+    Decode.map5 VM
+        (Decode.field "ctx" contextDecoder)
+        (Decode.field "s" stackDecoder)
+        (Decode.field "e" environmentDecoder)
+        (Decode.field "c" controlDecoder)
+        (Decode.field "d" dumpDecoder)
+
+
+
+-- CONTEXT
+
+
+encodeContext : Context -> Encode.Value
+encodeContext ctx =
+    let
+        encodedDummyVal =
+            case ctx.dummyVal of
+                Nothing ->
+                    Encode.null
+
+                Just v ->
+                    Encode.list (Cons.encode encodeValue) v
+    in
+    Encode.object
+        [ ( "dummyVal", encodedDummyVal ) ]
+
+
+contextDecoder : Decoder Context
+contextDecoder =
+    let
+        dummyValDecoder =
+            Decode.oneOf
+                [ Decode.null Nothing
+                , Decode.map Just <| Decode.list (Cons.decoder valueDecoder)
+                ]
+    in
+    Decode.map Context
+        (Decode.field "dummyVal" dummyValDecoder)
+
+
+
+-- STACK
+-- just a list of values
+
+
+encodeStack : Stack -> Encode.Value
+encodeStack =
+    Encode.list encodeValue
+
+
+stackDecoder : Decoder Stack
+stackDecoder =
+    Decode.list valueDecoder
+
+
+
+-- ENVIRONMENT
+
+
+encodeEnvironment : Environment Value -> Encode.Value
+encodeEnvironment =
+    Env.encode encodeValue
+
+
+environmentDecoder : Decoder (Environment Value)
+environmentDecoder =
+    Env.decoder valueDecoder
+
+
+
+-- CONTROL
+
+
+encodeControl : Control -> Encode.Value
+encodeControl =
+    Encode.list Program.encodeSingle
+
+
+controlDecoder : Decoder Control
+controlDecoder =
+    Decode.list Program.singleDecoder
+
+
+
+-- DUMP
+
+
+encodeDump : Dump -> Encode.Value
+encodeDump =
+    let
+        encodeDumpVal : DumpValue -> Encode.Value
+        encodeDumpVal dv =
+            case dv of
+                Control c ->
+                    Encode.object
+                        [ ( "tag", Encode.string "Control" )
+                        , ( "val", encodeControl c )
+                        ]
+
+                EntireState s e c ->
+                    Encode.object
+                        [ ( "tag", Encode.string "EntireState" )
+                        , ( "stack", encodeStack s )
+                        , ( "environment", encodeEnvironment e )
+                        , ( "control", encodeControl c )
+                        ]
+    in
+    Encode.list encodeDumpVal
+
+
+dumpDecoder : Decoder Dump
+dumpDecoder =
+    let
+        dumpValueDecoder =
+            Decode.field "tag" Decode.string
+                |> Decode.andThen
+                    (\tag ->
+                        case tag of
+                            "Control" ->
+                                Decode.map Control <| Decode.field "val" controlDecoder
+
+                            "EntireState" ->
+                                Decode.map3 EntireState
+                                    (Decode.field "stack" stackDecoder)
+                                    (Decode.field "environment" environmentDecoder)
+                                    (Decode.field "control" controlDecoder)
+
+                            _ ->
+                                Decode.fail <| "Parsing dump: Invalid tag: " ++ tag
+                    )
+    in
+    Decode.list dumpValueDecoder
+
+
+
+-- VALUE
+
+
+encodeValue : Value -> Encode.Value
+encodeValue v =
+    case v of
+        Integer n ->
+            Encode.object
+                [ ( "tag", Encode.string "Int" )
+                , ( "val", Encode.int n )
+                ]
+
+        Truthy ->
+            Encode.object
+                [ ( "tag", Encode.string "Truthy" ) ]
+
+        Array cons ->
+            Encode.object
+                [ ( "tag", Encode.string "Array" )
+                , ( "val", Cons.encode encodeValue cons )
+                ]
+
+        Closure ops env ->
+            Encode.object
+                [ ( "tag", Encode.string "Closure" )
+                , ( "ops", Encode.list Program.encodeSingle ops )
+                , ( "env", encodeEnvironment env )
+                ]
+
+
+valueDecoder : Decoder Value
+valueDecoder =
+    Decode.field "tag" Decode.string
+        |> Decode.andThen
+            (\tag ->
+                case tag of
+                    "Int" ->
+                        Decode.map Integer <| Decode.field "val" Decode.int
+
+                    "Truthy" ->
+                        Decode.succeed Truthy
+
+                    "Array" ->
+                        Decode.map Array <| Cons.decoder valueDecoder
+
+                    "Closure" ->
+                        Decode.map2 Closure (Decode.list Program.singleDecoder) environmentDecoder
+
+                    _ ->
+                        Decode.fail <| "Decoding value: unknown tag " ++ tag
+            )

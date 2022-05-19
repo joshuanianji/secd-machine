@@ -457,7 +457,7 @@ testDecodeSingle =
             (\op ->
                 Test.test ("Simple op: " ++ opToString op) <|
                     \_ ->
-                        Decode.decodeValue decoderSingle (encodeSingle op)
+                        Decode.decodeValue singleDecoder (encodeSingle op)
                             |> Expect.equal (Ok op)
             )
             [ NIL

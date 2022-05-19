@@ -164,11 +164,11 @@ encodeItem subencoder item =
 
 decoder : Decoder a -> Decoder (Environment a)
 decoder subdecoder =
-    Decode.list (decodeItem subdecoder)
+    Decode.list (itemDecoder subdecoder)
 
 
-decodeItem : Decoder a -> Decoder (EnvItem a)
-decodeItem subdecoder =
+itemDecoder : Decoder a -> Decoder (EnvItem a)
+itemDecoder subdecoder =
     Decode.field "val" Decode.string
         |> Decode.andThen
             (\val ->
