@@ -25,7 +25,7 @@ port initialized : String -> Cmd msg
 -- each VM page is identified by a unique id
 
 
-port sendPage : ( Int, Value ) -> Cmd msg
+port sendPages : List ( Int, Value ) -> Cmd msg
 
 
 port fetchPage : Int -> Cmd msg

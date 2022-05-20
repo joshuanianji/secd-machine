@@ -720,7 +720,7 @@ evalN vm chunkSize =
             case step vm_ of
                 Unfinished newVm ->
                     if n == 0 then
-                        ( List.reverse states, Err newVm )
+                        ( states, Err newVm )
 
                     else
                         helper (n - 1) newVm (newVm :: states)
@@ -732,6 +732,7 @@ evalN vm chunkSize =
                     ( states, Ok (Err err) )
     in
     helper chunkSize vm []
+        |> Tuple.mapFirst List.reverse
 
 
 {-|
@@ -775,33 +776,11 @@ evalPage pageSize chunkSize vm =
 
 
 
--- DEBUG
+-- VIEW
 
 
-viewState : Int -> State -> Html msg
-viewState lookahead st =
-    let
-        ( title, err, body ) =
-            case st of
-                Unfinished vm ->
-                    ( "Unfinished", Html.text "", viewVM lookahead vm )
-
-                Finished vm val ->
-                    ( "Finished: " ++ valueToString val, Html.text "", viewVM lookahead vm )
-
-                Error vm e ->
-                    ( "Error", Error.view e, viewVM lookahead vm )
-    in
-    Html.div
-        [ Attr.class "state" ]
-        [ Html.h3 [ Attr.class "state-title" ] [ Html.text title ]
-        , Html.div [ Attr.class "state-error" ] [ err ]
-        , Html.div [ Attr.class "state-body" ] [ body ]
-        ]
-
-
-viewVM : Int -> VM -> Html msg
-viewVM _ (VM ctx s e c d) =
+view : Int -> VM -> Html msg
+view _ (VM ctx s e c d) =
     Html.div
         [ Attr.class "vm" ]
         [ Html.p [ Attr.class "vm-title ctx-title" ] [ Html.text "Context" ]

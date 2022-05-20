@@ -8,6 +8,7 @@ import Keyboard.Arrows
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ports
+import SECD.Error as Error
 import SECD.Program exposing (Program)
 import SECD.VM as VM exposing (VM, VMResult)
 
@@ -61,7 +62,7 @@ init pagesInfo prog =
       , pagesInfo = pagesInfo
       , compiled = prog
       }
-    , pagesData.cmds
+    , Ports.sendPages pagesData.toJSValues
     )
 
 
@@ -82,7 +83,7 @@ type alias PagesData =
     , initialChunk : Zipper VM
     , pages : Zipper Int
     , totalVMs : Int
-    , cmds : Cmd Msg
+    , toJSValues : List ( Int, Encode.Value )
     }
 
 
@@ -107,7 +108,7 @@ getPages { maxPages, pageSize, chunkSize } vm =
             , initialChunk = Zipper.fromCons vm initialChunk
             , pages = Zipper.singleton 0
             , totalVMs = List.length initialChunk
-            , cmds = Cmd.none
+            , toJSValues = []
             }
 
         -- takes in, and returns the same result as getPages
@@ -144,12 +145,12 @@ getPages { maxPages, pageSize, chunkSize } vm =
                             Int
                             -> VM
                             -> Int
-                            -> List (Cmd Msg)
+                            -> List ( Int, Encode.Value )
                             ->
                                 { result : Result VM VMResult
                                 , pageCount : Int
                                 , totalVMCount : Int
-                                , cmds : List (Cmd Msg)
+                                , cmds : List ( Int, Encode.Value )
                                 }
                         helper pageCount vm_ vmCountAcc cmdAcc =
                             if pageCount == maxPages then
@@ -170,24 +171,24 @@ getPages { maxPages, pageSize, chunkSize } vm =
                                         { result = Ok vmResult
                                         , pageCount = pageCount
                                         , totalVMCount = vmCountAcc + nthPage.totalVMCount
-                                        , cmds = Ports.sendPage ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc
+                                        , cmds = ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc
                                         }
 
                                     Err newVM ->
                                         helper (pageCount + 1)
                                             newVM
                                             (vmCountAcc + nthPage.totalVMCount)
-                                            (Ports.sendPage ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
+                                            (( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
 
                         -- we also send the first page states to JS
                         helperData =
-                            helper 1 secondPageVM 0 [ Ports.sendPage ( 0, Encode.list VM.encode <| Zipper.toList pagesData.initialPage ) ]
+                            helper 1 secondPageVM 0 [ ( 0, Encode.list VM.encode <| Zipper.toList pagesData.initialPage ) ]
                     in
                     { pagesData
                         | result = helperData.result
                         , pages = Zipper.fromCons 0 (List.range 1 helperData.pageCount)
                         , totalVMs = pagesData.totalVMs + helperData.totalVMCount
-                        , cmds = Cmd.batch helperData.cmds
+                        , toJSValues = helperData.cmds
                     }
     in
     getFirstChunk
@@ -246,6 +247,10 @@ update msg model =
                             )
 
                         Nothing ->
+                            let
+                                _ =
+                                    Debug.log "Need to get next page!"
+                            in
                             -- fetch previous page from JS
                             ( model, Cmd.none )
 
@@ -276,6 +281,10 @@ update msg model =
                             )
 
                         Nothing ->
+                            let
+                                _ =
+                                    Debug.log "Need to get next page!"
+                            in
                             -- fetch next page from JS
                             ( model, Cmd.none )
 
@@ -327,7 +336,6 @@ view model =
 
             Ok _ ->
                 Element.none
-        , Element.text <| Debug.toString <| SECD.Program.toList model.compiled
         , Element.row
             [ Element.width Element.fill
             , Element.spacing 8
@@ -337,8 +345,38 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-        , Element.html <| VM.viewState 6 <| VM.Unfinished <| Zipper.current model.chunk
+        , if atLastState model then
+            case model.latestVM of
+                Ok (Ok value) ->
+                    Element.paragraph
+                        []
+                        [ Lib.Views.bold "Finished successfully: "
+                        , Element.text <| VM.valueToString value
+                        ]
+
+                Ok (Err e) ->
+                    Element.column
+                        []
+                        [ Lib.Views.bold "Finished with an error: "
+                        , Element.html <| Error.view e
+                        ]
+
+                Err _ ->
+                    Lib.Views.bold "There's more to render! But no renders yet"
+
+          else
+            Element.none
+        , Element.html <| VM.view 6 <| Zipper.current model.chunk
         ]
+
+
+
+-- returns true if we're at the last state
+
+
+atLastState : Model -> Bool
+atLastState model =
+    Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages
 
 
 

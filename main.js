@@ -1,4 +1,6 @@
 import { Elm } from "./src/Main.elm";
+// use indexedDB for storage
+import * as db from "idb-keyval";
 import CodeMirror from "codemirror";
 import "codemirror/theme/material.css";
 import "codemirror/lib/codemirror.css";
@@ -11,7 +13,8 @@ import "./style.scss";
 
 import { examples as codeExamples } from "./examples/";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await db.clear();
   const root = document.getElementById("app");
   const app = Elm.Main.init({
     node: root,
@@ -49,10 +52,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Elm gives us a page to store
-    app.ports.sendPage.subscribe(([n, val]) => {
-      console.log(`Page ${n} stored`);
-      console.log(`val for ${n}:`, JSON.stringify(val));
-      sessionStorage.setItem(n.toString(), JSON.stringify(val));
+    app.ports.sendPages.subscribe((pages) => {
+      if (pages.length === 0) {
+        console.log("No pages to store!");
+      } else {
+        console.log(`Storing pages: ${pages.map((p) => p[0])}`);
+        db.setMany(pages)
+          .then(() => {
+            console.log("Stored pages");
+          })
+          .catch((err) => {
+            console.error("Failure storing pages!", err);
+          });
+      }
     });
 
     // app.ports.fetchPage.subscribe((n) => {
