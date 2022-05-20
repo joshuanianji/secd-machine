@@ -165,7 +165,7 @@ updateSuccess msg model =
                         Ok prog ->
                             let
                                 ( vmViewModel, vmViewMsg ) =
-                                    VMView.init prog
+                                    VMView.init { maxPages = 15, pageSize = 25, chunkSize = 10 } prog
                             in
                             ( { model | compiled = CompileSuccess ast vmViewModel }, Cmd.map VMViewMsg vmViewMsg )
 

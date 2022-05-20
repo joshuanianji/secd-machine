@@ -666,12 +666,16 @@ evalList oldVm =
 
 evaluate a VM chunk, returning the state/value, and first VM state in that chunk
 
-  - If we're not finished, return `(startVM, Err lastEvaluatedVM)`
+Note that, compared to evalN, evalChunk only keeps the first VM state
+
+  - If we're not finished, return `(startVM, Err nextVM)`
   - If we're finished, return `(startVM, Ok (vmResult, count))`
 
 **Note**: initial state is just the VM that was passed in
 
-Running `evalN startVM n` will give you a list of VMs from `startVM + 1` to `lastEvaluatedVM - 1`.
+`nextVM` is the vm you would want to start off of for the next chunk.
+
+Running `evalN startVM n` will give you a list of VMs from `startVM + 1` to `nextVM - 1`.
 
 -}
 evalChunk : VM -> Int -> ( VM, Result VM ( VMResult, Int ) )
@@ -679,19 +683,19 @@ evalChunk vm chunkSize =
     let
         helper : Int -> VM -> Result VM ( VMResult, Int )
         helper n_ vm_ =
-            if n_ == 0 then
-                Err vm_
+            case step vm_ of
+                Unfinished newVm ->
+                    if n_ == 0 then
+                        Err newVm
 
-            else
-                case step vm_ of
-                    Unfinished newVm ->
+                    else
                         helper (n_ - 1) newVm
 
-                    Finished _ val ->
-                        Ok ( Ok val, n_ )
+                Finished _ val ->
+                    Ok ( Ok val, n_ )
 
-                    Error _ err ->
-                        Ok ( Err err, n_ )
+                Error _ err ->
+                    Ok ( Err err, n_ )
     in
     ( vm, helper chunkSize vm )
 
@@ -763,8 +767,8 @@ evalPage vm pageSize chunkSize =
                         -- evaluation finished
                         ( vmCount + vmChunkCount, chunkVM :: stateAcc, Ok val )
 
-                    ( chunkVM, Err lastCalculatedVM ) ->
-                        ( vmCount + chunkSize, chunkVM :: stateAcc, Err lastCalculatedVM )
+                    ( chunkVM, Err nextVM ) ->
+                        helper nextVM (vmCount + chunkSize) (pageCount + 1) (chunkVM :: stateAcc)
 
         ( totalVMCount, chunkVMs, result ) =
             helper vm 0 0 []

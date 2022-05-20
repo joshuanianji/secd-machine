@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     app.ports.sendPage.subscribe(([n, val]) => {
       console.log(`Page ${n} stored`);
       console.log(`val for ${n}:`, JSON.stringify(val));
-      sessionStorage.setItem(toString(n), JSON.stringify(val));
+      sessionStorage.setItem(n.toString(), JSON.stringify(val));
     });
 
     // app.ports.fetchPage.subscribe((n) => {

@@ -32,17 +32,22 @@ type alias Model =
     -- total states to keep track of
     , totalStates : Int
     , pressedKeys : List Key
+    , pagesInfo : PagesInfo
     }
 
 
-init : Program -> ( Model, Cmd Msg )
-init prog =
+type alias PagesInfo =
+    { maxPages : Int, pageSize : Int, chunkSize : Int }
+
+
+init : PagesInfo -> Program -> ( Model, Cmd Msg )
+init pagesInfo prog =
     let
         vm =
             VM.initRaw prog
 
         pagesData =
-            getPages { maxPages = 15, pageSize = 50, chunkSize = 10 } vm
+            getPages pagesInfo vm
     in
     ( { chunk = pagesData.initialChunk
       , page = pagesData.initialPage
@@ -50,6 +55,7 @@ init prog =
       , latestVM = pagesData.result
       , totalStates = pagesData.totalVMs
       , pressedKeys = []
+      , pagesInfo = pagesInfo
       }
     , pagesData.cmds
     )
@@ -211,19 +217,63 @@ update msg model =
 
         Previous ->
             case Zipper.previous model.chunk of
-                Nothing ->
-                    ( model, Cmd.none )
-
                 Just newState ->
                     ( { model | chunk = newState }, Cmd.none )
+
+                Nothing ->
+                    -- get previous chunk
+                    case Zipper.previous model.page of
+                        Just newPage ->
+                            let
+                                startVM =
+                                    Zipper.current newPage
+
+                                ( newChunk, _ ) =
+                                    VM.evalN startVM model.pagesInfo.chunkSize
+
+                                _ =
+                                    Debug.log "Previous chunk" ()
+                            in
+                            ( { model
+                                | chunk = Zipper.last <| Zipper.fromCons startVM newChunk
+                                , page = newPage
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            -- fetch previous page from JS
+                            ( model, Cmd.none )
 
         Step ->
             case Zipper.next model.chunk of
-                Nothing ->
-                    ( model, Cmd.none )
-
                 Just newState ->
                     ( { model | chunk = newState }, Cmd.none )
+
+                Nothing ->
+                    -- get next chunk
+                    case Zipper.next model.page of
+                        Just newPage ->
+                            let
+                                startVM =
+                                    Zipper.current newPage
+
+                                ( newChunk, _ ) =
+                                    VM.evalN startVM model.pagesInfo.chunkSize
+
+                                _ =
+                                    Debug.log "Next chunk" ()
+                            in
+                            ( { model
+                                | chunk = Zipper.fromCons startVM newChunk
+                                , page = newPage
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            -- fetch next page from JS
+                            ( model, Cmd.none )
 
         Last ->
             ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
@@ -262,7 +312,18 @@ view model =
         , Element.spacing 8
         , Element.spacingXY 8 12
         ]
-        [ Element.row
+        [ Element.paragraph
+            []
+            [ Element.text "Total size: "
+            , Lib.Views.bold <| String.fromInt model.totalStates
+            ]
+        , case model.latestVM of
+            Err _ ->
+                Element.text "Warning: Latest VM does not terminate!"
+
+            Ok _ ->
+                Element.none
+        , Element.row
             [ Element.width Element.fill
             , Element.spacing 8
             ]
