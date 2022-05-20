@@ -7,7 +7,7 @@ import Json.Encode as Encode
 import Lib.Cons as Cons exposing (Cons)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
-import SECD.VMEnv as Env exposing (EnvItem(..), Environment)
+import SECD.VMEnv as Env exposing (EnvItem(..))
 
 
 
@@ -23,7 +23,7 @@ type VM
         -- Stack used for evaluation of expressions
         Stack
         --  Environment used to store the current value list
-        (Environment Value)
+        Environment
         -- Control used to store the current instruction pointer
         Control
         -- Dump to store anything else
@@ -52,6 +52,10 @@ type alias Stack =
     List Value
 
 
+type alias Environment =
+    Env.Environment Value
+
+
 type alias Control =
     List Op
 
@@ -68,7 +72,7 @@ type Value
     = Integer Int
     | Truthy -- false is represented by Nil
     | Array (Cons Value)
-    | Closure (List Op) (Environment Value) -- When loading a function, dump the closure of the function (i think?)
+    | Closure (List Op) Environment -- When loading a function, dump the closure of the function (i think?)
 
 
 boolToValue : Bool -> Value
@@ -261,7 +265,7 @@ viewValue val =
 
 type DumpValue
     = Control (List Op) -- in Sel, we want to dump the contents of the control stack
-    | EntireState Stack (Environment Value) Control -- When applying a function, we want to dump the state of the VM
+    | EntireState Stack Environment Control -- When applying a function, we want to dump the state of the VM
 
 
 
@@ -655,13 +659,21 @@ evalList oldVm =
             List.singleton other
 
 
-
--- evaluate a VM chunk, returning the state/value, and first VM state in that chunk
--- If we're not finished, return (startVM, Err lastEvaluatedVM)
--- If we're finished, return (startVM, Ok (vmResult, count))
--- Note: initial state is just the VM that was passed in
+{-|
 
 
+## evalChunk
+
+evaluate a VM chunk, returning the state/value, and first VM state in that chunk
+
+  - If we're not finished, return `(startVM, Err lastEvaluatedVM)`
+  - If we're finished, return `(startVM, Ok (vmResult, count))`
+
+**Note**: initial state is just the VM that was passed in
+
+Running `evalN startVM n` will give you a list of VMs from `startVM + 1` to `lastEvaluatedVM - 1`.
+
+-}
 evalChunk : VM -> Int -> ( VM, Result VM ( VMResult, Int ) )
 evalChunk vm chunkSize =
     let
@@ -684,45 +696,56 @@ evalChunk vm chunkSize =
     ( vm, helper chunkSize vm )
 
 
-
--- evaluate a VM a max of n times, returning all states in that range
--- If we're not finished, return Err (currState, allStates)
--- If we're finished, return Ok (returnValue, allStates)
--- Note: we do not include the initial VM in the list of VM states
+{-|
 
 
+## evalN
+
+evaluate a VM a max of `chunkSize` times, returning all states in that range
+
+  - If we're not finished, return `Err (currState, allStates)`
+  - If we're finished, return `Ok (returnValue, allStates)`
+
+**Note**: we do not include the initial VM in the list of VM states
+
+The VM returned if the program is not finished execuing is also not included in the list of VM states
+
+-}
 evalN : VM -> Int -> ( List VM, Result VM VMResult )
-evalN vm n =
+evalN vm chunkSize =
     let
         helper : Int -> VM -> List VM -> ( List VM, Result VM VMResult )
-        helper n_ vm_ states =
-            if n_ == 0 then
-                ( List.reverse states, Err vm_ )
+        helper n vm_ states =
+            case step vm_ of
+                Unfinished newVm ->
+                    if n == 0 then
+                        ( List.reverse states, Err newVm )
 
-            else
-                case step vm_ of
-                    Unfinished newVm ->
-                        helper (n_ - 1) newVm (newVm :: states)
+                    else
+                        helper (n - 1) newVm (newVm :: states)
 
-                    Finished _ val ->
-                        ( states, Ok <| Ok val )
+                Finished _ val ->
+                    ( states, Ok <| Ok val )
 
-                    Error _ err ->
-                        ( states, Ok (Err err) )
+                Error _ err ->
+                    ( states, Ok (Err err) )
     in
-    helper n vm []
+    helper chunkSize vm []
 
 
-{-| evalPage
+{-|
+
+
+## evalPage
 
 evaluate a PAGE of VM states, or a list of chunks
 each page can holds `pageSize` chunks, and each chunk holds `chunkSize` states
 We accumulate the first VM state of each chunk
 
-if we're not finished, return (totalVMs, chunkVMs, Err lastVMState)
-If we're finished, return Ok (totalVMs, chunkVMs, Ok vmResult)
+  - if we're not finished, return `(totalVMs, chunkVMs, Err lastVMState)`
+    0 If we're finished, return `(totalVMs, chunkVMs, Ok vmResult)`
 
-totalVMs is ALL vm states
+**Note** totalVMs is the count for _ALL_ vm states
 
 -}
 evalPage : VM -> Int -> Int -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
@@ -936,12 +959,12 @@ stackDecoder =
 -- ENVIRONMENT
 
 
-encodeEnvironment : Environment Value -> Encode.Value
+encodeEnvironment : Environment -> Encode.Value
 encodeEnvironment =
     Env.encode encodeValue
 
 
-environmentDecoder : Decoder (Environment Value)
+environmentDecoder : Decoder Environment
 environmentDecoder =
     Env.decoder valueDecoder
 
