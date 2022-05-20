@@ -594,6 +594,12 @@ recursiveApply (VM ctx s e c d) =
             Error vm "VM: recursiveApply: Cannot find function body!"
 
 
+
+-- fully evaluate a VM
+-- WARNING: this will blow up the stack if it goes in an infinite loop
+-- this is mainly used for testing
+
+
 evaluate : VM -> Result Error Value
 evaluate oldVm =
     case step oldVm of
@@ -607,6 +613,10 @@ evaluate oldVm =
             Err <| err
 
 
+
+-- fully evaluate a VM, keeping track of all states
+
+
 evalList : VM -> List State
 evalList oldVm =
     case step oldVm of
@@ -615,6 +625,34 @@ evalList oldVm =
 
         other ->
             List.singleton other
+
+
+
+-- evaluate a VM a max of n times
+-- If we're not finished, return Err (currState, allStates)
+-- If we're finished, return Ok (returnValue, allStates)
+
+
+evalN : VM -> Int -> Result ( VM, List State ) ( Result Error Value, List State )
+evalN vm n =
+    let
+        helper : Int -> VM -> List State -> Result ( VM, List State ) ( Result Error Value, List State )
+        helper n_ vm_ states =
+            if n_ == 0 then
+                Err ( vm, List.reverse states )
+
+            else
+                case step vm_ of
+                    Unfinished newVm ->
+                        helper (n_ - 1) newVm (Unfinished vm :: states)
+
+                    Finished _ val ->
+                        Ok ( Ok val, states )
+
+                    Error _ err ->
+                        Ok ( Err err, states )
+    in
+    helper n vm []
 
 
 

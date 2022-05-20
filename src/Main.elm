@@ -163,7 +163,11 @@ updateSuccess msg model =
                             ( { model | compiled = CompileError ast err }, Cmd.none )
 
                         Ok prog ->
-                            ( { model | compiled = CompileSuccess ast (VMView.init prog) }, Cmd.none )
+                            let
+                                ( vmViewModel, vmViewMsg ) =
+                                    VMView.init prog
+                            in
+                            ( { model | compiled = CompileSuccess ast vmViewModel }, Cmd.map VMViewMsg vmViewMsg )
 
         ( CompileSuccess ast vmModel, VMViewMsg subMsg ) ->
             let

@@ -2,12 +2,6 @@ module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
-import Element.Events as Events
-import Element.Font as Font
-import Element.Input as Input
-import Html exposing (Html)
-import Html.Attributes as Attr
-import Html.Events as Events
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Views
@@ -22,11 +16,16 @@ import SECD.VM as VM
 
 type alias Model =
     { states : Zipper VM.State
+
+    -- each "page" holds 100 VM states
+    -- the "states" hold the current 100 states of the VM
+    -- the rest are held in SessionStorage
+    , pages : Zipper Int
     , pressedKeys : List Key
     }
 
 
-init : Program -> Model
+init : Program -> ( Model, Cmd Msg )
 init prog =
     let
         vm =
@@ -43,9 +42,12 @@ init prog =
                 _ ->
                     []
     in
-    { states = Zipper.from [] currState afters
-    , pressedKeys = []
-    }
+    ( { states = Zipper.from [] currState afters
+      , pages = Zipper.from [] 0 []
+      , pressedKeys = []
+      }
+    , Cmd.none
+    )
 
 
 
