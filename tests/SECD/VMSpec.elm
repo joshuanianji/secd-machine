@@ -2,9 +2,11 @@ module SECD.VMSpec exposing (suite)
 
 import Expect exposing (Expectation)
 import Fuzz
+import Json.Decode as Decode
 import Lib.Cons as Cons
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..), Program)
 import SECD.VM as VM exposing (Value)
+import SECD.VMEnv as Env
 import Test exposing (Test)
 
 
@@ -401,6 +403,118 @@ testRecursiveFuncs =
                             VM.Truthy
                 in
                 vmExpectSuccess program expected
+        ]
+
+
+
+-- DECODE/ENCODE
+
+
+testDecoder : Test
+testDecoder =
+    Test.describe "Decoder/encoder for VM"
+        [ testValueDecoder
+        , testWithPrograms
+        ]
+
+
+testValueDecoder : Test
+testValueDecoder =
+    Test.describe "Decoder/encoder for VM Value type"
+        [ Test.fuzz Fuzz.int "integer" <|
+            \n ->
+                VM.Integer n
+                    |> VM.encodeValue
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Integer n)
+        , Test.test "Truthy" <|
+            \_ ->
+                VM.encodeValue VM.Truthy
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Truthy)
+        , Test.test "Empty Array" <|
+            \_ ->
+                VM.Array Cons.nil
+                    |> VM.encodeValue
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Array Cons.nil)
+        , Test.test "Nonempty Array" <|
+            \_ ->
+                (VM.Array <| Cons.fromList [ VM.Integer 1, VM.Integer 2, VM.Integer 3 ])
+                    |> VM.encodeValue
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Array <| Cons.fromList [ VM.Integer 1, VM.Integer 2, VM.Integer 3 ])
+        , Test.test "Empty Closure" <|
+            \_ ->
+                VM.Closure [] Env.init
+                    |> VM.encodeValue
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Closure [] Env.init)
+        , Test.test "Empty Closure" <|
+            \_ ->
+                VM.Closure [ NIL ] Env.init
+                    |> VM.encodeValue
+                    |> Decode.decodeValue VM.valueDecoder
+                    |> Expect.equal (Ok <| VM.Closure [ NIL ] Env.init)
+        ]
+
+
+testWithPrograms : Test
+testWithPrograms =
+    Test.describe "VM Decoder/encoder with real programs"
+        [ Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Recursive list length function" <|
+            \steps ->
+                let
+                    -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
+                    func =
+                        [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+                    -- (f '(1 2 3) 0)
+                    funcApply =
+                        [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+
+                    stepped =
+                        Prog.fromList
+                            [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
+                            |> VM.initRaw
+                            |> VM.stepN steps
+                in
+                case stepped of
+                    VM.Unfinished vm ->
+                        Expect.equal (Decode.decodeValue VM.decoder <| VM.encode vm) (Ok vm)
+
+                    VM.Finished _ _ ->
+                        Expect.fail <| "Rec. Length program finished prematurely in " ++ String.fromInt steps ++ " steps!"
+
+                    VM.Error _ _ ->
+                        Expect.fail <| "Rec. Length program errored out!"
+        , Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Factorial Function" <|
+            \steps ->
+                let
+                    n =
+                        6
+
+                    fact =
+                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+                    -- I actually don't really know what this does
+                    factCreateClosure =
+                        [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+
+                    stepped =
+                        Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+                            |> VM.initRaw
+                            |> VM.stepN steps
+                in
+                case stepped of
+                    VM.Unfinished vm ->
+                        Expect.equal (Decode.decodeValue VM.decoder <| VM.encode vm) (Ok vm)
+
+                    VM.Finished _ _ ->
+                        Expect.fail <| "Factorial program finished prematurely in " ++ String.fromInt steps ++ " steps!"
+
+                    VM.Error _ _ ->
+                        Expect.fail <| "Factorial program errored out!"
         ]
 
 

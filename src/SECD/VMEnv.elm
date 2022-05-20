@@ -154,12 +154,12 @@ encodeItem subencoder item =
     case item of
         ListItem cs ->
             Encode.object
-                [ ( "val", Encode.string "ListItem" )
-                , ( "tag", Encode.list (Cons.encode subencoder) cs )
+                [ ( "t", Encode.string "I" )
+                , ( "v", Encode.list (Cons.encode subencoder) cs )
                 ]
 
         Dummy ->
-            Encode.object [ ( "val", Encode.string "Dummy" ) ]
+            Encode.object [ ( "t", Encode.string "D" ) ]
 
 
 decoder : Decoder a -> Decoder (Environment a)
@@ -169,15 +169,15 @@ decoder subdecoder =
 
 itemDecoder : Decoder a -> Decoder (EnvItem a)
 itemDecoder subdecoder =
-    Decode.field "val" Decode.string
+    Decode.field "t" Decode.string
         |> Decode.andThen
             (\val ->
                 case val of
-                    "ListItem" ->
-                        Decode.field "tag" (Decode.list (Cons.decoder subdecoder))
+                    "I" ->
+                        Decode.field "v" (Decode.list (Cons.decoder subdecoder))
                             |> Decode.map ListItem
 
-                    "Dummy" ->
+                    "D" ->
                         Decode.succeed Dummy
 
                     _ ->

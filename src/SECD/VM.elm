@@ -306,6 +306,26 @@ stateStep st =
             st
 
 
+
+-- take max N steps, returning the final state
+-- mostly used in tests
+
+
+stepN : Int -> VM -> State
+stepN n vm =
+    if n <= 0 then
+        Unfinished vm
+
+    else
+        case step vm of
+            Unfinished vm_ ->
+                stepN (n - 1) vm_
+
+            _ ->
+                -- return "finished" value
+                step vm
+
+
 step : VM -> State
 step vm =
     let
@@ -595,12 +615,20 @@ recursiveApply (VM ctx s e c d) =
 
 
 
+-- EVALUATION
+
+
+type alias VMResult =
+    Result Error Value
+
+
+
 -- fully evaluate a VM
 -- WARNING: this will blow up the stack if it goes in an infinite loop
 -- this is mainly used for testing
 
 
-evaluate : VM -> Result Error Value
+evaluate : VM -> VMResult
 evaluate oldVm =
     case step oldVm of
         Unfinished vm ->
@@ -631,12 +659,13 @@ evalList oldVm =
 -- evaluate a VM a max of n times
 -- If we're not finished, return Err (currState, allStates)
 -- If we're finished, return Ok (returnValue, allStates)
+-- Note: we do not include the initial VM in the list of VM states
 
 
-evalN : VM -> Int -> Result ( VM, List State ) ( Result Error Value, List State )
+evalN : VM -> Int -> Result ( VM, List VM ) ( VMResult, List VM )
 evalN vm n =
     let
-        helper : Int -> VM -> List State -> Result ( VM, List State ) ( Result Error Value, List State )
+        helper : Int -> VM -> List VM -> Result ( VM, List VM ) ( VMResult, List VM )
         helper n_ vm_ states =
             if n_ == 0 then
                 Err ( vm, List.reverse states )
@@ -644,7 +673,7 @@ evalN vm n =
             else
                 case step vm_ of
                     Unfinished newVm ->
-                        helper (n_ - 1) newVm (Unfinished vm :: states)
+                        helper (n_ - 1) newVm (newVm :: states)
 
                     Finished _ val ->
                         Ok ( Ok val, states )
@@ -807,7 +836,7 @@ encodeContext ctx =
                     Encode.list (Cons.encode encodeValue) v
     in
     Encode.object
-        [ ( "dummyVal", encodedDummyVal ) ]
+        [ ( "dmy", encodedDummyVal ) ]
 
 
 contextDecoder : Decoder Context
@@ -820,7 +849,7 @@ contextDecoder =
                 ]
     in
     Decode.map Context
-        (Decode.field "dummyVal" dummyValDecoder)
+        (Decode.field "dmy" dummyValDecoder)
 
 
 
@@ -878,16 +907,16 @@ encodeDump =
             case dv of
                 Control c ->
                     Encode.object
-                        [ ( "tag", Encode.string "Control" )
-                        , ( "val", encodeControl c )
+                        [ ( "t", Encode.string "C" )
+                        , ( "v", encodeControl c )
                         ]
 
                 EntireState s e c ->
                     Encode.object
-                        [ ( "tag", Encode.string "EntireState" )
-                        , ( "stack", encodeStack s )
-                        , ( "environment", encodeEnvironment e )
-                        , ( "control", encodeControl c )
+                        [ ( "t", Encode.string "E" )
+                        , ( "s", encodeStack s )
+                        , ( "e", encodeEnvironment e )
+                        , ( "c", encodeControl c )
                         ]
     in
     Encode.list encodeDumpVal
@@ -897,18 +926,18 @@ dumpDecoder : Decoder Dump
 dumpDecoder =
     let
         dumpValueDecoder =
-            Decode.field "tag" Decode.string
+            Decode.field "t" Decode.string
                 |> Decode.andThen
                     (\tag ->
                         case tag of
-                            "Control" ->
-                                Decode.map Control <| Decode.field "val" controlDecoder
+                            "C" ->
+                                Decode.map Control <| Decode.field "v" controlDecoder
 
-                            "EntireState" ->
+                            "E" ->
                                 Decode.map3 EntireState
-                                    (Decode.field "stack" stackDecoder)
-                                    (Decode.field "environment" environmentDecoder)
-                                    (Decode.field "control" controlDecoder)
+                                    (Decode.field "s" stackDecoder)
+                                    (Decode.field "e" environmentDecoder)
+                                    (Decode.field "c" controlDecoder)
 
                             _ ->
                                 Decode.fail <| "Parsing dump: Invalid tag: " ++ tag
@@ -926,45 +955,45 @@ encodeValue v =
     case v of
         Integer n ->
             Encode.object
-                [ ( "tag", Encode.string "Int" )
-                , ( "val", Encode.int n )
+                [ ( "t", Encode.string "n" )
+                , ( "v", Encode.int n )
                 ]
 
         Truthy ->
             Encode.object
-                [ ( "tag", Encode.string "Truthy" ) ]
+                [ ( "t", Encode.string "t" ) ]
 
         Array cons ->
             Encode.object
-                [ ( "tag", Encode.string "Array" )
-                , ( "val", Cons.encode encodeValue cons )
+                [ ( "t", Encode.string "a" )
+                , ( "v", Cons.encode encodeValue cons )
                 ]
 
         Closure ops env ->
             Encode.object
-                [ ( "tag", Encode.string "Closure" )
-                , ( "ops", Encode.list Program.encodeSingle ops )
-                , ( "env", encodeEnvironment env )
+                [ ( "t", Encode.string "c" )
+                , ( "o", Encode.list Program.encodeSingle ops )
+                , ( "e", encodeEnvironment env )
                 ]
 
 
 valueDecoder : Decoder Value
 valueDecoder =
-    Decode.field "tag" Decode.string
+    Decode.field "t" Decode.string
         |> Decode.andThen
             (\tag ->
                 case tag of
-                    "Int" ->
-                        Decode.map Integer <| Decode.field "val" Decode.int
+                    "n" ->
+                        Decode.map Integer <| Decode.field "v" Decode.int
 
-                    "Truthy" ->
+                    "t" ->
                         Decode.succeed Truthy
 
-                    "Array" ->
-                        Decode.map Array <| Cons.decoder valueDecoder
+                    "a" ->
+                        Decode.map Array (Decode.field "v" <| Cons.decoder valueDecoder)
 
-                    "Closure" ->
-                        Decode.map2 Closure (Decode.list Program.singleDecoder) environmentDecoder
+                    "c" ->
+                        Decode.map2 Closure (Decode.field "o" <| Decode.list Program.singleDecoder) (Decode.field "e" environmentDecoder)
 
                     _ ->
                         Decode.fail <| "Decoding value: unknown tag " ++ tag

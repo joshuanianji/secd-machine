@@ -174,28 +174,28 @@ encode : (a -> Value) -> Cons a -> Value
 encode subEncoder c =
     case c of
         Nil ->
-            Encode.object [ ( "tag", Encode.string "Nil" ) ]
+            Encode.object [ ( "t", Encode.string "n" ) ]
 
         Val a ->
-            Encode.object [ ( "tag", Encode.string "Val" ), ( "val", subEncoder a ) ]
+            Encode.object [ ( "t", Encode.string "v" ), ( "v", subEncoder a ) ]
 
         Cons hd tl ->
-            Encode.object [ ( "tag", Encode.string "Cons" ), ( "hd", encode subEncoder hd ), ( "tl", encode subEncoder tl ) ]
+            Encode.object [ ( "t", Encode.string "c" ), ( "hd", encode subEncoder hd ), ( "tl", encode subEncoder tl ) ]
 
 
 decoder : Decoder a -> Decoder (Cons a)
 decoder subdecoder =
-    Decode.field "tag" Decode.string
+    Decode.field "t" Decode.string
         |> Decode.andThen
             (\tag ->
                 case tag of
-                    "Nil" ->
+                    "n" ->
                         Decode.succeed Nil
 
-                    "Val" ->
-                        Decode.map Val (Decode.field "val" subdecoder)
+                    "v" ->
+                        Decode.map Val (Decode.field "v" subdecoder)
 
-                    "Cons" ->
+                    "c" ->
                         Decode.map2 Cons (Decode.field "hd" (decoder subdecoder)) (Decode.field "tl" (decoder subdecoder))
 
                     _ ->

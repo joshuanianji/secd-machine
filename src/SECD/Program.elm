@@ -652,7 +652,7 @@ encodeSingle : Op -> Value
 encodeSingle op =
     case op of
         NIL ->
-            Encode.string "NIL"
+            Encode.string "N"
 
         LD ( x, y ) ->
             Encode.list Encode.int [ x, y ]
@@ -661,25 +661,25 @@ encodeSingle op =
             Encode.int x
 
         LDF ->
-            Encode.string "LDF"
+            Encode.string "F"
 
         AP ->
             Encode.string "AP"
 
         RTN ->
-            Encode.string "RTN"
+            Encode.string "R"
 
         SEL ->
-            Encode.string "SEL"
+            Encode.string "S"
 
         JOIN ->
-            Encode.string "JOIN"
+            Encode.string "J"
 
         RAP ->
-            Encode.string "RAP"
+            Encode.string "P"
 
         DUM ->
-            Encode.string "DUM"
+            Encode.string "D"
 
         FUNC func ->
             encodeFunc func
@@ -692,19 +692,19 @@ encodeFunc : Func -> Value
 encodeFunc f =
     case f of
         ADD ->
-            Encode.string "ADD"
+            Encode.string "+"
 
         MULT ->
-            Encode.string "MULT"
+            Encode.string "*"
 
         SUB ->
-            Encode.string "SUB"
+            Encode.string "-"
 
         ATOM ->
-            Encode.string "ATOM"
+            Encode.string "A"
 
         CONS ->
-            Encode.string "CONS"
+            Encode.string "::"
 
         CAR ->
             Encode.string "CAR"
@@ -713,7 +713,7 @@ encodeFunc f =
             Encode.string "CDR"
 
         NULL ->
-            Encode.string "NULL"
+            Encode.string "NL"
 
         COMPARE cmp ->
             encodeCompare cmp
@@ -723,22 +723,22 @@ encodeCompare : Cmp -> Value
 encodeCompare cmp =
     case cmp of
         CMP_EQ ->
-            Encode.string "CMP_EQ"
+            Encode.string "="
 
         CMP_NE ->
-            Encode.string "CMP_NE"
+            Encode.string "!="
 
         CMP_LT ->
-            Encode.string "CMP_LT"
+            Encode.string "<"
 
         CMP_GT ->
-            Encode.string "CMP_GT"
+            Encode.string ">"
 
         CMP_LEQ ->
-            Encode.string "CMP_LEQ"
+            Encode.string "<="
 
         CMP_GEQ ->
-            Encode.string "CMP_GEQ"
+            Encode.string ">="
 
 
 singleDecoder : Decoder Op
@@ -751,43 +751,43 @@ singleDecoder =
             |> Decode.andThen
                 (\str ->
                     case str of
-                        "NIL" ->
+                        "N" ->
                             Decode.succeed NIL
 
-                        "LDF" ->
+                        "F" ->
                             Decode.succeed LDF
 
                         "AP" ->
                             Decode.succeed AP
 
-                        "RTN" ->
+                        "R" ->
                             Decode.succeed RTN
 
-                        "SEL" ->
+                        "S" ->
                             Decode.succeed SEL
 
-                        "JOIN" ->
+                        "J" ->
                             Decode.succeed JOIN
 
-                        "RAP" ->
+                        "P" ->
                             Decode.succeed RAP
 
-                        "DUM" ->
+                        "D" ->
                             Decode.succeed DUM
 
-                        "ADD" ->
+                        "+" ->
                             Decode.succeed <| FUNC ADD
 
-                        "MULT" ->
+                        "*" ->
                             Decode.succeed <| FUNC MULT
 
-                        "SUB" ->
+                        "-" ->
                             Decode.succeed <| FUNC SUB
 
-                        "ATOM" ->
+                        "A" ->
                             Decode.succeed <| FUNC ATOM
 
-                        "CONS" ->
+                        "::" ->
                             Decode.succeed <| FUNC CONS
 
                         "CAR" ->
@@ -796,25 +796,25 @@ singleDecoder =
                         "CDR" ->
                             Decode.succeed <| FUNC CDR
 
-                        "NULL" ->
+                        "NL" ->
                             Decode.succeed <| FUNC NULL
 
-                        "CMP_EQ" ->
+                        "=" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_EQ
 
-                        "CMP_NE" ->
+                        "!=" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_NE
 
-                        "CMP_LT" ->
+                        "<" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_LT
 
-                        "CMP_GT" ->
+                        ">" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_GT
 
-                        "CMP_LEQ" ->
+                        "<=" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_LEQ
 
-                        "CMP_GEQ" ->
+                        ">=" ->
                             Decode.succeed <| FUNC <| COMPARE CMP_GEQ
 
                         s ->
