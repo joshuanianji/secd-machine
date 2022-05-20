@@ -33,6 +33,9 @@ type alias Model =
     , totalStates : Int
     , pressedKeys : List Key
     , pagesInfo : PagesInfo
+
+    -- keeping compiled code to view
+    , compiled : Program
     }
 
 
@@ -56,6 +59,7 @@ init pagesInfo prog =
       , totalStates = pagesData.totalVMs
       , pressedKeys = []
       , pagesInfo = pagesInfo
+      , compiled = prog
       }
     , pagesData.cmds
     )
@@ -118,7 +122,7 @@ getPages { maxPages, pageSize, chunkSize } vm =
                     -- calculate first page
                     let
                         firstPage =
-                            VM.evalPage nextState pageSize chunkSize
+                            VM.evalPage pageSize chunkSize nextState
                     in
                     { pagesData
                         | result = firstPage.result
@@ -158,7 +162,7 @@ getPages { maxPages, pageSize, chunkSize } vm =
                             else
                                 let
                                     nthPage =
-                                        VM.evalPage vm_ pageSize chunkSize
+                                        VM.evalPage pageSize chunkSize vm_
                                 in
                                 case nthPage.result of
                                     Ok vmResult ->
@@ -323,6 +327,7 @@ view model =
 
             Ok _ ->
                 Element.none
+        , Element.text <| Debug.toString <| SECD.Program.toList model.compiled
         , Element.row
             [ Element.width Element.fill
             , Element.spacing 8

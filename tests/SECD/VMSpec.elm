@@ -10,6 +10,61 @@ import SECD.VMEnv as Env
 import Test exposing (Test)
 
 
+
+-- REUSABLE PROGRAMS
+
+
+recursiveLength : Prog.Program
+recursiveLength =
+    let
+        -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
+        func =
+            [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+        -- (f '(1 2 3) 0)
+        funcApply =
+            [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+    in
+    Prog.fromList
+        [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
+
+
+factorial : Int -> Prog.Program
+factorial n =
+    let
+        fact =
+            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
+
+        -- I actually don't really know what this does
+        factCreateClosure =
+            [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
+    in
+    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+
+
+mutualRecursiveIsEven : Int -> Prog.Program
+mutualRecursiveIsEven n =
+    let
+        isEven =
+            mutualRecursive [ NIL ] ( 1, 1 )
+
+        isOdd =
+            mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+
+        mutualRecursive onTrue letrecCoords =
+            [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
+
+        body =
+            [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
+    in
+    Prog.fromList
+        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
+
+
+
+-- TESTS
+
+
 suite : Test
 suite =
     Test.describe "Test VM"
@@ -18,6 +73,8 @@ suite =
         , testIfElse
         , testFuncs
         , testRecursiveFuncs
+        , testEvalFuncs
+        , testDecoder
         ]
 
 
@@ -155,7 +212,7 @@ testCons =
                         Prog.fromList [ NIL, LDC 3, FUNC CONS, NIL, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS ]
                 in
                 case VM.evaluate <| VM.initRaw program of
-                    Result.Ok (VM.Array cons) ->
+                    ( _, Result.Ok (VM.Array cons) ) ->
                         Expect.equal (Cons.toString VM.valueToString cons) "((1 2) 3)"
 
                     _ ->
@@ -344,57 +401,13 @@ testRecursiveFuncs =
     Test.describe "Recursive Functions"
         [ Test.test "Recursive list length function" <|
             \_ ->
-                let
-                    -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
-                    func =
-                        [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-                    -- (f '(1 2 3) 0)
-                    funcApply =
-                        [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-
-                    program =
-                        Prog.fromList
-                            [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
-                in
-                vmExpectSuccess program (VM.Integer 3)
+                vmExpectSuccess recursiveLength (VM.Integer 3)
         , Test.test "Factorial function" <|
             \_ ->
-                let
-                    -- this is the number we want to create a factorial of
-                    n =
-                        6
-
-                    fact =
-                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-                    -- I actually don't really know what this does
-                    factCreateClosure =
-                        [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-
-                    program =
-                        Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
-                in
-                vmExpectSuccess program (VM.Integer 720)
+                vmExpectSuccess (factorial 6) (VM.Integer 720)
         , Test.fuzzWith { runs = 5 } (Fuzz.intRange 0 10) "Mutually recursive isEven" <|
             \n ->
                 let
-                    isEven =
-                        mutualRecursive [ NIL ] ( 1, 1 )
-
-                    isOdd =
-                        mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
-
-                    mutualRecursive onTrue letrecCoords =
-                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
-
-                    body =
-                        [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
-
-                    program =
-                        Prog.fromList
-                            [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
-
                     expected =
                         if modBy 2 n == 1 then
                             VM.nil
@@ -402,8 +415,49 @@ testRecursiveFuncs =
                         else
                             VM.Truthy
                 in
-                vmExpectSuccess program expected
+                vmExpectSuccess (mutualRecursiveIsEven n) expected
         ]
+
+
+
+-- EVAL FUNCS
+
+
+testEvalFuncs : Test
+testEvalFuncs =
+    Test.describe "Testing evaluation functions" <|
+        List.map
+            (\( name, prog ) ->
+                Test.test name <|
+                    \_ ->
+                        let
+                            expectedLength =
+                                VM.initRaw prog
+                                    |> VM.evaluate
+                                    |> Tuple.first
+
+                            -- the size when n=8 is 99 steps, so make sure the page can hold more than that
+                            evalPageLength =
+                                VM.initRaw prog
+                                    |> VM.evalPage 15 15
+                                    |> .totalVMCount
+                        in
+                        Expect.equal evalPageLength expectedLength
+            )
+            [ -- (* (+ 1 2) (+ 3 4))
+              ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
+            , ( "Basic if statement"
+              , Prog.fromList [ LDC 2, LDC 1, FUNC (COMPARE CMP_GT), SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
+              )
+            , ( "Basic Let Statements"
+              , Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 5, FUNC CONS, LDF, NESTED [ NIL, LDC 2, FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 0, 0 ), LD ( 2, 0 ), FUNC ADD, LD ( 1, 0 ), LD ( 2, 1 ), FUNC ADD, FUNC ADD, RTN ], AP, RTN ], AP, RTN ], AP ]
+              )
+            , ( "isEven 2", mutualRecursiveIsEven 2 )
+            , ( "isEven 6", mutualRecursiveIsEven 6 )
+            , ( "factorial 3", factorial 3 )
+            , ( "factorial 7", factorial 7 )
+            , ( "recursiveLength", recursiveLength )
+            ]
 
 
 
@@ -450,7 +504,7 @@ testValueDecoder =
                     |> VM.encodeValue
                     |> Decode.decodeValue VM.valueDecoder
                     |> Expect.equal (Ok <| VM.Closure [] Env.init)
-        , Test.test "Empty Closure" <|
+        , Test.test "Nonempty closure" <|
             \_ ->
                 VM.Closure [ NIL ] Env.init
                     |> VM.encodeValue
@@ -465,18 +519,8 @@ testWithPrograms =
         [ Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Recursive list length function" <|
             \steps ->
                 let
-                    -- f = (λx m | (if (null x) m (f (cdr x) (+ m 1) )) )
-                    func =
-                        [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-                    -- (f '(1 2 3) 0)
-                    funcApply =
-                        [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-
                     stepped =
-                        Prog.fromList
-                            [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
-                            |> VM.initRaw
+                        VM.initRaw recursiveLength
                             |> VM.stepN steps
                 in
                 case stepped of
@@ -491,19 +535,8 @@ testWithPrograms =
         , Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Factorial Function" <|
             \steps ->
                 let
-                    n =
-                        6
-
-                    fact =
-                        [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LD ( 0, 1 ), LD ( 0, 0 ), FUNC MULT, FUNC CONS, LD ( 2, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ]
-
-                    -- I actually don't really know what this does
-                    factCreateClosure =
-                        [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
-
                     stepped =
-                        Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
-                            |> VM.initRaw
+                        VM.initRaw (factorial 6)
                             |> VM.stepN steps
                 in
                 case stepped of
@@ -524,9 +557,15 @@ testWithPrograms =
 
 vmExpectSuccess : Program -> Value -> Expectation
 vmExpectSuccess prog expected =
-    Expect.equal (VM.evaluate <| VM.initRaw prog) (Ok expected)
+    VM.initRaw prog
+        |> VM.evaluate
+        |> Tuple.second
+        |> Expect.equal (Ok expected)
 
 
 vmExpectFailure : Program -> Expectation
 vmExpectFailure prog =
-    Expect.err (VM.evaluate <| VM.initRaw prog)
+    VM.initRaw prog
+        |> VM.evaluate
+        |> Tuple.second
+        |> Expect.err

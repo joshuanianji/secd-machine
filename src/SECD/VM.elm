@@ -626,37 +626,34 @@ type alias VMResult =
     Result Error Value
 
 
-
--- fully evaluate a VM
--- WARNING: this will blow up the stack if it goes in an infinite loop
--- this is mainly used for testing
+{-|
 
 
-evaluate : VM -> VMResult
-evaluate oldVm =
-    case step oldVm of
-        Unfinished vm ->
-            evaluate vm
+## evaluate
 
-        Finished _ val ->
-            Ok val
+fully evaluates a VM, counting the amount of steps
 
-        Error _ err ->
-            Err <| err
+_this is mainly used for testing_
 
+**WARNING**: this will blow up the stack if it goes in an infinite loop
 
+-}
+evaluate : VM -> ( Int, VMResult )
+evaluate inputVM =
+    let
+        evaluate_ : VM -> Int -> ( Int, VMResult )
+        evaluate_ vm_ n =
+            case step vm_ of
+                Unfinished vm ->
+                    evaluate_ vm (n + 1)
 
--- fully evaluate a VM, keeping track of all states
+                Finished _ val ->
+                    ( n, Ok val )
 
-
-evalList : VM -> List State
-evalList oldVm =
-    case step oldVm of
-        Unfinished vm ->
-            Unfinished vm :: evalList vm
-
-        other ->
-            List.singleton other
+                Error _ err ->
+                    ( n, Err err )
+    in
+    evaluate_ inputVM 0
 
 
 {-|
@@ -682,22 +679,22 @@ evalChunk : VM -> Int -> ( VM, Result VM ( VMResult, Int ) )
 evalChunk vm chunkSize =
     let
         helper : Int -> VM -> Result VM ( VMResult, Int )
-        helper n_ vm_ =
+        helper n vm_ =
             case step vm_ of
                 Unfinished newVm ->
-                    if n_ == 0 then
+                    if n == chunkSize then
                         Err newVm
 
                     else
-                        helper (n_ - 1) newVm
+                        helper (n + 1) newVm
 
                 Finished _ val ->
-                    Ok ( Ok val, n_ )
+                    Ok ( Ok val, n )
 
                 Error _ err ->
-                    Ok ( Err err, n_ )
+                    Ok ( Err err, n )
     in
-    ( vm, helper chunkSize vm )
+    ( vm, helper 0 vm )
 
 
 {-|
@@ -752,8 +749,8 @@ We accumulate the first VM state of each chunk
 **Note** totalVMs is the count for _ALL_ vm states
 
 -}
-evalPage : VM -> Int -> Int -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
-evalPage vm pageSize chunkSize =
+evalPage : Int -> Int -> VM -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
+evalPage pageSize chunkSize vm =
     let
         helper : VM -> Int -> Int -> List VM -> ( Int, List VM, Result VM VMResult )
         helper startVM vmCount pageCount stateAcc =
@@ -768,7 +765,8 @@ evalPage vm pageSize chunkSize =
                         ( vmCount + vmChunkCount, chunkVM :: stateAcc, Ok val )
 
                     ( chunkVM, Err nextVM ) ->
-                        helper nextVM (vmCount + chunkSize) (pageCount + 1) (chunkVM :: stateAcc)
+                        -- add 1 since we don't include the first VM in thechunk
+                        helper nextVM (vmCount + chunkSize + 1) (pageCount + 1) (chunkVM :: stateAcc)
 
         ( totalVMCount, chunkVMs, result ) =
             helper vm 0 0 []
