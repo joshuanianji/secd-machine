@@ -66,26 +66,33 @@ If we the VM terminates in time, also return the value
 Else, return the last unfinished VM state
 
 -}
+type alias PagesData =
+    { result : Result VM VMResult
+    , initialPage : Zipper VM
+    , initialChunk : Zipper VM
+    , pages : Zipper Int
+    , totalVMs : Int
+    , cmds : Cmd Msg
+    }
+
+
 getPages :
     { maxPages : Int
     , pageSize : Int
     , chunkSize : Int
     }
     -> VM
-    ->
-        { result : Result VM VMResult
-        , initialPage : Zipper VM
-        , initialChunk : Zipper VM
-        , pages : Zipper Int
-        , totalVMs : Int
-        , cmds : Cmd Msg
-        }
+    -> PagesData
 getPages { maxPages, pageSize, chunkSize } vm =
-    -- calculate first chunk
-    case VM.evalN vm chunkSize of
-        ( initialChunk, Ok res ) ->
-            -- program terminates in one chunk
-            { result = Ok res
+    let
+        -- returns the same result as getPages
+        getFirstChunk : PagesData
+        getFirstChunk =
+            let
+                ( initialChunk, firstChunkRes ) =
+                    VM.evalN vm chunkSize
+            in
+            { result = firstChunkRes
             , initialPage = Zipper.singleton vm
             , initialChunk = Zipper.fromCons vm initialChunk
             , pages = Zipper.singleton 0
@@ -93,24 +100,31 @@ getPages { maxPages, pageSize, chunkSize } vm =
             , cmds = Cmd.none
             }
 
-        ( initialChunk, Err nextState ) ->
-            -- program needs more than one chunk
-            -- calculate first page
-            let
-                -- first, calculate the first page
-                firstPage =
-                    VM.evalPage nextState pageSize chunkSize
-            in
-            case firstPage.result of
-                Ok vmResult ->
-                    -- VM terminates in one page
-                    { result = Ok vmResult
-                    , initialPage = Zipper.fromCons vm firstPage.chunkVMs
-                    , initialChunk = Zipper.fromCons vm initialChunk
-                    , pages = Zipper.singleton 0
-                    , totalVMs = firstPage.totalVMCount + List.length initialChunk
-                    , cmds = Cmd.none
+        -- takes in, and returns the same result as getPages
+        getFirstPage : PagesData -> PagesData
+        getFirstPage pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
+
+                Err nextState ->
+                    -- program needs more than one chunk
+                    -- calculate first page
+                    let
+                        firstPage =
+                            VM.evalPage nextState pageSize chunkSize
+                    in
+                    { pagesData
+                        | result = firstPage.result
+                        , initialPage = Zipper.fromCons vm firstPage.chunkVMs
+                        , totalVMs = pagesData.totalVMs + firstPage.totalVMCount
                     }
+
+        getRemainingPages : PagesData -> PagesData
+        getRemainingPages pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
 
                 Err secondPageVM ->
                     -- VM does not terminate in one page. Calculate all pages (until max)
@@ -156,16 +170,19 @@ getPages { maxPages, pageSize, chunkSize } vm =
                                             (Ports.sendPage ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
 
                         -- we also send the first page states to JS
-                        pagesData =
-                            helper 1 secondPageVM 0 [ Ports.sendPage ( 0, Encode.list VM.encode firstPage.chunkVMs ) ]
+                        helperData =
+                            helper 1 secondPageVM 0 [ Ports.sendPage ( 0, Encode.list VM.encode <| Zipper.toList pagesData.initialPage ) ]
                     in
-                    { result = pagesData.result
-                    , initialPage = Zipper.fromCons vm firstPage.chunkVMs
-                    , initialChunk = Zipper.fromCons vm initialChunk
-                    , pages = Zipper.fromCons 0 (List.range 1 pagesData.pageCount)
-                    , totalVMs = pagesData.totalVMCount
-                    , cmds = Cmd.batch pagesData.cmds
+                    { pagesData
+                        | result = helperData.result
+                        , pages = Zipper.fromCons 0 (List.range 1 helperData.pageCount)
+                        , totalVMs = pagesData.totalVMs + helperData.totalVMCount
+                        , cmds = Cmd.batch helperData.cmds
                     }
+    in
+    getFirstChunk
+        |> getFirstPage
+        |> getRemainingPages
 
 
 
