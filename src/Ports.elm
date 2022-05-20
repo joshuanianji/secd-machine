@@ -21,14 +21,14 @@ port initialized : String -> Cmd msg
 
 
 
--- sending VM state between elm and JS
--- each VM state is identified by a unique id
+-- sending VM page (a chunk of 250 states) between elm and JS
+-- each VM page is identified by a unique id
 
 
-port sendState : ( Int, Value ) -> Cmd msg
+port sendPage : ( Int, Value ) -> Cmd msg
 
 
-port fetchState : Int -> Cmd msg
+port fetchPage : Int -> Cmd msg
 
 
-port fetchStateResponse : (( Int, Value ) -> msg) -> Sub msg
+port fetchPageResponse : (( Int, Value ) -> msg) -> Sub msg

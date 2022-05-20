@@ -2,12 +2,14 @@ module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
+import Json.Encode as Encode
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
+import Ports
 import SECD.Program exposing (Program)
-import SECD.VM as VM
+import SECD.VM as VM exposing (VM, VMResult)
 
 
 
@@ -15,12 +17,20 @@ import SECD.VM as VM
 
 
 type alias Model =
-    { states : Zipper VM.State
+    { -- current chunk holds the VM states in the current chunk
+      chunk : Zipper VM
 
-    -- each "page" holds 100 VM states
-    -- the "states" hold the current 100 states of the VM
-    -- the rest are held in SessionStorage
+    -- current page holds the starting positions for each chunk
+    , page : Zipper VM
+
+    -- Keeps track of the IDs of all the generated pages, if we need to swap a page
     , pages : Zipper Int
+
+    -- furthest calculated VM state (either a state, or a Result)
+    , latestVM : Result VM VMResult
+
+    -- total states to keep track of
+    , totalStates : Int
     , pressedKeys : List Key
     }
 
@@ -31,23 +41,131 @@ init prog =
         vm =
             VM.initRaw prog
 
-        currState =
-            VM.initState vm
-
-        afters =
-            case currState of
-                VM.Unfinished nextState ->
-                    VM.evalList nextState
-
-                _ ->
-                    []
+        pagesData =
+            getPages { maxPages = 15, pageSize = 50, chunkSize = 10 } vm
     in
-    ( { states = Zipper.from [] currState afters
-      , pages = Zipper.from [] 0 []
+    ( { chunk = pagesData.initialChunk
+      , page = pagesData.initialPage
+      , pages = pagesData.pages
+      , latestVM = pagesData.result
+      , totalStates = pagesData.totalVMs
       , pressedKeys = []
       }
-    , Cmd.none
+    , pagesData.cmds
     )
+
+
+{-| getPages
+
+given a VM, calculate as many states it can reach
+Limit the amount of pages (groups of "chunks" that are stored in SessionStorage similar to a memory page) by maxPages
+Limit the amount of chunkVMs a page can store by pageSize
+Limit the amount of stets a chunk can store by chunkSize
+
+If we the VM terminates in time, also return the value
+Else, return the last unfinished VM state
+
+-}
+getPages :
+    { maxPages : Int
+    , pageSize : Int
+    , chunkSize : Int
+    }
+    -> VM
+    ->
+        { result : Result VM VMResult
+        , initialPage : Zipper VM
+        , initialChunk : Zipper VM
+        , pages : Zipper Int
+        , totalVMs : Int
+        , cmds : Cmd Msg
+        }
+getPages { maxPages, pageSize, chunkSize } vm =
+    -- calculate first chunk
+    case VM.evalN vm chunkSize of
+        ( initialChunk, Ok res ) ->
+            -- program terminates in one chunk
+            { result = Ok res
+            , initialPage = Zipper.singleton vm
+            , initialChunk = Zipper.fromCons vm initialChunk
+            , pages = Zipper.singleton 0
+            , totalVMs = List.length initialChunk
+            , cmds = Cmd.none
+            }
+
+        ( initialChunk, Err nextState ) ->
+            -- program needs more than one chunk
+            -- calculate first page
+            let
+                -- first, calculate the first page
+                firstPage =
+                    VM.evalPage nextState pageSize chunkSize
+            in
+            case firstPage.result of
+                Ok vmResult ->
+                    -- VM terminates in one page
+                    { result = Ok vmResult
+                    , initialPage = Zipper.fromCons vm firstPage.chunkVMs
+                    , initialChunk = Zipper.fromCons vm initialChunk
+                    , pages = Zipper.singleton 0
+                    , totalVMs = firstPage.totalVMCount + List.length initialChunk
+                    , cmds = Cmd.none
+                    }
+
+                Err secondPageVM ->
+                    -- VM does not terminate in one page. Calculate all pages (until max)
+                    let
+                        -- builds up all the pages to send to JS
+                        helper :
+                            Int
+                            -> VM
+                            -> Int
+                            -> List (Cmd Msg)
+                            ->
+                                { result : Result VM VMResult
+                                , pageCount : Int
+                                , totalVMCount : Int
+                                , cmds : List (Cmd Msg)
+                                }
+                        helper pageCount vm_ vmCountAcc cmdAcc =
+                            if pageCount == maxPages then
+                                { result = Err vm_
+                                , pageCount = pageCount
+                                , totalVMCount = vmCountAcc
+                                , cmds = cmdAcc
+                                }
+
+                            else
+                                let
+                                    nthPage =
+                                        VM.evalPage vm_ pageSize chunkSize
+                                in
+                                case nthPage.result of
+                                    Ok vmResult ->
+                                        -- VM terminates in this page
+                                        { result = Ok vmResult
+                                        , pageCount = pageCount
+                                        , totalVMCount = vmCountAcc + nthPage.totalVMCount
+                                        , cmds = Ports.sendPage ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc
+                                        }
+
+                                    Err newVM ->
+                                        helper (pageCount + 1)
+                                            newVM
+                                            (vmCountAcc + nthPage.totalVMCount)
+                                            (Ports.sendPage ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
+
+                        -- we also send the first page states to JS
+                        pagesData =
+                            helper 1 secondPageVM 0 [ Ports.sendPage ( 0, Encode.list VM.encode firstPage.chunkVMs ) ]
+                    in
+                    { result = pagesData.result
+                    , initialPage = Zipper.fromCons vm firstPage.chunkVMs
+                    , initialChunk = Zipper.fromCons vm initialChunk
+                    , pages = Zipper.fromCons 0 (List.range 1 pagesData.pageCount)
+                    , totalVMs = pagesData.totalVMCount
+                    , cmds = Cmd.batch pagesData.cmds
+                    }
 
 
 
@@ -69,27 +187,29 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        -- goes to first state in current chunk
+        -- TODO: retrieve first page as well
         First ->
-            ( { model | states = Zipper.first model.states }, Cmd.none )
+            ( { model | chunk = Zipper.first model.chunk }, Cmd.none )
 
         Previous ->
-            case Zipper.previous model.states of
+            case Zipper.previous model.chunk of
                 Nothing ->
                     ( model, Cmd.none )
 
                 Just newState ->
-                    ( { model | states = newState }, Cmd.none )
+                    ( { model | chunk = newState }, Cmd.none )
 
         Step ->
-            case Zipper.next model.states of
+            case Zipper.next model.chunk of
                 Nothing ->
                     ( model, Cmd.none )
 
                 Just newState ->
-                    ( { model | states = newState }, Cmd.none )
+                    ( { model | chunk = newState }, Cmd.none )
 
         Last ->
-            ( { model | states = Zipper.last model.states }, Cmd.none )
+            ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
 
         KeyMsg keyMsg ->
             let
@@ -134,7 +254,7 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-        , Element.html <| VM.viewState 6 <| Zipper.current model.states
+        , Element.html <| VM.viewState 6 <| VM.Unfinished <| Zipper.current model.chunk
         ]
 
 

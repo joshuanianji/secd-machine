@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
         height: window.innerHeight,
       },
       codeExamples: codeExamples,
-      initialCode: codeExamples[0]["examples"][0][1], // starts off with the arithmetic example
+      initialCode: codeExamples[2]["examples"][2][1], // starts off with the lazy infinite lists
     },
   });
 
@@ -47,5 +47,17 @@ document.addEventListener("DOMContentLoaded", () => {
     app.ports.updateCode.subscribe((val) => {
       cm.setValue(val);
     });
+
+    // Elm gives us a page to store
+    app.ports.sendPage.subscribe(([n, val]) => {
+      console.log(`Page ${n} stored`);
+      console.log(`val for ${n}:`, JSON.stringify(val));
+      sessionStorage.setItem(toString(n), JSON.stringify(val));
+    });
+
+    // app.ports.fetchPage.subscribe((n) => {
+    //   const val = JSON.parse(sessionStorage.getItem(toString(n)));
+    //   app.ports.receivePage.send((n, val));
+    // });
   });
 });

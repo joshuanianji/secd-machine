@@ -656,19 +656,48 @@ evalList oldVm =
 
 
 
--- evaluate a VM a max of n times
+-- evaluate a VM chunk, returning the state/value, and first VM state in that chunk
+-- If we're not finished, return (startVM, Err lastEvaluatedVM)
+-- If we're finished, return (startVM, Ok (vmResult, count))
+-- Note: initial state is just the VM that was passed in
+
+
+evalChunk : VM -> Int -> ( VM, Result VM ( VMResult, Int ) )
+evalChunk vm chunkSize =
+    let
+        helper : Int -> VM -> Result VM ( VMResult, Int )
+        helper n_ vm_ =
+            if n_ == 0 then
+                Err vm_
+
+            else
+                case step vm_ of
+                    Unfinished newVm ->
+                        helper (n_ - 1) newVm
+
+                    Finished _ val ->
+                        Ok ( Ok val, n_ )
+
+                    Error _ err ->
+                        Ok ( Err err, n_ )
+    in
+    ( vm, helper chunkSize vm )
+
+
+
+-- evaluate a VM a max of n times, returning all states in that range
 -- If we're not finished, return Err (currState, allStates)
 -- If we're finished, return Ok (returnValue, allStates)
 -- Note: we do not include the initial VM in the list of VM states
 
 
-evalN : VM -> Int -> Result ( VM, List VM ) ( VMResult, List VM )
+evalN : VM -> Int -> ( List VM, Result VM VMResult )
 evalN vm n =
     let
-        helper : Int -> VM -> List VM -> Result ( VM, List VM ) ( VMResult, List VM )
+        helper : Int -> VM -> List VM -> ( List VM, Result VM VMResult )
         helper n_ vm_ states =
             if n_ == 0 then
-                Err ( vm, List.reverse states )
+                ( List.reverse states, Err vm_ )
 
             else
                 case step vm_ of
@@ -676,12 +705,48 @@ evalN vm n =
                         helper (n_ - 1) newVm (newVm :: states)
 
                     Finished _ val ->
-                        Ok ( Ok val, states )
+                        ( states, Ok <| Ok val )
 
                     Error _ err ->
-                        Ok ( Err err, states )
+                        ( states, Ok (Err err) )
     in
     helper n vm []
+
+
+{-| evalPage
+
+evaluate a PAGE of VM states, or a list of chunks
+each page can holds `pageSize` chunks, and each chunk holds `chunkSize` states
+We accumulate the first VM state of each chunk
+
+if we're not finished, return (totalVMs, chunkVMs, Err lastVMState)
+If we're finished, return Ok (totalVMs, chunkVMs, Ok vmResult)
+
+totalVMs is ALL vm states
+
+-}
+evalPage : VM -> Int -> Int -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
+evalPage vm pageSize chunkSize =
+    let
+        helper : VM -> Int -> Int -> List VM -> ( Int, List VM, Result VM VMResult )
+        helper startVM vmCount pageCount stateAcc =
+            if pageCount == pageSize then
+                ( vmCount, stateAcc, Err startVM )
+
+            else
+                -- chunkVM is the first VM state of the chunk
+                case evalChunk startVM chunkSize of
+                    ( chunkVM, Ok ( val, vmChunkCount ) ) ->
+                        -- evaluation finished
+                        ( vmCount + vmChunkCount, chunkVM :: stateAcc, Ok val )
+
+                    ( chunkVM, Err lastCalculatedVM ) ->
+                        ( vmCount + chunkSize, chunkVM :: stateAcc, Err lastCalculatedVM )
+
+        ( totalVMCount, chunkVMs, result ) =
+            helper vm 0 0 []
+    in
+    { totalVMCount = totalVMCount, chunkVMs = List.reverse chunkVMs, result = result }
 
 
 

@@ -74,8 +74,8 @@ init flags =
         Ok f ->
             ( Success
                 { code = f.initialCode
-                , openTabs = Set.fromList [ "Basics", "howto" ]
-                , currCodeExample = Ok "Arithmetic"
+                , openTabs = Set.fromList [ "Complex", "howto" ]
+                , currCodeExample = Ok "Lazy Infinite Lists"
                 , compiled = Idle
                 , codeExamples = f.codeExamples
                 , screen = f.screen
