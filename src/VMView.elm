@@ -2,13 +2,14 @@ module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
-import Json.Encode as Encode
+import Json.Decode as Decode
+import Json.Encode as Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ports
-import SECD.Error as Error
+import SECD.Error as Error exposing (Error)
 import SECD.Program exposing (Program)
 import SECD.VM as VM exposing (VM, VMResult)
 
@@ -37,7 +38,21 @@ type alias Model =
 
     -- keeping compiled code to view
     , compiled : Program
+
+    -- status when we're fetching a page
+    , fetchStatus : FetchStatus
     }
+
+
+type FetchStatus
+    = Idle
+    | Loading PageLocation
+    | Error Error
+
+
+type PageLocation
+    = Beginning
+    | End
 
 
 type alias PagesInfo =
@@ -61,6 +76,7 @@ init pagesInfo prog =
       , pressedKeys = []
       , pagesInfo = pagesInfo
       , compiled = prog
+      , fetchStatus = Idle
       }
     , Ports.sendPages pagesData.toJSValues
     )
@@ -206,6 +222,7 @@ type Msg
     | Step
     | Last
     | KeyMsg Keyboard.Msg
+    | GotPage (Result Error ( Int, Zipper VM ))
 
 
 
@@ -214,13 +231,17 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
+    case ( model.fetchStatus, msg ) of
         -- goes to first state in current chunk
-        -- TODO: retrieve first page as well
-        First ->
-            ( { model | chunk = Zipper.first model.chunk }, Cmd.none )
+        ( _, First ) ->
+            ( { model
+                | pages = Zipper.first model.pages
+                , fetchStatus = Loading Beginning
+              }
+            , Ports.fetchPage 0
+            )
 
-        Previous ->
+        ( _, Previous ) ->
             case Zipper.previous model.chunk of
                 Just newState ->
                     ( { model | chunk = newState }, Cmd.none )
@@ -254,7 +275,7 @@ update msg model =
                             -- fetch previous page from JS
                             ( model, Cmd.none )
 
-        Step ->
+        ( _, Step ) ->
             case Zipper.next model.chunk of
                 Just newState ->
                     ( { model | chunk = newState }, Cmd.none )
@@ -288,10 +309,37 @@ update msg model =
                             -- fetch next page from JS
                             ( model, Cmd.none )
 
-        Last ->
-            ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
+        ( _, Last ) ->
+            if Zipper.isLast model.pages then
+                -- no need to swap page
+                if Zipper.isLast model.page then
+                    ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
 
-        KeyMsg keyMsg ->
+                else
+                    let
+                        newPage =
+                            Zipper.last model.page
+
+                        ( newChunk, _ ) =
+                            VM.evalN (Zipper.current newPage) model.pagesInfo.chunkSize
+                    in
+                    ( { model
+                        | page = newPage
+                        , chunk = Zipper.fromCons (Zipper.current newPage) newChunk
+                      }
+                    , Cmd.none
+                    )
+
+            else
+                -- swap page
+                ( { model
+                    | pages = Zipper.last model.pages
+                    , fetchStatus = Loading End
+                  }
+                , Ports.fetchPage (Zipper.current <| Zipper.last model.pages)
+                )
+
+        ( _, KeyMsg keyMsg ) ->
             let
                 newPressedKeys =
                     Keyboard.update keyMsg model.pressedKeys
@@ -311,6 +359,52 @@ update msg model =
 
             else
                 ( model, Cmd.none )
+
+        ( Loading pageLocation, GotPage res ) ->
+            case res of
+                -- underalized meaning the we don't know where the zipper pointer is
+                -- it points to the beginning,
+                Ok ( _, unseralizedPage ) ->
+                    let
+                        ( page, chunk ) =
+                            case pageLocation of
+                                Beginning ->
+                                    let
+                                        seralizedPage =
+                                            Zipper.first unseralizedPage
+
+                                        ( evaledChunk, _ ) =
+                                            VM.evalN (Zipper.current seralizedPage) model.pagesInfo.chunkSize
+                                    in
+                                    ( seralizedPage
+                                    , Zipper.fromCons (Zipper.current seralizedPage) evaledChunk
+                                    )
+
+                                End ->
+                                    let
+                                        seralizedPage =
+                                            Zipper.last unseralizedPage
+
+                                        ( evaledChunk, _ ) =
+                                            VM.evalN (Zipper.current seralizedPage) model.pagesInfo.chunkSize
+                                    in
+                                    ( seralizedPage
+                                    , Zipper.last <| Zipper.fromCons (Zipper.current seralizedPage) evaledChunk
+                                    )
+                    in
+                    ( { model
+                        | page = page
+                        , chunk = chunk
+                        , fetchStatus = Idle
+                      }
+                    , Cmd.none
+                    )
+
+                Err n ->
+                    ( { model | fetchStatus = Error n }, Cmd.none )
+
+        ( _, _ ) ->
+            ( model, Cmd.none )
 
 
 
@@ -345,38 +439,40 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-        , if atLastState model then
-            case model.latestVM of
-                Ok (Ok value) ->
-                    Element.paragraph
-                        []
-                        [ Lib.Views.bold "Finished successfully: "
-                        , Element.text <| VM.valueToString value
-                        ]
 
-                Ok (Err e) ->
-                    Element.column
-                        []
-                        [ Lib.Views.bold "Finished with an error: "
-                        , Element.html <| Error.view e
-                        ]
-
-                Err _ ->
-                    Lib.Views.bold "There's more to render! But no renders yet"
-
-          else
-            Element.none
+        -- stuff to render when we're at the final VM state
+        , finalVMState model
         , Element.html <| VM.view 6 <| Zipper.current model.chunk
         ]
 
 
+finalVMState : Model -> Element Msg
+finalVMState model =
+    let
+        atLastState =
+            Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages
+    in
+    if atLastState then
+        case model.latestVM of
+            Ok (Ok value) ->
+                Element.paragraph
+                    []
+                    [ Lib.Views.bold "Finished successfully: "
+                    , Element.text <| VM.valueToString value
+                    ]
 
--- returns true if we're at the last state
+            Ok (Err e) ->
+                Element.column
+                    []
+                    [ Lib.Views.bold "Finished with an error: "
+                    , Element.html <| Error.view e
+                    ]
 
+            Err _ ->
+                Lib.Views.bold "There's more to render! But no renders yet"
 
-atLastState : Model -> Bool
-atLastState model =
-    Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages
+    else
+        Element.none
 
 
 
@@ -384,5 +480,35 @@ atLastState model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.map KeyMsg Keyboard.subscriptions
+subscriptions model =
+    let
+        fetchSub =
+            case model.fetchStatus of
+                Loading _ ->
+                    Ports.fetchPageResponse gotPage
+
+                _ ->
+                    Sub.none
+    in
+    Sub.batch
+        [ fetchSub
+        , Sub.map KeyMsg Keyboard.subscriptions
+        ]
+
+
+
+-- received a new page from JSON
+-- note this page is a list of VMs, each representing the start of a chunk
+
+
+gotPage : ( Int, Value ) -> Msg
+gotPage ( pageNum, val ) =
+    case Decode.decodeValue (Decode.list VM.decoder) val of
+        Ok (vm :: vms) ->
+            GotPage <| Ok ( pageNum, Zipper.fromCons vm vms )
+
+        Ok _ ->
+            GotPage <| Err "Empty VM list!"
+
+        Err e ->
+            GotPage <| Err (Decode.errorToString e)

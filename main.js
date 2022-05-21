@@ -14,7 +14,9 @@ import "./style.scss";
 import { examples as codeExamples } from "./examples/";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await db.clear();
+  db.clear().then(() => {
+    console.log("DB cleared");
+  });
   const root = document.getElementById("app");
   const app = Elm.Main.init({
     node: root,
@@ -67,9 +69,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // app.ports.fetchPage.subscribe((n) => {
-    //   const val = JSON.parse(sessionStorage.getItem(toString(n)));
-    //   app.ports.receivePage.send((n, val));
-    // });
+    app.ports.fetchPage.subscribe((n) => {
+      db.get(n)
+        .then((val) => {
+          console.log(`JS: Got page ${n}`);
+          app.ports.fetchPageResponse.send([n, val]);
+        })
+        .catch((err) => {
+          console.log(`Failed to fetch page ${n}`, err);
+        });
+    });
   });
 });
