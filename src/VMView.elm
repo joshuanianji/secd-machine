@@ -50,6 +50,10 @@ type FetchStatus
     | Error Error
 
 
+
+-- where in the page we will locate when the page is loaded
+
+
 type PageLocation
     = Beginning
     | End
@@ -256,9 +260,6 @@ update msg model =
 
                                 ( newChunk, _ ) =
                                     VM.evalN startVM model.pagesInfo.chunkSize
-
-                                _ =
-                                    Debug.log "Previous chunk" ()
                             in
                             ( { model
                                 | chunk = Zipper.last <| Zipper.fromCons startVM newChunk
@@ -268,12 +269,19 @@ update msg model =
                             )
 
                         Nothing ->
-                            let
-                                _ =
-                                    Debug.log "Need to get next page!"
-                            in
-                            -- fetch previous page from JS
-                            ( model, Cmd.none )
+                            case Zipper.previous model.pages of
+                                Just newPages ->
+                                    -- fetch previous page from JS
+                                    ( { model
+                                        | pages = newPages
+                                        , fetchStatus = Loading End
+                                      }
+                                    , Ports.fetchPage <| Zipper.current newPages
+                                    )
+
+                                Nothing ->
+                                    -- We are at the beginning of the program
+                                    ( model, Cmd.none )
 
         ( _, Step ) ->
             case Zipper.next model.chunk of
@@ -290,9 +298,6 @@ update msg model =
 
                                 ( newChunk, _ ) =
                                     VM.evalN startVM model.pagesInfo.chunkSize
-
-                                _ =
-                                    Debug.log "Next chunk" ()
                             in
                             ( { model
                                 | chunk = Zipper.fromCons startVM newChunk
@@ -302,12 +307,19 @@ update msg model =
                             )
 
                         Nothing ->
-                            let
-                                _ =
-                                    Debug.log "Need to get next page!"
-                            in
-                            -- fetch next page from JS
-                            ( model, Cmd.none )
+                            case Zipper.next model.pages of
+                                Just newPages ->
+                                    -- fetch previous page from JS
+                                    ( { model
+                                        | pages = newPages
+                                        , fetchStatus = Loading Beginning
+                                      }
+                                    , Ports.fetchPage <| Zipper.current newPages
+                                    )
+
+                                Nothing ->
+                                    -- We are at the end of the program
+                                    ( model, Cmd.none )
 
         ( _, Last ) ->
             if Zipper.isLast model.pages then
