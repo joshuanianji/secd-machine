@@ -1,6 +1,7 @@
 module Lib.Views exposing (..)
 
 import Element exposing (Attribute, Element)
+import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
@@ -20,6 +21,8 @@ button msg label =
         , Border.width 1
         , Border.rounded 5
         , Element.centerX
+        , Element.mouseOver
+            [ Background.color Colours.slateGrey ]
         ]
         { onPress = Just msg
         , label = label

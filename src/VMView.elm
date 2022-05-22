@@ -5,12 +5,18 @@ module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Input as Input
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
+import Lib.Colours as Colours
+import Lib.Util as Util
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
+import Ordinal exposing (ordinal)
 import Ports
 import SECD.Error as Error exposing (Error)
 import SECD.Program exposing (Program)
@@ -22,8 +28,13 @@ import SECD.VM as VM exposing (VM, VMResult)
 
 
 type alias Model =
-    { -- current chunk holds the VM states in the current chunk
-      chunk : Zipper VM
+    { -- which state index are we in?
+      -- also, keep track of the slider position separately
+      index : Int
+    , sliderIdx : Int
+
+    -- current chunk holds the VM states in the current chunk
+    , chunk : Zipper VM
 
     -- current page holds the starting positions for each chunk
     , page : Zipper VM
@@ -60,6 +71,7 @@ type FetchStatus
 type Location
     = Beginning
     | End
+    | Indexed Int -- specific index (0-indexed)
 
 
 type alias PagesInfo =
@@ -75,7 +87,9 @@ init pagesInfo prog =
         pagesData =
             getPages pagesInfo vm
     in
-    ( { chunk = pagesData.initialChunk
+    ( { index = 0
+      , sliderIdx = 0
+      , chunk = pagesData.initialChunk
       , page = pagesData.initialPage
       , pages = pagesData.pages
       , latestVM = pagesData.result
@@ -163,49 +177,9 @@ getPages { maxPages, pageSize, chunkSize } vm =
                 Err secondPageVM ->
                     -- VM does not terminate in one page. Calculate all pages (until max)
                     let
-                        -- builds up all the pages to send to JS
-                        helper :
-                            Int
-                            -> VM
-                            -> Int
-                            -> List ( Int, Encode.Value )
-                            ->
-                                { result : Result VM VMResult
-                                , pageCount : Int
-                                , totalVMCount : Int
-                                , cmds : List ( Int, Encode.Value )
-                                }
-                        helper pageCount vm_ vmCountAcc cmdAcc =
-                            if pageCount == maxPages then
-                                { result = Err vm_
-                                , pageCount = pageCount
-                                , totalVMCount = vmCountAcc
-                                , cmds = cmdAcc
-                                }
-
-                            else
-                                let
-                                    nthPage =
-                                        VM.evalPage pageSize chunkSize vm_
-                                in
-                                case nthPage.result of
-                                    Ok vmResult ->
-                                        -- VM terminates in this page
-                                        { result = Ok vmResult
-                                        , pageCount = pageCount
-                                        , totalVMCount = vmCountAcc + nthPage.totalVMCount
-                                        , cmds = ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc
-                                        }
-
-                                    Err newVM ->
-                                        helper (pageCount + 1)
-                                            newVM
-                                            (vmCountAcc + nthPage.totalVMCount)
-                                            (( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
-
                         -- we also send the first page states to JS
                         helperData =
-                            helper 1 secondPageVM 0 [ ( 0, Encode.list VM.encode <| Zipper.toList pagesData.initialPage ) ]
+                            remainingPagesHelper 1 secondPageVM 0 [ ( 0, Encode.list VM.encode <| Zipper.toList pagesData.initialPage ) ]
                     in
                     { pagesData
                         | result = helperData.result
@@ -213,6 +187,46 @@ getPages { maxPages, pageSize, chunkSize } vm =
                         , totalVMs = pagesData.totalVMs + helperData.totalVMCount
                         , toJSValues = helperData.cmds
                     }
+
+        -- builds up all the pages to send to JS
+        remainingPagesHelper :
+            Int
+            -> VM
+            -> Int
+            -> List ( Int, Encode.Value )
+            ->
+                { result : Result VM VMResult
+                , pageCount : Int
+                , totalVMCount : Int
+                , cmds : List ( Int, Encode.Value )
+                }
+        remainingPagesHelper pageCount vm_ vmCountAcc cmdAcc =
+            if pageCount == maxPages then
+                { result = Err vm_
+                , pageCount = pageCount
+                , totalVMCount = vmCountAcc
+                , cmds = cmdAcc
+                }
+
+            else
+                let
+                    nthPage =
+                        VM.evalPage pageSize chunkSize vm_
+                in
+                case nthPage.result of
+                    Ok vmResult ->
+                        -- VM terminates in this page
+                        { result = Ok vmResult
+                        , pageCount = pageCount
+                        , totalVMCount = vmCountAcc + nthPage.totalVMCount
+                        , cmds = ( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc
+                        }
+
+                    Err newVM ->
+                        remainingPagesHelper (pageCount + 1)
+                            newVM
+                            (vmCountAcc + nthPage.totalVMCount)
+                            (( pageCount, Encode.list VM.encode nthPage.chunkVMs ) :: cmdAcc)
     in
     getFirstChunk
         |> getFirstPage
@@ -228,6 +242,8 @@ type Msg
     | Previous
     | Step
     | Last
+    | ToIndex Int
+    | UpdateSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
 
@@ -245,13 +261,17 @@ update msg model =
                 | pages = Zipper.first model.pages
                 , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
               }
+                |> updateStateIndex 0
             , Ports.fetchPage 0
             )
 
         ( _, Previous ) ->
             case Zipper.previous model.chunk of
                 Just newState ->
-                    ( { model | chunk = newState }, Cmd.none )
+                    ( { model | chunk = newState }
+                        |> updateStateIndex (model.index - 1)
+                    , Cmd.none
+                    )
 
                 Nothing ->
                     -- get previous chunk
@@ -266,7 +286,10 @@ update msg model =
                                         , pagesInfo = model.pagesInfo
                                         }
                             in
-                            ( { model | page = newPage, chunk = newChunk }, Cmd.none )
+                            ( { model | page = newPage, chunk = newChunk }
+                                |> updateStateIndex (model.index - 1)
+                            , Cmd.none
+                            )
 
                         Nothing ->
                             case Zipper.previous model.pages of
@@ -276,6 +299,7 @@ update msg model =
                                         | pages = newPages
                                         , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
                                       }
+                                        |> updateStateIndex (model.index - 1)
                                     , Ports.fetchPage <| Zipper.current newPages
                                     )
 
@@ -286,7 +310,10 @@ update msg model =
         ( _, Step ) ->
             case Zipper.next model.chunk of
                 Just newState ->
-                    ( { model | chunk = newState }, Cmd.none )
+                    ( { model | chunk = newState }
+                        |> updateStateIndex (model.index + 1)
+                    , Cmd.none
+                    )
 
                 Nothing ->
                     -- get next chunk
@@ -301,7 +328,10 @@ update msg model =
                                         , pagesInfo = model.pagesInfo
                                         }
                             in
-                            ( { model | page = newPage, chunk = newChunk }, Cmd.none )
+                            ( { model | page = newPage, chunk = newChunk }
+                                |> updateStateIndex (model.index + 1)
+                            , Cmd.none
+                            )
 
                         Nothing ->
                             case Zipper.next model.pages of
@@ -311,6 +341,7 @@ update msg model =
                                         | pages = newPages
                                         , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
                                       }
+                                        |> updateStateIndex (model.index + 1)
                                     , Ports.fetchPage <| Zipper.current newPages
                                     )
 
@@ -320,22 +351,20 @@ update msg model =
 
         ( _, Last ) ->
             if Zipper.isLast model.pages then
-                -- no need to swap page
-                if Zipper.isLast model.page then
-                    ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
-
-                else
-                    -- go to the end of the current page
-                    let
-                        ( newPage, newChunk ) =
-                            updatePage
-                                { page = model.page
-                                , pageLocation = Just End
-                                , chunkLocation = End
-                                , pagesInfo = model.pagesInfo
-                                }
-                    in
-                    ( { model | page = newPage, chunk = newChunk }, Cmd.none )
+                -- go to the end of the current page
+                let
+                    ( newPage, newChunk ) =
+                        updatePage
+                            { page = model.page
+                            , pageLocation = Just End
+                            , chunkLocation = End
+                            , pagesInfo = model.pagesInfo
+                            }
+                in
+                ( { model | page = newPage, chunk = newChunk }
+                    |> updateStateIndex (model.totalStates - 1)
+                , Cmd.none
+                )
 
             else
                 -- swap page
@@ -343,8 +372,25 @@ update msg model =
                     | pages = Zipper.last model.pages
                     , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
                   }
+                    |> updateStateIndex (model.totalStates - 1)
                 , Ports.fetchPage (Zipper.current <| Zipper.last model.pages)
                 )
+
+        ( _, ToIndex n ) ->
+            let
+                { pageNum, pageLocation, chunkLocation } =
+                    Util.getLocationInfo n model.pagesInfo
+            in
+            ( { model
+                | pages = Util.zipperNth pageNum model.pages
+                , fetchStatus = Loading { pageLocation = Indexed pageLocation, chunkLocation = Indexed chunkLocation }
+              }
+                |> updateStateIndex n
+            , Ports.fetchPage pageNum
+            )
+
+        ( _, UpdateSlider val ) ->
+            ( { model | sliderIdx = val }, Cmd.none )
 
         ( _, KeyMsg keyMsg ) ->
             let
@@ -393,7 +439,7 @@ update msg model =
 
 ## updatePage
 
-Updates Page zipper, and calculates a new chunk for it.
+Updates Page zipper(zipper of Chunk VM inits), and calculates a new chunk for it.
 
 If pageLocation is `Nothing`, do not update the page zipper and just calculate a new chunk.
 
@@ -417,6 +463,9 @@ updatePage { page, pageLocation, chunkLocation, pagesInfo } =
                 Just End ->
                     Zipper.last
 
+                Just (Indexed idx) ->
+                    Util.zipperNth idx
+
                 Nothing ->
                     identity
 
@@ -433,6 +482,19 @@ updatePage { page, pageLocation, chunkLocation, pagesInfo } =
                 |> locToZipper (Just chunkLocation)
     in
     ( newPage, newChunk )
+
+
+{-|
+
+
+## updateStateIndex
+
+updates `index` and `sliderIdx` fields of the model.
+
+-}
+updateStateIndex : Int -> Model -> Model
+updateStateIndex newIdx model =
+    { model | index = newIdx, sliderIdx = newIdx }
 
 
 
@@ -452,6 +514,7 @@ view model =
             [ Element.text "Total size: "
             , Lib.Views.bold <| String.fromInt model.totalStates
             ]
+        , viewSlider model
         , case model.latestVM of
             Err _ ->
                 Element.text "Warning: Latest VM does not terminate!"
@@ -471,6 +534,52 @@ view model =
         -- stuff to render when we're at the final VM state
         , finalVMState model
         , Element.html <| VM.view 6 <| Zipper.current model.chunk
+        ]
+
+
+viewSlider : Model -> Element Msg
+viewSlider model =
+    Element.column
+        [ Element.width Element.fill
+        , Element.paddingXY 8 12
+        ]
+        [ Input.slider
+            [ Element.width Element.fill
+
+            -- same height as the thumb
+            , Element.height (Element.px 24)
+
+            -- establish the "track"
+            , Element.behindContent
+                (Element.el
+                    [ Element.width Element.fill
+                    , Element.height (Element.px 8)
+                    , Element.centerY
+                    , Background.color <| Colours.greyAlpha 0.1
+                    , Border.rounded 4
+                    ]
+                    Element.none
+                )
+            ]
+            { onChange = round >> UpdateSlider
+            , label = Input.labelAbove [] <| Element.text ("Current State: " ++ String.fromInt (model.index + 1))
+            , min = 0
+            , max = toFloat <| model.totalStates - 1
+            , value = toFloat model.sliderIdx
+            , thumb =
+                Input.thumb
+                    [ Element.width (Element.px 24)
+                    , Element.height (Element.px 24)
+                    , Border.rounded 24
+                    , Background.color <| Colours.purple
+                    ]
+            , step = Just 1
+            }
+        , if model.sliderIdx /= model.index then
+            Lib.Views.button (ToIndex model.sliderIdx) <| Element.text ("Go to " ++ ordinal (model.sliderIdx + 1) ++ " state")
+
+          else
+            Element.none
         ]
 
 
