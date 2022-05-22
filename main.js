@@ -54,18 +54,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Elm gives us a page to store
-    app.ports.sendPages.subscribe((pages) => {
-      if (pages.length === 0) {
-        console.log("No pages to store!");
-      } else {
-        console.log(`Storing pages: ${pages.map((p) => p[0])}`);
-        db.setMany(pages)
-          .then(() => {
-            console.log("Stored pages");
-          })
-          .catch((err) => {
-            console.error("Failure storing pages!", err);
-          });
+    app.ports.sendPages.subscribe(async (pages) => {
+      try {
+        await db.clear();
+        console.log("DB cleared");
+        if (pages.length === 0) {
+          console.log("No pages to store!");
+        } else {
+          console.log(`Storing pages: ${pages.map((p) => p[0])}`);
+          await db.setMany(pages);
+
+          console.log("Stored pages");
+        }
+      } catch (e) {
+        console.error("Failure storing pages!");
+        console.log(e);
       }
     });
 

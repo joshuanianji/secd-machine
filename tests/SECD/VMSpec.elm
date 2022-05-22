@@ -425,13 +425,23 @@ testRecursiveFuncs =
 
 testEvalFuncs : Test
 testEvalFuncs =
-    Test.describe "Testing evaluation functions" <|
+    Test.describe "Evaluation functions"
+        [ testEvalPage
+        , testGetPages
+        ]
+
+
+testEvalPage : Test
+testEvalPage =
+    Test.describe "evalPage" <|
         List.map
             (\( name, prog ) ->
                 Test.test name <|
                     \_ ->
                         let
-                            expectedLength =
+                            -- the expected steps is one less than the expected states
+                            -- since a step goes between two states
+                            expectedSteps =
                                 VM.initRaw prog
                                     |> VM.evaluate
                                     |> Tuple.first
@@ -442,9 +452,9 @@ testEvalFuncs =
                                     |> VM.evalPage 15 15
                                     |> .totalVMCount
                         in
-                        Expect.equal evalPageLength expectedLength
+                        Expect.equal evalPageLength (expectedSteps + 1)
             )
-            [ -- (* (+ 1 2) (+ 3 4))
+            [ -- Ensure all these programs terminate within one page
               ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
             , ( "Basic if statement"
               , Prog.fromList [ LDC 2, LDC 1, FUNC (COMPARE CMP_GT), SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
@@ -455,6 +465,37 @@ testEvalFuncs =
             , ( "isEven 2", mutualRecursiveIsEven 2 )
             , ( "isEven 6", mutualRecursiveIsEven 6 )
             , ( "factorial 3", factorial 3 )
+            , ( "factorial 7", factorial 7 )
+            , ( "recursiveLength", recursiveLength )
+            ]
+
+
+testGetPages : Test
+testGetPages =
+    Test.describe "getPages" <|
+        List.map
+            (\( name, prog ) ->
+                Test.test name <|
+                    \_ ->
+                        let
+                            -- the expected steps is one less than the expected states
+                            -- since a step goes between two states
+                            expectedSteps =
+                                VM.initRaw prog
+                                    |> VM.evaluate
+                                    |> Tuple.first
+
+                            evalPageLength =
+                                VM.initRaw prog
+                                    |> VM.getPages { maxPages = 10, pageSize = 4, chunkSize = 5 }
+                                    |> .totalVMCount
+                        in
+                        Expect.equal evalPageLength (expectedSteps + 1)
+            )
+            [ ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD ] )
+            , ( "Basic arithmetic 2", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
+            , ( "isEven 6", mutualRecursiveIsEven 6 )
+            , ( "factorial 10", factorial 10 )
             , ( "factorial 7", factorial 7 )
             , ( "recursiveLength", recursiveLength )
             ]

@@ -5,6 +5,7 @@ import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Lib.Cons as Cons exposing (Cons)
+import List.Zipper as Zipper exposing (Zipper)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 import SECD.VMEnv as Env exposing (EnvItem(..))
@@ -740,12 +741,14 @@ evalN vm chunkSize =
 
 ## evalPage
 
-evaluate a PAGE of VM states, or a list of chunks
-each page can holds `pageSize` chunks, and each chunk holds `chunkSize` states
+Evaluate a PAGE of VM states, or a list of chunks
+
+Each page can hold `pageSize` chunks, and each chunk holds `chunkSize` states
+
 We accumulate the first VM state of each chunk
 
   - if we're not finished, return `(totalVMs, chunkVMs, Err lastVMState)`
-    0 If we're finished, return `(totalVMs, chunkVMs, Ok vmResult)`
+  - If we're finished, return `(totalVMs, chunkVMs, Ok vmResult)`
 
 **Note** totalVMs is the count for _ALL_ vm states
 
@@ -766,13 +769,151 @@ evalPage pageSize chunkSize vm =
                         ( vmCount + vmChunkCount, chunkVM :: stateAcc, Ok val )
 
                     ( chunkVM, Err nextVM ) ->
-                        -- add 1 since we don't include the first VM in thechunk
+                        -- add 1 since we don't include the first VM in the chunk
                         helper nextVM (vmCount + chunkSize + 1) (pageCount + 1) (chunkVM :: stateAcc)
 
+        -- ading 1 to the page count since we don't include the first VM in the page
         ( totalVMCount, chunkVMs, result ) =
-            helper vm 0 0 []
+            helper vm 1 0 []
     in
     { totalVMCount = totalVMCount, chunkVMs = List.reverse chunkVMs, result = result }
+
+
+{-| getPages
+
+given a VM, calculate as many states it can reach
+Limit the amount of pages (groups of "chunks" that are stored in SessionStorage similar to a memory page) by maxPages
+Limit the amount of chunkVMs a page can store by pageSize
+Limit the amount of stets a chunk can store by chunkSize
+
+If we the VM terminates in time, also return the value
+Else, return the last unfinished VM state
+
+This function is used in VMView to initialize the model.
+
+-}
+type alias PagesData =
+    { result : Result VM VMResult
+    , initialPage : Zipper VM
+    , initialChunk : Zipper VM
+    , pages : Zipper Int
+    , totalVMCount : Int
+    , toJSValues : List ( Int, Encode.Value )
+    }
+
+
+getPages :
+    { maxPages : Int
+    , pageSize : Int
+    , chunkSize : Int
+    }
+    -> VM
+    -> PagesData
+getPages { maxPages, pageSize, chunkSize } vm =
+    let
+        -- returns the same result as getPages
+        getFirstChunk : PagesData
+        getFirstChunk =
+            let
+                ( initialChunk, firstChunkRes ) =
+                    evalN vm chunkSize
+            in
+            { result = firstChunkRes
+            , initialPage = Zipper.singleton vm
+            , initialChunk = Zipper.fromCons vm initialChunk
+            , pages = Zipper.singleton 0
+
+            -- adding one because the initial `vm` is not accounted for in the list of VMs
+            , totalVMCount = List.length initialChunk + 1
+            , toJSValues = []
+            }
+
+        -- takes in, and returns the same result as getPages
+        getFirstPage : PagesData -> PagesData
+        getFirstPage pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
+
+                Err nextState ->
+                    -- program needs more than one chunk
+                    -- calculate first page
+                    let
+                        firstPage =
+                            evalPage pageSize chunkSize nextState
+                    in
+                    { pagesData
+                        | result = firstPage.result
+                        , initialPage = Zipper.fromCons vm firstPage.chunkVMs
+                        , totalVMCount = pagesData.totalVMCount + firstPage.totalVMCount
+                    }
+
+        getRemainingPages : PagesData -> PagesData
+        getRemainingPages pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
+
+                Err secondPageVM ->
+                    -- VM does not terminate in one page. Calculate all pages (until max)
+                    let
+                        -- we also send the first page states to JS
+                        -- starting `vmCountAcc` for `remainingPagesHelper` at -1 because our starting point is the last calculated VM
+                        -- this VM state is already accounted for, so we basically have to subtract one.
+                        helperData =
+                            remainingPagesHelper 1 secondPageVM -1 [ ( 0, Encode.list encode <| Zipper.toList pagesData.initialPage ) ]
+                    in
+                    { pagesData
+                        | result = helperData.result
+                        , pages = Zipper.fromCons 0 (List.range 1 helperData.pageCount)
+                        , totalVMCount = pagesData.totalVMCount + helperData.totalVMCount
+                        , toJSValues = helperData.portData
+                    }
+
+        -- builds up all the pages to send to JS
+        remainingPagesHelper :
+            Int
+            -> VM
+            -> Int
+            -> List ( Int, Encode.Value )
+            ->
+                { result : Result VM VMResult
+                , pageCount : Int
+                , totalVMCount : Int
+                , portData : List ( Int, Encode.Value )
+                }
+        remainingPagesHelper pageCount vm_ vmCountAcc portDataAcc =
+            if pageCount == maxPages then
+                { result = Err vm_
+                , pageCount = pageCount
+                , totalVMCount = vmCountAcc
+                , portData = portDataAcc
+                }
+
+            else
+                let
+                    nthPage =
+                        evalPage pageSize chunkSize vm_
+                in
+                case nthPage.result of
+                    Ok vmResult ->
+                        -- VM terminates in this page
+                        { result = Ok vmResult
+                        , pageCount = pageCount
+                        , totalVMCount = vmCountAcc + nthPage.totalVMCount
+                        , portData = ( pageCount, Encode.list encode nthPage.chunkVMs ) :: portDataAcc
+                        }
+
+                    Err newVM ->
+                        remainingPagesHelper (pageCount + 1)
+                            newVM
+                            -- subtract 1 since the starting VM was counted twice
+                            (vmCountAcc + nthPage.totalVMCount - 1)
+                            (( pageCount, Encode.list encode nthPage.chunkVMs ) :: portDataAcc)
+    in
+    getFirstChunk
+        |> getFirstPage
+        |> getRemainingPages
 
 
 
