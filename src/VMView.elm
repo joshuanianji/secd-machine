@@ -1,5 +1,8 @@
 module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
+-- | VMView
+-- Views the VM, and lets the user go back and forth from different VM states
+
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
 import Json.Decode as Decode
@@ -46,15 +49,15 @@ type alias Model =
 
 type FetchStatus
     = Idle
-    | Loading PageLocation
+    | Loading { pageLocation : Location, chunkLocation : Location }
     | Error Error
 
 
 
--- where in the page we will locate when the page is loaded
+-- Lets us know where in the page or chunk we want to go.
 
 
-type PageLocation
+type Location
     = Beginning
     | End
 
@@ -240,7 +243,7 @@ update msg model =
         ( _, First ) ->
             ( { model
                 | pages = Zipper.first model.pages
-                , fetchStatus = Loading Beginning
+                , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
               }
             , Ports.fetchPage 0
             )
@@ -255,18 +258,15 @@ update msg model =
                     case Zipper.previous model.page of
                         Just newPage ->
                             let
-                                startVM =
-                                    Zipper.current newPage
-
-                                ( newChunk, _ ) =
-                                    VM.evalN startVM model.pagesInfo.chunkSize
+                                ( _, newChunk ) =
+                                    updatePage
+                                        { page = newPage
+                                        , pageLocation = Nothing
+                                        , chunkLocation = End
+                                        , pagesInfo = model.pagesInfo
+                                        }
                             in
-                            ( { model
-                                | chunk = Zipper.last <| Zipper.fromCons startVM newChunk
-                                , page = newPage
-                              }
-                            , Cmd.none
-                            )
+                            ( { model | page = newPage, chunk = newChunk }, Cmd.none )
 
                         Nothing ->
                             case Zipper.previous model.pages of
@@ -274,7 +274,7 @@ update msg model =
                                     -- fetch previous page from JS
                                     ( { model
                                         | pages = newPages
-                                        , fetchStatus = Loading End
+                                        , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
                                       }
                                     , Ports.fetchPage <| Zipper.current newPages
                                     )
@@ -293,18 +293,15 @@ update msg model =
                     case Zipper.next model.page of
                         Just newPage ->
                             let
-                                startVM =
-                                    Zipper.current newPage
-
-                                ( newChunk, _ ) =
-                                    VM.evalN startVM model.pagesInfo.chunkSize
+                                ( _, newChunk ) =
+                                    updatePage
+                                        { page = newPage
+                                        , pageLocation = Nothing
+                                        , chunkLocation = Beginning
+                                        , pagesInfo = model.pagesInfo
+                                        }
                             in
-                            ( { model
-                                | chunk = Zipper.fromCons startVM newChunk
-                                , page = newPage
-                              }
-                            , Cmd.none
-                            )
+                            ( { model | page = newPage, chunk = newChunk }, Cmd.none )
 
                         Nothing ->
                             case Zipper.next model.pages of
@@ -312,7 +309,7 @@ update msg model =
                                     -- fetch previous page from JS
                                     ( { model
                                         | pages = newPages
-                                        , fetchStatus = Loading Beginning
+                                        , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
                                       }
                                     , Ports.fetchPage <| Zipper.current newPages
                                     )
@@ -328,25 +325,23 @@ update msg model =
                     ( { model | chunk = Zipper.last model.chunk }, Cmd.none )
 
                 else
+                    -- go to the end of the current page
                     let
-                        newPage =
-                            Zipper.last model.page
-
-                        ( newChunk, _ ) =
-                            VM.evalN (Zipper.current newPage) model.pagesInfo.chunkSize
+                        ( newPage, newChunk ) =
+                            updatePage
+                                { page = model.page
+                                , pageLocation = Just End
+                                , chunkLocation = End
+                                , pagesInfo = model.pagesInfo
+                                }
                     in
-                    ( { model
-                        | page = newPage
-                        , chunk = Zipper.fromCons (Zipper.current newPage) newChunk
-                      }
-                    , Cmd.none
-                    )
+                    ( { model | page = newPage, chunk = newChunk }, Cmd.none )
 
             else
                 -- swap page
                 ( { model
                     | pages = Zipper.last model.pages
-                    , fetchStatus = Loading End
+                    , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
                   }
                 , Ports.fetchPage (Zipper.current <| Zipper.last model.pages)
                 )
@@ -372,51 +367,72 @@ update msg model =
             else
                 ( model, Cmd.none )
 
-        ( Loading pageLocation, GotPage res ) ->
+        ( Loading locs, GotPage res ) ->
             case res of
-                -- underalized meaning the we don't know where the zipper pointer is
-                -- it points to the beginning,
-                Ok ( _, unseralizedPage ) ->
+                Ok ( _, page ) ->
                     let
-                        ( page, chunk ) =
-                            case pageLocation of
-                                Beginning ->
-                                    let
-                                        seralizedPage =
-                                            Zipper.first unseralizedPage
-
-                                        ( evaledChunk, _ ) =
-                                            VM.evalN (Zipper.current seralizedPage) model.pagesInfo.chunkSize
-                                    in
-                                    ( seralizedPage
-                                    , Zipper.fromCons (Zipper.current seralizedPage) evaledChunk
-                                    )
-
-                                End ->
-                                    let
-                                        seralizedPage =
-                                            Zipper.last unseralizedPage
-
-                                        ( evaledChunk, _ ) =
-                                            VM.evalN (Zipper.current seralizedPage) model.pagesInfo.chunkSize
-                                    in
-                                    ( seralizedPage
-                                    , Zipper.last <| Zipper.fromCons (Zipper.current seralizedPage) evaledChunk
-                                    )
+                        ( newPage, newChunk ) =
+                            updatePage
+                                { page = page
+                                , pageLocation = Just locs.pageLocation
+                                , chunkLocation = locs.chunkLocation
+                                , pagesInfo = model.pagesInfo
+                                }
                     in
-                    ( { model
-                        | page = page
-                        , chunk = chunk
-                        , fetchStatus = Idle
-                      }
-                    , Cmd.none
-                    )
+                    ( { model | page = newPage, chunk = newChunk, fetchStatus = Idle }, Cmd.none )
 
                 Err n ->
                     ( { model | fetchStatus = Error n }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
+
+
+{-|
+
+
+## updatePage
+
+Updates Page zipper, and calculates a new chunk for it.
+
+If pageLocation is `Nothing`, do not update the page zipper and just calculate a new chunk.
+
+Remember:
+
+  - Page: a list of states that represent the beginning of each chunk
+  - Chunk: a group of sequential states
+
+Returns: (`Page Zipper`, `Chunk Zipper`)
+
+-}
+updatePage : { page : Zipper VM, pageLocation : Maybe Location, chunkLocation : Location, pagesInfo : PagesInfo } -> ( Zipper VM, Zipper VM )
+updatePage { page, pageLocation, chunkLocation, pagesInfo } =
+    let
+        locToZipper : Maybe Location -> Zipper a -> Zipper a
+        locToZipper loc =
+            case loc of
+                Just Beginning ->
+                    Zipper.first
+
+                Just End ->
+                    Zipper.last
+
+                Nothing ->
+                    identity
+
+        -- update zipper pointer in the page
+        newPage =
+            locToZipper pageLocation page
+
+        ( evaledChunk, _ ) =
+            VM.evalN (Zipper.current newPage) pagesInfo.chunkSize
+
+        -- update chunk pointer in the chunk (singe evaledChunk will always point to the first element)
+        newChunk =
+            Zipper.fromCons (Zipper.current newPage) evaledChunk
+                |> locToZipper (Just chunkLocation)
+    in
+    ( newPage, newChunk )
 
 
 
@@ -462,7 +478,7 @@ finalVMState : Model -> Element Msg
 finalVMState model =
     let
         atLastState =
-            Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages
+            Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages && model.fetchStatus == Idle
     in
     if atLastState then
         case model.latestVM of
