@@ -660,61 +660,22 @@ evaluate inputVM =
 {-|
 
 
-## evalChunk
+## stepNAccumulate
 
-evaluate a VM chunk, returning the state/value, and first VM state in that chunk
+Given a starting VM, step a max of "n" times, storing each VM state in a list.
 
-Note that, compared to evalN, evalChunk only keeps the first VM state
+`evalN n startVM` does not include startVM in the states we return.
 
-  - If we're not finished, return `(startVM, Err nextVM)`
-  - If we're finished, return `(startVM, Ok (vmResult, count))`
+  - If we're not finished, return `(vms, Err nextVM)`
+  - If we're finished, return `(vms, Ok (vmResult, count))`
 
-**Note**: initial state is just the VM that was passed in
+`nextVM` is not included in the accumulated states.
 
-`nextVM` is the vm you would want to start off of for the next chunk.
-
-Running `evalN startVM n` will give you a list of VMs from `startVM + 1` to `nextVM - 1`.
+The VM returned if the program is not finished executing is also not included in the list of VM states
 
 -}
-evalChunk : VM -> Int -> ( VM, Result VM ( VMResult, Int ) )
-evalChunk vm chunkSize =
-    let
-        helper : Int -> VM -> Result VM ( VMResult, Int )
-        helper n vm_ =
-            case step vm_ of
-                Unfinished newVm ->
-                    if n == chunkSize then
-                        Err newVm
-
-                    else
-                        helper (n + 1) newVm
-
-                Finished _ val ->
-                    Ok ( Ok val, n )
-
-                Error _ err ->
-                    Ok ( Err err, n )
-    in
-    ( vm, helper 0 vm )
-
-
-{-|
-
-
-## evalN
-
-evaluate a VM a max of `chunkSize` times, returning all states in that range
-
-  - If we're not finished, return `Err (currState, allStates)`
-  - If we're finished, return `Ok (returnValue, allStates)`
-
-**Note**: we do not include the initial VM in the list of VM states
-
-The VM returned if the program is not finished execuing is also not included in the list of VM states
-
--}
-evalN : VM -> Int -> ( List VM, Result VM VMResult )
-evalN vm chunkSize =
+stepNAccumulate : Int -> VM -> ( List VM, Result VM VMResult )
+stepNAccumulate chunkSize vm =
     let
         helper : Int -> VM -> List VM -> ( List VM, Result VM VMResult )
         helper n vm_ states =
@@ -730,7 +691,7 @@ evalN vm chunkSize =
                     ( states, Ok <| Ok val )
 
                 Error _ err ->
-                    ( states, Ok (Err err) )
+                    ( states, Ok <| Err err )
     in
     helper chunkSize vm []
         |> Tuple.mapFirst List.reverse
@@ -739,44 +700,87 @@ evalN vm chunkSize =
 {-|
 
 
+## evalChunk
+
+Given a starting VM, evaluate the chunk starting from that VM.
+
+Note that, compared to evalN, evalChunk only keeps the first VM state.
+
+  - If we're not finished, return `(count, Err nextVM)`
+  - If we're finished, return `(count, Ok vmResult)`
+
+`nextVM` is the vm you would want to start off of for the next chunk. It is not included in the current chunk.
+
+`count` is the total size of the chunk. The count includes the inital VM state
+
+
+### Dev notes:
+
+This function is essentially `stepNAccumulate n (chunkSize - 1)`. The reason I subtract 1 from the chunk size is that
+the initial VM state is also included in the chunk, so to get a total of `n` states in the chunk, I step (n-1) times.
+
+-}
+evalChunk : VM -> Int -> ( Int, Result VM VMResult )
+evalChunk startVM chunkSize =
+    let
+        ( vms, result ) =
+            stepNAccumulate (chunkSize - 1) startVM
+    in
+    ( List.length vms + 1, result )
+
+
+{-|
+
+
 ## evalPage
 
-Evaluate a PAGE of VM states, or a list of chunks
+Given a starting VM state, evaluate a page starting from that state.
 
 Each page can hold `pageSize` chunks, and each chunk holds `chunkSize` states
+Thus, each page is limited to `pageSize * chunkSize` states
 
 We accumulate the first VM state of each chunk
 
-  - if we're not finished, return `(totalVMs, chunkVMs, Err lastVMState)`
+  - if we're not finished, return `(totalVMs, chunkVMs, Err newVMState)`
   - If we're finished, return `(totalVMs, chunkVMs, Ok vmResult)`
 
-**Note** totalVMs is the count for _ALL_ vm states
+If the evaluation does not terminate, `newVMState` is fresh VM state to start the next calculation off of
+
+**Note** chunkVMs does not include the input VM. Thus, totalVMCount is one more than `List.length chunkVMs`.
+This helps us create the Zipper more easily, although the code is a little bit messier...
 
 -}
 evalPage : Int -> Int -> VM -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
 evalPage pageSize chunkSize vm =
     let
+        -- evalPage helper that accumulates the chunkVMs in the parameter
         helper : VM -> Int -> Int -> List VM -> ( Int, List VM, Result VM VMResult )
-        helper startVM vmCount pageCount stateAcc =
-            if pageCount == pageSize then
+        helper startVM vmCount chunkCount stateAcc =
+            if chunkCount == pageSize then
                 ( vmCount, stateAcc, Err startVM )
 
             else
                 -- chunkVM is the first VM state of the chunk
                 case evalChunk startVM chunkSize of
-                    ( chunkVM, Ok ( val, vmChunkCount ) ) ->
-                        -- evaluation finished
-                        ( vmCount + vmChunkCount, chunkVM :: stateAcc, Ok val )
+                    ( currChunkSize, Ok val ) ->
+                        -- evaluation finished early. currChunkSize is less than chunkSize
+                        ( vmCount + currChunkSize, startVM :: stateAcc, Ok val )
 
-                    ( chunkVM, Err nextVM ) ->
-                        -- add 1 since we don't include the first VM in the chunk
-                        helper nextVM (vmCount + chunkSize + 1) (pageCount + 1) (chunkVM :: stateAcc)
-
-        -- ading 1 to the page count since we don't include the first VM in the page
-        ( totalVMCount, chunkVMs, result ) =
-            helper vm 1 0 []
+                    ( _, Err nextVM ) ->
+                        helper nextVM (vmCount + chunkSize) (chunkCount + 1) (startVM :: stateAcc)
     in
-    { totalVMCount = totalVMCount, chunkVMs = List.reverse chunkVMs, result = result }
+    case evalChunk vm chunkSize of
+        ( currChunkSize, Ok val ) ->
+            -- evaluation finished in one chunk!
+            { totalVMCount = currChunkSize, chunkVMs = [], result = Ok val }
+
+        ( _, Err nextVM ) ->
+            -- start from the NEXT chunk, since we don't want to include the input startChunk
+            let
+                ( totalVMCount, chunkVMs, result ) =
+                    helper nextVM chunkSize 1 []
+            in
+            { totalVMCount = totalVMCount, chunkVMs = List.reverse chunkVMs, result = result }
 
 
 {-| getPages
@@ -816,7 +820,7 @@ getPages { maxPages, pageSize, chunkSize } vm =
         getFirstChunk =
             let
                 ( initialChunk, firstChunkRes ) =
-                    evalN vm chunkSize
+                    stepNAccumulate (chunkSize - 1) vm
             in
             { result = firstChunkRes
             , initialPage = Zipper.singleton vm
@@ -835,17 +839,18 @@ getPages { maxPages, pageSize, chunkSize } vm =
                 Ok _ ->
                     pagesData
 
-                Err nextState ->
+                -- we don't care about the nextState, since we will recalculate the page starting from the initial VM
+                Err _ ->
                     -- program needs more than one chunk
                     -- calculate first page
                     let
                         firstPage =
-                            evalPage pageSize chunkSize nextState
+                            evalPage pageSize chunkSize vm
                     in
                     { pagesData
                         | result = firstPage.result
                         , initialPage = Zipper.fromCons vm firstPage.chunkVMs
-                        , totalVMCount = pagesData.totalVMCount + firstPage.totalVMCount
+                        , totalVMCount = firstPage.totalVMCount
                     }
 
         getRemainingPages : PagesData -> PagesData
@@ -858,10 +863,8 @@ getPages { maxPages, pageSize, chunkSize } vm =
                     -- VM does not terminate in one page. Calculate all pages (until max)
                     let
                         -- we also send the first page states to JS
-                        -- starting `vmCountAcc` for `remainingPagesHelper` at -1 because our starting point is the last calculated VM
-                        -- this VM state is already accounted for, so we basically have to subtract one.
                         helperData =
-                            remainingPagesHelper 1 secondPageVM -1 [ ( 0, Encode.list encode <| Zipper.toList pagesData.initialPage ) ]
+                            remainingPagesHelper 1 secondPageVM 0 [ ( 0, Encode.list encode <| Zipper.toList pagesData.initialPage ) ]
                     in
                     { pagesData
                         | result = helperData.result
@@ -901,15 +904,14 @@ getPages { maxPages, pageSize, chunkSize } vm =
                         { result = Ok vmResult
                         , pageCount = pageCount
                         , totalVMCount = vmCountAcc + nthPage.totalVMCount
-                        , portData = ( pageCount, Encode.list encode nthPage.chunkVMs ) :: portDataAcc
+                        , portData = ( pageCount, Encode.list encode (vm_ :: nthPage.chunkVMs) ) :: portDataAcc
                         }
 
                     Err newVM ->
                         remainingPagesHelper (pageCount + 1)
                             newVM
-                            -- subtract 1 since the starting VM was counted twice
-                            (vmCountAcc + nthPage.totalVMCount - 1)
-                            (( pageCount, Encode.list encode nthPage.chunkVMs ) :: portDataAcc)
+                            (vmCountAcc + nthPage.totalVMCount)
+                            (( pageCount, Encode.list encode (vm_ :: nthPage.chunkVMs) ) :: portDataAcc)
     in
     getFirstChunk
         |> getFirstPage

@@ -125,15 +125,25 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( model.fetchStatus, msg ) of
-        -- goes to first state in current chunk
         ( _, First ) ->
-            ( { model
-                | pages = Zipper.first model.pages
-                , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
-              }
-                |> updateStateIndex 0
-            , Ports.fetchPage 0
-            )
+            if Zipper.isFirst model.pages then
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just Beginning
+                        , chunkLocation = Beginning
+                        }
+                    |> updateStateIndex 0
+                , Cmd.none
+                )
+
+            else
+                ( { model
+                    | pages = Zipper.first model.pages
+                    , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
+                  }
+                    |> updateStateIndex 0
+                , Ports.fetchPage 0
+                )
 
         ( _, Previous ) ->
             case Zipper.previous model.chunk of
@@ -147,18 +157,13 @@ update msg model =
                     -- get previous chunk
                     case Zipper.previous model.page of
                         Just newPage ->
-                            let
-                                ( _, newChunk ) =
-                                    updatePage
-                                        { page = newPage
-                                        , pageLocation = Nothing
-                                        , chunkLocation = End
-                                        , pagesInfo = model.pagesInfo
-                                        }
-                            in
-                            ( { model | page = newPage, chunk = newChunk }
+                            ( { model | page = newPage }
+                                |> updatePageLocation
+                                    { pageLocation = Nothing
+                                    , chunkLocation = End
+                                    }
                                 |> updateStateIndex (model.index - 1)
-                            , Cmd.none
+                            , Ports.log "Previous: New chunk!"
                             )
 
                         Nothing ->
@@ -189,18 +194,13 @@ update msg model =
                     -- get next chunk
                     case Zipper.next model.page of
                         Just newPage ->
-                            let
-                                ( _, newChunk ) =
-                                    updatePage
-                                        { page = newPage
-                                        , pageLocation = Nothing
-                                        , chunkLocation = Beginning
-                                        , pagesInfo = model.pagesInfo
-                                        }
-                            in
-                            ( { model | page = newPage, chunk = newChunk }
+                            ( { model | page = newPage }
+                                |> updatePageLocation
+                                    { pageLocation = Nothing
+                                    , chunkLocation = Beginning
+                                    }
                                 |> updateStateIndex (model.index + 1)
-                            , Cmd.none
+                            , Ports.log "Step: New chunk!"
                             )
 
                         Nothing ->
@@ -221,17 +221,11 @@ update msg model =
 
         ( _, Last ) ->
             if Zipper.isLast model.pages then
-                -- go to the end of the current page
-                let
-                    ( newPage, newChunk ) =
-                        updatePage
-                            { page = model.page
-                            , pageLocation = Just End
-                            , chunkLocation = End
-                            , pagesInfo = model.pagesInfo
-                            }
-                in
-                ( { model | page = newPage, chunk = newChunk }
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just End
+                        , chunkLocation = End
+                        }
                     |> updateStateIndex (model.totalStates - 1)
                 , Cmd.none
                 )
@@ -251,13 +245,24 @@ update msg model =
                 { pageNum, pageLocation, chunkLocation } =
                     Util.getLocationInfo n model.pagesInfo
             in
-            ( { model
-                | pages = Util.zipperNth pageNum model.pages
-                , fetchStatus = Loading { pageLocation = Indexed pageLocation, chunkLocation = Indexed chunkLocation }
-              }
-                |> updateStateIndex n
-            , Ports.fetchPage pageNum
-            )
+            if Zipper.current model.pages == pageNum then
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just <| Indexed pageLocation
+                        , chunkLocation = Indexed chunkLocation
+                        }
+                    |> updateStateIndex n
+                , Cmd.none
+                )
+
+            else
+                ( { model
+                    | pages = Util.zipperNth pageNum model.pages
+                    , fetchStatus = Loading { pageLocation = Indexed pageLocation, chunkLocation = Indexed chunkLocation }
+                  }
+                    |> updateStateIndex n
+                , Ports.fetchPage pageNum
+                )
 
         ( _, UpdateSlider val ) ->
             ( { model | sliderIdx = val }, Cmd.none )
@@ -286,16 +291,13 @@ update msg model =
         ( Loading locs, GotPage res ) ->
             case res of
                 Ok ( _, page ) ->
-                    let
-                        ( newPage, newChunk ) =
-                            updatePage
-                                { page = page
-                                , pageLocation = Just locs.pageLocation
-                                , chunkLocation = locs.chunkLocation
-                                , pagesInfo = model.pagesInfo
-                                }
-                    in
-                    ( { model | page = newPage, chunk = newChunk, fetchStatus = Idle }, Cmd.none )
+                    ( { model | fetchStatus = Idle, page = page }
+                        |> updatePageLocation
+                            { pageLocation = Just locs.pageLocation
+                            , chunkLocation = locs.chunkLocation
+                            }
+                    , Cmd.none
+                    )
 
                 Err n ->
                     ( { model | fetchStatus = Error n }, Cmd.none )
@@ -307,9 +309,13 @@ update msg model =
 {-|
 
 
-## updatePage
+## updatePageLocation
 
-Updates Page zipper(zipper of Chunk VM inits), and calculates a new chunk for it.
+`update` helper function
+
+Updates current page (zipper of Chunk VM inits), and calculates a new chunk for it. Does not move to a new page.
+
+**NOTE**: If the Location is `Indexed`, we take in 0-indexed values.
 
 If pageLocation is `Nothing`, do not update the page zipper and just calculate a new chunk.
 
@@ -321,8 +327,8 @@ Remember:
 Returns: (`Page Zipper`, `Chunk Zipper`)
 
 -}
-updatePage : { page : Zipper VM, pageLocation : Maybe Location, chunkLocation : Location, pagesInfo : PagesInfo } -> ( Zipper VM, Zipper VM )
-updatePage { page, pageLocation, chunkLocation, pagesInfo } =
+updatePageLocation : { pageLocation : Maybe Location, chunkLocation : Location } -> Model -> Model
+updatePageLocation { pageLocation, chunkLocation } model =
     let
         locToZipper : Maybe Location -> Zipper a -> Zipper a
         locToZipper loc =
@@ -341,17 +347,17 @@ updatePage { page, pageLocation, chunkLocation, pagesInfo } =
 
         -- update zipper pointer in the page
         newPage =
-            locToZipper pageLocation page
+            locToZipper pageLocation model.page
 
-        ( evaledChunk, _ ) =
-            VM.evalN (Zipper.current newPage) pagesInfo.chunkSize
+        ( remainingChunk, _ ) =
+            VM.stepNAccumulate (model.pagesInfo.chunkSize - 1) (Zipper.current newPage)
 
-        -- update chunk pointer in the chunk (singe evaledChunk will always point to the first element)
+        -- update chunk pointer in the chunk (single evaledChunk will always point to the first element)
         newChunk =
-            Zipper.fromCons (Zipper.current newPage) evaledChunk
+            Zipper.fromCons (Zipper.current newPage) remainingChunk
                 |> locToZipper (Just chunkLocation)
     in
-    ( newPage, newChunk )
+    { model | page = newPage, chunk = newChunk }
 
 
 {-|

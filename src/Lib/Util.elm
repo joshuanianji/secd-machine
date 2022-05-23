@@ -84,7 +84,7 @@ zipperNth n z =
 
 ## getLocationInfo
 
-takes in an index and finds out which page and chunk it's from.
+takes in an index and finds out which page and chunk it's from. 0-indexed.
 
 Returns:
 

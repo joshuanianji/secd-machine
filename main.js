@@ -82,5 +82,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           console.log(`Failed to fetch page ${n}`, err);
         });
     });
+
+    app.ports.log.subscribe((str) => {
+      console.info(`From ELM: ${str}`);
+    });
   });
 });

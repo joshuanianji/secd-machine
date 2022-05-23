@@ -32,3 +32,10 @@ port fetchPage : Int -> Cmd msg
 
 
 port fetchPageResponse : (( Int, Value ) -> msg) -> Sub msg
+
+
+
+-- misc
+
+
+port log : String -> Cmd msg

@@ -426,18 +426,57 @@ testRecursiveFuncs =
 testEvalFuncs : Test
 testEvalFuncs =
     Test.describe "Evaluation functions"
-        [ testEvalPage
+        [ testStepNAccumulate
+        , testEvalPage
         , testGetPages
         ]
 
 
-testEvalPage : Test
-testEvalPage =
-    Test.describe "evalPage" <|
+testStepNAccumulate : Test
+testStepNAccumulate =
+    Test.describe "stepNAccumulate" <|
         List.map
             (\( name, prog ) ->
                 Test.test name <|
                     \_ ->
+                        VM.initRaw prog
+                            |> VM.stepNAccumulate 5
+                            |> Tuple.first
+                            |> List.length
+                            |> Expect.atMost 5
+            )
+            [ -- Ensure all these programs terminate within one page
+              ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
+            , ( "Basic if statement"
+              , Prog.fromList [ LDC 2, LDC 1, FUNC (COMPARE CMP_GT), SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
+              )
+            , ( "Basic Let Statements"
+              , Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 5, FUNC CONS, LDF, NESTED [ NIL, LDC 2, FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 0, 0 ), LD ( 2, 0 ), FUNC ADD, LD ( 1, 0 ), LD ( 2, 1 ), FUNC ADD, FUNC ADD, RTN ], AP, RTN ], AP, RTN ], AP ]
+              )
+            , ( "isEven 2", mutualRecursiveIsEven 2 )
+            , ( "isEven 6", mutualRecursiveIsEven 6 )
+            , ( "factorial 3", factorial 3 )
+            , ( "factorial 7", factorial 7 )
+            , ( "recursiveLength", recursiveLength )
+            ]
+
+
+testEvalPage : Test
+testEvalPage =
+    Test.describe "evalPage"
+        [ evalPageExact
+        , evalPageBoundaries
+        , evalPageChunks
+        ]
+
+
+evalPageExact : Test
+evalPageExact =
+    Test.describe "eval page when we know the exact length of the result" <|
+        List.map
+            (\( name, prog ) ->
+                Test.fuzz2 (Fuzz.intRange 15 20) (Fuzz.intRange 10 20) name <|
+                    \pageSize chunkSize ->
                         let
                             -- the expected steps is one less than the expected states
                             -- since a step goes between two states
@@ -445,14 +484,71 @@ testEvalPage =
                                 VM.initRaw prog
                                     |> VM.evaluate
                                     |> Tuple.first
-
-                            -- the size when n=8 is 99 steps, so make sure the page can hold more than that
-                            evalPageLength =
-                                VM.initRaw prog
-                                    |> VM.evalPage 15 15
-                                    |> .totalVMCount
                         in
-                        Expect.equal evalPageLength (expectedSteps + 1)
+                        VM.initRaw prog
+                            |> VM.evalPage pageSize chunkSize
+                            |> .totalVMCount
+                            |> Expect.equal (expectedSteps + 1)
+            )
+            [ -- Ensure all these programs terminate within one page
+              ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
+            , ( "Basic if statement"
+              , Prog.fromList [ LDC 2, LDC 1, FUNC (COMPARE CMP_GT), SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
+              )
+            , ( "Basic Let Statements"
+              , Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 5, FUNC CONS, LDF, NESTED [ NIL, LDC 2, FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 0, 0 ), LD ( 2, 0 ), FUNC ADD, LD ( 1, 0 ), LD ( 2, 1 ), FUNC ADD, FUNC ADD, RTN ], AP, RTN ], AP, RTN ], AP ]
+              )
+            , ( "isEven 2", mutualRecursiveIsEven 2 )
+            , ( "isEven 6", mutualRecursiveIsEven 6 )
+            , ( "factorial 3", factorial 3 )
+            , ( "factorial 6", factorial 6 )
+            , ( "recursiveLength", recursiveLength )
+            ]
+
+
+evalPageBoundaries : Test
+evalPageBoundaries =
+    Test.describe "evalPage for overflows" <|
+        List.map
+            (\( name, prog ) ->
+                Test.test name <|
+                    \_ ->
+                        -- states should not exceed page length
+                        -- which is 25 (5 chunks of 5 states each)
+                        VM.initRaw prog
+                            |> VM.evalPage 5 5
+                            |> .totalVMCount
+                            |> Expect.atMost 25
+            )
+            [ -- Ensure all these programs terminate within one page
+              ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
+            , ( "Basic if statement"
+              , Prog.fromList [ LDC 2, LDC 1, FUNC (COMPARE CMP_GT), SEL, NESTED [ LDC 1, JOIN ], NESTED [ LDC 2, JOIN ] ]
+              )
+            , ( "Basic Let Statements"
+              , Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC 5, FUNC CONS, LDF, NESTED [ NIL, LDC 2, FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 0, 0 ), LD ( 2, 0 ), FUNC ADD, LD ( 1, 0 ), LD ( 2, 1 ), FUNC ADD, FUNC ADD, RTN ], AP, RTN ], AP, RTN ], AP ]
+              )
+            , ( "isEven 2", mutualRecursiveIsEven 2 )
+            , ( "isEven 6", mutualRecursiveIsEven 6 )
+            , ( "factorial 3", factorial 3 )
+            , ( "factorial 7", factorial 7 )
+            , ( "recursiveLength", recursiveLength )
+            ]
+
+
+evalPageChunks : Test
+evalPageChunks =
+    Test.describe "evalPage has the correct amount of chunks" <|
+        List.map
+            (\( name, prog ) ->
+                Test.test name <|
+                    \_ ->
+                        -- chunkVMs should not include the first chunkVM, so it should max out at one less than the page size
+                        VM.initRaw prog
+                            |> VM.evalPage 5 5
+                            |> .chunkVMs
+                            |> List.length
+                            |> Expect.atMost 4
             )
             [ -- Ensure all these programs terminate within one page
               ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
@@ -484,13 +580,11 @@ testGetPages =
                                 VM.initRaw prog
                                     |> VM.evaluate
                                     |> Tuple.first
-
-                            evalPageLength =
-                                VM.initRaw prog
-                                    |> VM.getPages { maxPages = 10, pageSize = 4, chunkSize = 5 }
-                                    |> .totalVMCount
                         in
-                        Expect.equal evalPageLength (expectedSteps + 1)
+                        VM.initRaw prog
+                            |> VM.getPages { maxPages = 10, pageSize = 4, chunkSize = 5 }
+                            |> .totalVMCount
+                            |> Expect.equal (expectedSteps + 1)
             )
             [ ( "Basic arithmetic", Prog.fromList [ LDC 4, LDC 3, FUNC ADD ] )
             , ( "Basic arithmetic 2", Prog.fromList [ LDC 4, LDC 3, FUNC ADD, LDC 2, LDC 1, FUNC ADD, FUNC MULT ] )
