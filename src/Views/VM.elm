@@ -1,6 +1,6 @@
-module VMView exposing (Model, Msg, init, subscriptions, update, view)
+module Views.VM exposing (Model, Msg, init, subscriptions, update, view)
 
--- | VMView
+-- | Vm View
 -- Views the VM, and lets the user go back and forth from different VM states
 
 import Browser.Navigation exposing (Key)
