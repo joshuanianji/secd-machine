@@ -13,6 +13,7 @@
             "elm/parser": "1.1.0",
             "elm-community/list-extra": "8.5.2",
             "feathericons/elm-feather": "1.5.0",
+            "lynn/elm-ordinal": "1.0.4",
             "mdgriffith/elm-ui": "1.1.8",
             "ohanhi/keyboard": "2.0.1",
             "pablohirafuji/elm-syntax-highlight": "3.4.1",

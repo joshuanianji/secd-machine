@@ -3,6 +3,8 @@ module Lib.Colours exposing (..)
 import Element exposing (Color)
 
 
+{-| The higher the alpha, the less transparent the colour is.
+-}
 greyAlpha : Float -> Color
 greyAlpha =
     Element.rgba255 38 50 56

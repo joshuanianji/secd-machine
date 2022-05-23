@@ -65,5 +65,6 @@ expectCoderunSuccess code expected =
     AST.parse code
         |> Result.mapError Util.deadEndsToString
         |> Result.andThen Prog.compile
-        |> Result.andThen (VM.initRaw >> VM.evaluate)
-        |> Expect.equal (Ok expected)
+        |> Result.map (VM.initRaw >> VM.evaluate)
+        |> Result.map Tuple.second
+        |> Expect.equal (Ok <| Ok expected)

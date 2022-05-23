@@ -1,4 +1,6 @@
 import { Elm } from "./src/Main.elm";
+// use indexedDB for storage
+import * as db from "idb-keyval";
 import CodeMirror from "codemirror";
 import "codemirror/theme/material.css";
 import "codemirror/lib/codemirror.css";
@@ -11,7 +13,10 @@ import "./style.scss";
 
 import { examples as codeExamples } from "./examples/";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  db.clear().then(() => {
+    console.log("DB cleared");
+  });
   const root = document.getElementById("app");
   const app = Elm.Main.init({
     node: root,
@@ -21,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
         height: window.innerHeight,
       },
       codeExamples: codeExamples,
-      initialCode: codeExamples[0]["examples"][0][1], // starts off with the arithmetic example
+      initialCode: codeExamples[2]["examples"][2][1], // starts off with the lazy infinite lists
     },
   });
 
@@ -46,6 +51,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
     app.ports.updateCode.subscribe((val) => {
       cm.setValue(val);
+    });
+
+    // Elm gives us a page to store
+    app.ports.sendPages.subscribe(async (pages) => {
+      try {
+        await db.clear();
+        console.log("DB cleared");
+        if (pages.length === 0) {
+          console.log("No pages to store!");
+        } else {
+          console.log(`Storing pages: ${pages.map((p) => p[0])}`);
+          await db.setMany(pages);
+
+          console.log("Stored pages");
+        }
+      } catch (e) {
+        console.error("Failure storing pages!");
+        console.log(e);
+      }
+    });
+
+    app.ports.fetchPage.subscribe((n) => {
+      db.get(n)
+        .then((val) => {
+          console.log(`JS: Got page ${n}`);
+          app.ports.fetchPageResponse.send([n, val]);
+        })
+        .catch((err) => {
+          console.log(`Failed to fetch page ${n}`, err);
+        });
+    });
+
+    app.ports.log.subscribe((str) => {
+      console.info(`From ELM: ${str}`);
     });
   });
 });

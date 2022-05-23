@@ -74,8 +74,8 @@ init flags =
         Ok f ->
             ( Success
                 { code = f.initialCode
-                , openTabs = Set.fromList [ "Basics", "howto" ]
-                , currCodeExample = Ok "Arithmetic"
+                , openTabs = Set.fromList [ "Complex", "howto" ]
+                , currCodeExample = Ok "Lazy Infinite Lists"
                 , compiled = Idle
                 , codeExamples = f.codeExamples
                 , screen = f.screen
@@ -165,7 +165,7 @@ updateSuccess msg model =
                         Ok prog ->
                             let
                                 ( vmViewModel, vmViewMsg ) =
-                                    VMView.init prog
+                                    VMView.init { maxPages = 15, pageSize = 10, chunkSize = 10 } prog
                             in
                             ( { model | compiled = CompileSuccess ast vmViewModel }, Cmd.map VMViewMsg vmViewMsg )
 

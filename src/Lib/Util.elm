@@ -2,6 +2,7 @@ module Lib.Util exposing (..)
 
 import Element exposing (Attribute, Element)
 import FeatherIcons exposing (Icon)
+import List.Zipper as Zipper exposing (Zipper)
 import Parser exposing (DeadEnd, Problem(..))
 
 
@@ -43,6 +44,62 @@ foldResult r =
 
         Err a ->
             a
+
+
+{-|
+
+
+## focusN
+
+focus on the nth element in a zipper
+
+If `n<=0`, we focus on the first element
+
+If `n` is out of bounds, the zipper points to the last element
+
+-}
+zipperNth : Int -> Zipper a -> Zipper a
+zipperNth n z =
+    let
+        first =
+            Zipper.first z
+
+        helper n_ z_ =
+            if n_ <= 0 then
+                z_
+
+            else
+                case Zipper.next z_ of
+                    Nothing ->
+                        z_
+
+                    Just z__ ->
+                        helper (n_ - 1) z__
+    in
+    helper n first
+
+
+{-|
+
+
+## getLocationInfo
+
+takes in an index and finds out which page and chunk it's from. 0-indexed.
+
+Returns:
+
+    { pageNum = Int -- which page to retrieve JS from
+    , pageLocation = Int -- where inside the page to load the chunk
+    , chunkLocation = Int -- where inside the chunk to go to
+    }
+
+-}
+getLocationInfo : Int -> { a | pageSize : Int, chunkSize : Int } -> { pageNum : Int, pageLocation : Int, chunkLocation : Int }
+getLocationInfo n { pageSize, chunkSize } =
+    { pageNum = n // (pageSize * chunkSize)
+    , pageLocation = modBy (pageSize * chunkSize) n // chunkSize
+    , chunkLocation = modBy chunkSize n
+    }
 
 
 

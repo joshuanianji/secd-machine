@@ -1,13 +1,26 @@
 module VMView exposing (Model, Msg, init, subscriptions, update, view)
 
+-- | VMView
+-- Views the VM, and lets the user go back and forth from different VM states
+
 import Browser.Navigation exposing (Key)
 import Element exposing (Element)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Input as Input
+import Json.Decode as Decode
+import Json.Encode as Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
+import Lib.Colours as Colours
+import Lib.Util as Util
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
+import Ordinal exposing (ordinal)
+import Ports
+import SECD.Error as Error exposing (Error)
 import SECD.Program exposing (Program)
-import SECD.VM as VM
+import SECD.VM as VM exposing (VM, VMResult)
 
 
 
@@ -15,38 +28,78 @@ import SECD.VM as VM
 
 
 type alias Model =
-    { states : Zipper VM.State
+    { -- which state index are we in?
+      -- also, keep track of the slider position separately
+      index : Int
+    , sliderIdx : Int
 
-    -- each "page" holds 100 VM states
-    -- the "states" hold the current 100 states of the VM
-    -- the rest are held in SessionStorage
+    -- current chunk holds the VM states in the current chunk
+    , chunk : Zipper VM
+
+    -- current page holds the starting positions for each chunk
+    , page : Zipper VM
+
+    -- Keeps track of the IDs of all the generated pages, if we need to swap a page
     , pages : Zipper Int
+
+    -- furthest calculated VM state (either a state, or a Result)
+    , latestVM : Result VM VMResult
+
+    -- total states to keep track of
+    , totalStates : Int
     , pressedKeys : List Key
+    , pagesInfo : PagesInfo
+
+    -- keeping compiled code to view
+    , compiled : Program
+
+    -- status when we're fetching a page
+    , fetchStatus : FetchStatus
     }
 
 
-init : Program -> ( Model, Cmd Msg )
-init prog =
+type FetchStatus
+    = Idle
+    | Loading { pageLocation : Location, chunkLocation : Location }
+    | Error Error
+
+
+
+-- Lets us know where in the page or chunk we want to go.
+
+
+type Location
+    = Beginning
+    | End
+    | Indexed Int -- specific index (0-indexed)
+
+
+type alias PagesInfo =
+    { maxPages : Int, pageSize : Int, chunkSize : Int }
+
+
+init : PagesInfo -> Program -> ( Model, Cmd Msg )
+init pagesInfo prog =
     let
         vm =
             VM.initRaw prog
 
-        currState =
-            VM.initState vm
-
-        afters =
-            case currState of
-                VM.Unfinished nextState ->
-                    VM.evalList nextState
-
-                _ ->
-                    []
+        pagesData =
+            VM.getPages pagesInfo vm
     in
-    ( { states = Zipper.from [] currState afters
-      , pages = Zipper.from [] 0 []
+    ( { index = 0
+      , sliderIdx = 0
+      , chunk = pagesData.initialChunk
+      , page = pagesData.initialPage
+      , pages = pagesData.pages
+      , latestVM = pagesData.result
+      , totalStates = pagesData.totalVMCount
       , pressedKeys = []
+      , pagesInfo = pagesInfo
+      , compiled = prog
+      , fetchStatus = Idle
       }
-    , Cmd.none
+    , Ports.sendPages pagesData.toJSValues
     )
 
 
@@ -59,7 +112,10 @@ type Msg
     | Previous
     | Step
     | Last
+    | ToIndex Int
+    | UpdateSlider Int
     | KeyMsg Keyboard.Msg
+    | GotPage (Result Error ( Int, Zipper VM ))
 
 
 
@@ -68,30 +124,150 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        First ->
-            ( { model | states = Zipper.first model.states }, Cmd.none )
+    case ( model.fetchStatus, msg ) of
+        ( _, First ) ->
+            if Zipper.isFirst model.pages then
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just Beginning
+                        , chunkLocation = Beginning
+                        }
+                    |> updateStateIndex 0
+                , Cmd.none
+                )
 
-        Previous ->
-            case Zipper.previous model.states of
-                Nothing ->
-                    ( model, Cmd.none )
+            else
+                ( { model
+                    | pages = Zipper.first model.pages
+                    , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
+                  }
+                    |> updateStateIndex 0
+                , Ports.fetchPage 0
+                )
 
+        ( _, Previous ) ->
+            case Zipper.previous model.chunk of
                 Just newState ->
-                    ( { model | states = newState }, Cmd.none )
+                    ( { model | chunk = newState }
+                        |> updateStateIndex (model.index - 1)
+                    , Cmd.none
+                    )
 
-        Step ->
-            case Zipper.next model.states of
                 Nothing ->
-                    ( model, Cmd.none )
+                    -- get previous chunk
+                    case Zipper.previous model.page of
+                        Just newPage ->
+                            ( { model | page = newPage }
+                                |> updatePageLocation
+                                    { pageLocation = Nothing
+                                    , chunkLocation = End
+                                    }
+                                |> updateStateIndex (model.index - 1)
+                            , Ports.log "Previous: New chunk!"
+                            )
 
+                        Nothing ->
+                            case Zipper.previous model.pages of
+                                Just newPages ->
+                                    -- fetch previous page from JS
+                                    ( { model
+                                        | pages = newPages
+                                        , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
+                                      }
+                                        |> updateStateIndex (model.index - 1)
+                                    , Ports.fetchPage <| Zipper.current newPages
+                                    )
+
+                                Nothing ->
+                                    -- We are at the beginning of the program
+                                    ( model, Cmd.none )
+
+        ( _, Step ) ->
+            case Zipper.next model.chunk of
                 Just newState ->
-                    ( { model | states = newState }, Cmd.none )
+                    ( { model | chunk = newState }
+                        |> updateStateIndex (model.index + 1)
+                    , Cmd.none
+                    )
 
-        Last ->
-            ( { model | states = Zipper.last model.states }, Cmd.none )
+                Nothing ->
+                    -- get next chunk
+                    case Zipper.next model.page of
+                        Just newPage ->
+                            ( { model | page = newPage }
+                                |> updatePageLocation
+                                    { pageLocation = Nothing
+                                    , chunkLocation = Beginning
+                                    }
+                                |> updateStateIndex (model.index + 1)
+                            , Ports.log "Step: New chunk!"
+                            )
 
-        KeyMsg keyMsg ->
+                        Nothing ->
+                            case Zipper.next model.pages of
+                                Just newPages ->
+                                    -- fetch previous page from JS
+                                    ( { model
+                                        | pages = newPages
+                                        , fetchStatus = Loading { pageLocation = Beginning, chunkLocation = Beginning }
+                                      }
+                                        |> updateStateIndex (model.index + 1)
+                                    , Ports.fetchPage <| Zipper.current newPages
+                                    )
+
+                                Nothing ->
+                                    -- We are at the end of the program
+                                    ( model, Cmd.none )
+
+        ( _, Last ) ->
+            if Zipper.isLast model.pages then
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just End
+                        , chunkLocation = End
+                        }
+                    |> updateStateIndex (model.totalStates - 1)
+                , Cmd.none
+                )
+
+            else
+                -- swap page
+                ( { model
+                    | pages = Zipper.last model.pages
+                    , fetchStatus = Loading { pageLocation = End, chunkLocation = End }
+                  }
+                    |> updateStateIndex (model.totalStates - 1)
+                , Ports.fetchPage (Zipper.current <| Zipper.last model.pages)
+                )
+
+        ( _, ToIndex n ) ->
+            let
+                { pageNum, pageLocation, chunkLocation } =
+                    Util.getLocationInfo n model.pagesInfo
+            in
+            if Zipper.current model.pages == pageNum then
+                ( model
+                    |> updatePageLocation
+                        { pageLocation = Just <| Indexed pageLocation
+                        , chunkLocation = Indexed chunkLocation
+                        }
+                    |> updateStateIndex n
+                , Cmd.none
+                )
+
+            else
+                ( { model
+                    | pages = Util.zipperNth pageNum model.pages
+                    , fetchStatus = Loading { pageLocation = Indexed pageLocation, chunkLocation = Indexed chunkLocation }
+                  }
+                    |> updateStateIndex n
+                , Ports.fetchPage pageNum
+                )
+
+        ( _, UpdateSlider val ) ->
+            ( { model | sliderIdx = val }, Cmd.none )
+
+        ( _, KeyMsg keyMsg ) ->
             let
                 newPressedKeys =
                     Keyboard.update keyMsg model.pressedKeys
@@ -112,6 +288,90 @@ update msg model =
             else
                 ( model, Cmd.none )
 
+        ( Loading locs, GotPage res ) ->
+            case res of
+                Ok ( _, page ) ->
+                    ( { model | fetchStatus = Idle, page = page }
+                        |> updatePageLocation
+                            { pageLocation = Just locs.pageLocation
+                            , chunkLocation = locs.chunkLocation
+                            }
+                    , Cmd.none
+                    )
+
+                Err n ->
+                    ( { model | fetchStatus = Error n }, Cmd.none )
+
+        ( _, _ ) ->
+            ( model, Cmd.none )
+
+
+{-|
+
+
+## updatePageLocation
+
+`update` helper function
+
+Updates current page (zipper of Chunk VM inits), and calculates a new chunk for it. Does not move to a new page.
+
+**NOTE**: If the Location is `Indexed`, we take in 0-indexed values.
+
+If pageLocation is `Nothing`, do not update the page zipper and just calculate a new chunk.
+
+Remember:
+
+  - Page: a list of states that represent the beginning of each chunk
+  - Chunk: a group of sequential states
+
+Returns: (`Page Zipper`, `Chunk Zipper`)
+
+-}
+updatePageLocation : { pageLocation : Maybe Location, chunkLocation : Location } -> Model -> Model
+updatePageLocation { pageLocation, chunkLocation } model =
+    let
+        locToZipper : Maybe Location -> Zipper a -> Zipper a
+        locToZipper loc =
+            case loc of
+                Just Beginning ->
+                    Zipper.first
+
+                Just End ->
+                    Zipper.last
+
+                Just (Indexed idx) ->
+                    Util.zipperNth idx
+
+                Nothing ->
+                    identity
+
+        -- update zipper pointer in the page
+        newPage =
+            locToZipper pageLocation model.page
+
+        ( remainingChunk, _ ) =
+            VM.stepNAccumulate (model.pagesInfo.chunkSize - 1) (Zipper.current newPage)
+
+        -- update chunk pointer in the chunk (single evaledChunk will always point to the first element)
+        newChunk =
+            Zipper.fromCons (Zipper.current newPage) remainingChunk
+                |> locToZipper (Just chunkLocation)
+    in
+    { model | page = newPage, chunk = newChunk }
+
+
+{-|
+
+
+## updateStateIndex
+
+updates `index` and `sliderIdx` fields of the model.
+
+-}
+updateStateIndex : Int -> Model -> Model
+updateStateIndex newIdx model =
+    { model | index = newIdx, sliderIdx = newIdx }
+
 
 
 ---- VIEW ----
@@ -125,7 +385,22 @@ view model =
         , Element.spacing 8
         , Element.spacingXY 8 12
         ]
-        [ Element.row
+        [ Element.paragraph
+            []
+            [ Element.text "Total size: "
+            , Lib.Views.bold <| String.fromInt model.totalStates
+            ]
+        , viewSlider model
+
+        -- renders if the fetch status is error
+        , viewFetchError model
+        , case model.latestVM of
+            Err _ ->
+                Element.text "Warning: Latest VM does not terminate!"
+
+            Ok _ ->
+                Element.none
+        , Element.row
             [ Element.width Element.fill
             , Element.spacing 8
             ]
@@ -134,8 +409,100 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-        , Element.html <| VM.viewState 6 <| Zipper.current model.states
+
+        -- stuff to render when we're at the final VM state
+        , finalVMState model
+        , Element.html <| VM.view 6 <| Zipper.current model.chunk
         ]
+
+
+viewSlider : Model -> Element Msg
+viewSlider model =
+    Element.column
+        [ Element.width Element.fill
+        , Element.paddingXY 8 12
+        ]
+        [ Input.slider
+            [ Element.width Element.fill
+
+            -- same height as the thumb
+            , Element.height (Element.px 24)
+
+            -- establish the "track"
+            , Element.behindContent
+                (Element.el
+                    [ Element.width Element.fill
+                    , Element.height (Element.px 8)
+                    , Element.centerY
+                    , Background.color <| Colours.greyAlpha 0.1
+                    , Border.rounded 4
+                    ]
+                    Element.none
+                )
+            ]
+            { onChange = round >> UpdateSlider
+            , label = Input.labelAbove [] <| Element.text ("Current State: " ++ String.fromInt (model.index + 1))
+            , min = 0
+            , max = toFloat <| model.totalStates - 1
+            , value = toFloat model.sliderIdx
+            , thumb =
+                Input.thumb
+                    [ Element.width (Element.px 24)
+                    , Element.height (Element.px 24)
+                    , Border.rounded 24
+                    , Background.color <| Colours.purple
+                    ]
+            , step = Just 1
+            }
+        , if model.sliderIdx /= model.index then
+            Lib.Views.button (ToIndex model.sliderIdx) <| Element.text ("Go to " ++ ordinal (model.sliderIdx + 1) ++ " state")
+
+          else
+            Element.none
+        ]
+
+
+viewFetchError : Model -> Element Msg
+viewFetchError model =
+    case model.fetchStatus of
+        Error n ->
+            Element.paragraph
+                []
+                [ Element.text "Error: "
+                , Element.text n
+                ]
+
+        _ ->
+            Element.none
+
+
+finalVMState : Model -> Element Msg
+finalVMState model =
+    let
+        atLastState =
+            Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages && model.fetchStatus == Idle
+    in
+    if atLastState then
+        case model.latestVM of
+            Ok (Ok value) ->
+                Element.paragraph
+                    []
+                    [ Lib.Views.bold "Finished successfully: "
+                    , Element.text <| VM.valueToString value
+                    ]
+
+            Ok (Err e) ->
+                Element.column
+                    []
+                    [ Lib.Views.bold "Finished with an error: "
+                    , Element.html <| Error.view e
+                    ]
+
+            Err _ ->
+                Lib.Views.bold "There's more to render! But no renders yet"
+
+    else
+        Element.none
 
 
 
@@ -143,5 +510,35 @@ view model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.map KeyMsg Keyboard.subscriptions
+subscriptions model =
+    let
+        fetchSub =
+            case model.fetchStatus of
+                Loading _ ->
+                    Ports.fetchPageResponse gotPage
+
+                _ ->
+                    Sub.none
+    in
+    Sub.batch
+        [ fetchSub
+        , Sub.map KeyMsg Keyboard.subscriptions
+        ]
+
+
+
+-- received a new page from JSON
+-- note this page is a list of VMs, each representing the start of a chunk
+
+
+gotPage : ( Int, Value ) -> Msg
+gotPage ( pageNum, val ) =
+    case Decode.decodeValue (Decode.list VM.decoder) val of
+        Ok (vm :: vms) ->
+            GotPage <| Ok ( pageNum, Zipper.fromCons vm vms )
+
+        Ok _ ->
+            GotPage <| Err "Empty VM list!"
+
+        Err e ->
+            GotPage <| Err (Decode.errorToString e)

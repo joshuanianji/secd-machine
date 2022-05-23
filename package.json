@@ -21,6 +21,7 @@
     "vite-plugin-plain-text": "^1.1.4"
   },
   "dependencies": {
-    "codemirror": "^5.65.3"
+    "codemirror": "^5.65.3",
+    "idb-keyval": "^6.1.0"
   }
 }

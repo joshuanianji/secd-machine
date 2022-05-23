@@ -5,9 +5,10 @@ import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Lib.Cons as Cons exposing (Cons)
+import List.Zipper as Zipper exposing (Zipper)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
-import SECD.VMEnv as Env exposing (EnvItem(..), Environment)
+import SECD.VMEnv as Env exposing (EnvItem(..))
 
 
 
@@ -23,7 +24,7 @@ type VM
         -- Stack used for evaluation of expressions
         Stack
         --  Environment used to store the current value list
-        (Environment Value)
+        Environment
         -- Control used to store the current instruction pointer
         Control
         -- Dump to store anything else
@@ -52,6 +53,10 @@ type alias Stack =
     List Value
 
 
+type alias Environment =
+    Env.Environment Value
+
+
 type alias Control =
     List Op
 
@@ -68,7 +73,7 @@ type Value
     = Integer Int
     | Truthy -- false is represented by Nil
     | Array (Cons Value)
-    | Closure (List Op) (Environment Value) -- When loading a function, dump the closure of the function (i think?)
+    | Closure (List Op) Environment -- When loading a function, dump the closure of the function (i think?)
 
 
 boolToValue : Bool -> Value
@@ -261,7 +266,7 @@ viewValue val =
 
 type DumpValue
     = Control (List Op) -- in Sel, we want to dump the contents of the control stack
-    | EntireState Stack (Environment Value) Control -- When applying a function, we want to dump the state of the VM
+    | EntireState Stack Environment Control -- When applying a function, we want to dump the state of the VM
 
 
 
@@ -622,96 +627,303 @@ type alias VMResult =
     Result Error Value
 
 
-
--- fully evaluate a VM
--- WARNING: this will blow up the stack if it goes in an infinite loop
--- this is mainly used for testing
+{-|
 
 
-evaluate : VM -> VMResult
-evaluate oldVm =
-    case step oldVm of
-        Unfinished vm ->
-            evaluate vm
+## evaluate
 
-        Finished _ val ->
-            Ok val
+fully evaluates a VM, counting the amount of steps
 
-        Error _ err ->
-            Err <| err
+_this is mainly used for testing_
 
+**WARNING**: this will blow up the stack if it goes in an infinite loop
 
-
--- fully evaluate a VM, keeping track of all states
-
-
-evalList : VM -> List State
-evalList oldVm =
-    case step oldVm of
-        Unfinished vm ->
-            Unfinished vm :: evalList vm
-
-        other ->
-            List.singleton other
-
-
-
--- evaluate a VM a max of n times
--- If we're not finished, return Err (currState, allStates)
--- If we're finished, return Ok (returnValue, allStates)
--- Note: we do not include the initial VM in the list of VM states
-
-
-evalN : VM -> Int -> Result ( VM, List VM ) ( VMResult, List VM )
-evalN vm n =
+-}
+evaluate : VM -> ( Int, VMResult )
+evaluate inputVM =
     let
-        helper : Int -> VM -> List VM -> Result ( VM, List VM ) ( VMResult, List VM )
-        helper n_ vm_ states =
-            if n_ == 0 then
-                Err ( vm, List.reverse states )
+        evaluate_ : VM -> Int -> ( Int, VMResult )
+        evaluate_ vm_ n =
+            case step vm_ of
+                Unfinished vm ->
+                    evaluate_ vm (n + 1)
+
+                Finished _ val ->
+                    ( n, Ok val )
+
+                Error _ err ->
+                    ( n, Err err )
+    in
+    evaluate_ inputVM 0
+
+
+{-|
+
+
+## stepNAccumulate
+
+Given a starting VM, step a max of "n" times, storing each VM state in a list.
+
+`evalN n startVM` does not include startVM in the states we return.
+
+  - If we're not finished, return `(vms, Err nextVM)`
+  - If we're finished, return `(vms, Ok (vmResult, count))`
+
+`nextVM` is not included in the accumulated states.
+
+The VM returned if the program is not finished executing is also not included in the list of VM states
+
+-}
+stepNAccumulate : Int -> VM -> ( List VM, Result VM VMResult )
+stepNAccumulate chunkSize vm =
+    let
+        helper : Int -> VM -> List VM -> ( List VM, Result VM VMResult )
+        helper n vm_ states =
+            case step vm_ of
+                Unfinished newVm ->
+                    if n == 0 then
+                        ( states, Err newVm )
+
+                    else
+                        helper (n - 1) newVm (newVm :: states)
+
+                Finished _ val ->
+                    ( states, Ok <| Ok val )
+
+                Error _ err ->
+                    ( states, Ok <| Err err )
+    in
+    helper chunkSize vm []
+        |> Tuple.mapFirst List.reverse
+
+
+{-|
+
+
+## evalChunk
+
+Given a starting VM, evaluate the chunk starting from that VM.
+
+Note that, compared to evalN, evalChunk only keeps the first VM state.
+
+  - If we're not finished, return `(count, Err nextVM)`
+  - If we're finished, return `(count, Ok vmResult)`
+
+`nextVM` is the vm you would want to start off of for the next chunk. It is not included in the current chunk.
+
+`count` is the total size of the chunk. The count includes the inital VM state
+
+
+### Dev notes:
+
+This function is essentially `stepNAccumulate n (chunkSize - 1)`. The reason I subtract 1 from the chunk size is that
+the initial VM state is also included in the chunk, so to get a total of `n` states in the chunk, I step (n-1) times.
+
+-}
+evalChunk : VM -> Int -> ( Int, Result VM VMResult )
+evalChunk startVM chunkSize =
+    let
+        ( vms, result ) =
+            stepNAccumulate (chunkSize - 1) startVM
+    in
+    ( List.length vms + 1, result )
+
+
+{-|
+
+
+## evalPage
+
+Given a starting VM state, evaluate a page starting from that state.
+
+Each page can hold `pageSize` chunks, and each chunk holds `chunkSize` states
+Thus, each page is limited to `pageSize * chunkSize` states
+
+We accumulate the first VM state of each chunk
+
+  - if we're not finished, return `(totalVMs, chunkVMs, Err newVMState)`
+  - If we're finished, return `(totalVMs, chunkVMs, Ok vmResult)`
+
+If the evaluation does not terminate, `newVMState` is fresh VM state to start the next calculation off of
+
+**Note** chunkVMs does not include the input VM. Thus, totalVMCount is one more than `List.length chunkVMs`.
+This helps us create the Zipper more easily, although the code is a little bit messier...
+
+-}
+evalPage : Int -> Int -> VM -> { totalVMCount : Int, chunkVMs : List VM, result : Result VM VMResult }
+evalPage pageSize chunkSize vm =
+    let
+        -- evalPage helper that accumulates the chunkVMs in the parameter
+        helper : VM -> Int -> Int -> List VM -> ( Int, List VM, Result VM VMResult )
+        helper startVM vmCount chunkCount stateAcc =
+            if chunkCount == pageSize then
+                ( vmCount, stateAcc, Err startVM )
 
             else
-                case step vm_ of
-                    Unfinished newVm ->
-                        helper (n_ - 1) newVm (newVm :: states)
+                -- chunkVM is the first VM state of the chunk
+                case evalChunk startVM chunkSize of
+                    ( currChunkSize, Ok val ) ->
+                        -- evaluation finished early. currChunkSize is less than chunkSize
+                        ( vmCount + currChunkSize, startVM :: stateAcc, Ok val )
 
-                    Finished _ val ->
-                        Ok ( Ok val, states )
-
-                    Error _ err ->
-                        Ok ( Err err, states )
+                    ( _, Err nextVM ) ->
+                        helper nextVM (vmCount + chunkSize) (chunkCount + 1) (startVM :: stateAcc)
     in
-    helper n vm []
+    case evalChunk vm chunkSize of
+        ( currChunkSize, Ok val ) ->
+            -- evaluation finished in one chunk!
+            { totalVMCount = currChunkSize, chunkVMs = [], result = Ok val }
+
+        ( _, Err nextVM ) ->
+            -- start from the NEXT chunk, since we don't want to include the input startChunk
+            let
+                ( totalVMCount, chunkVMs, result ) =
+                    helper nextVM chunkSize 1 []
+            in
+            { totalVMCount = totalVMCount, chunkVMs = List.reverse chunkVMs, result = result }
 
 
+{-| getPages
 
--- DEBUG
+given a VM, calculate as many states it can reach
+Limit the amount of pages (groups of "chunks" that are stored in SessionStorage similar to a memory page) by maxPages
+Limit the amount of chunkVMs a page can store by pageSize
+Limit the amount of stets a chunk can store by chunkSize
+
+If we the VM terminates in time, also return the value
+Else, return the last unfinished VM state
+
+This function is used in VMView to initialize the model.
+
+-}
+type alias PagesData =
+    { result : Result VM VMResult
+    , initialPage : Zipper VM
+    , initialChunk : Zipper VM
+    , pages : Zipper Int
+    , totalVMCount : Int
+    , toJSValues : List ( Int, Encode.Value )
+    }
 
 
-viewState : Int -> State -> Html msg
-viewState lookahead st =
+getPages :
+    { maxPages : Int
+    , pageSize : Int
+    , chunkSize : Int
+    }
+    -> VM
+    -> PagesData
+getPages { maxPages, pageSize, chunkSize } vm =
     let
-        ( title, err, body ) =
-            case st of
-                Unfinished vm ->
-                    ( "Unfinished", Html.text "", viewVM lookahead vm )
+        -- returns the same result as getPages
+        getFirstChunk : PagesData
+        getFirstChunk =
+            let
+                ( initialChunk, firstChunkRes ) =
+                    stepNAccumulate (chunkSize - 1) vm
+            in
+            { result = firstChunkRes
+            , initialPage = Zipper.singleton vm
+            , initialChunk = Zipper.fromCons vm initialChunk
+            , pages = Zipper.singleton 0
 
-                Finished vm val ->
-                    ( "Finished: " ++ valueToString val, Html.text "", viewVM lookahead vm )
+            -- adding one because the initial `vm` is not accounted for in the list of VMs
+            , totalVMCount = List.length initialChunk + 1
+            , toJSValues = []
+            }
 
-                Error vm e ->
-                    ( "Error", Error.view e, viewVM lookahead vm )
+        -- takes in, and returns the same result as getPages
+        getFirstPage : PagesData -> PagesData
+        getFirstPage pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
+
+                -- we don't care about the nextState, since we will recalculate the page starting from the initial VM
+                Err _ ->
+                    -- program needs more than one chunk
+                    -- calculate first page
+                    let
+                        firstPage =
+                            evalPage pageSize chunkSize vm
+                    in
+                    { pagesData
+                        | result = firstPage.result
+                        , initialPage = Zipper.fromCons vm firstPage.chunkVMs
+                        , totalVMCount = firstPage.totalVMCount
+                    }
+
+        getRemainingPages : PagesData -> PagesData
+        getRemainingPages pagesData =
+            case pagesData.result of
+                Ok _ ->
+                    pagesData
+
+                Err secondPageVM ->
+                    -- VM does not terminate in one page. Calculate all pages (until max)
+                    let
+                        -- we also send the first page states to JS
+                        helperData =
+                            remainingPagesHelper 1 secondPageVM 0 [ ( 0, Encode.list encode <| Zipper.toList pagesData.initialPage ) ]
+                    in
+                    { pagesData
+                        | result = helperData.result
+                        , pages = Zipper.fromCons 0 (List.range 1 helperData.pageCount)
+                        , totalVMCount = pagesData.totalVMCount + helperData.totalVMCount
+                        , toJSValues = helperData.portData
+                    }
+
+        -- builds up all the pages to send to JS
+        remainingPagesHelper :
+            Int
+            -> VM
+            -> Int
+            -> List ( Int, Encode.Value )
+            ->
+                { result : Result VM VMResult
+                , pageCount : Int
+                , totalVMCount : Int
+                , portData : List ( Int, Encode.Value )
+                }
+        remainingPagesHelper pageCount vm_ vmCountAcc portDataAcc =
+            if pageCount == maxPages then
+                { result = Err vm_
+                , pageCount = pageCount
+                , totalVMCount = vmCountAcc
+                , portData = portDataAcc
+                }
+
+            else
+                let
+                    nthPage =
+                        evalPage pageSize chunkSize vm_
+                in
+                case nthPage.result of
+                    Ok vmResult ->
+                        -- VM terminates in this page
+                        { result = Ok vmResult
+                        , pageCount = pageCount
+                        , totalVMCount = vmCountAcc + nthPage.totalVMCount
+                        , portData = ( pageCount, Encode.list encode (vm_ :: nthPage.chunkVMs) ) :: portDataAcc
+                        }
+
+                    Err newVM ->
+                        remainingPagesHelper (pageCount + 1)
+                            newVM
+                            (vmCountAcc + nthPage.totalVMCount)
+                            (( pageCount, Encode.list encode (vm_ :: nthPage.chunkVMs) ) :: portDataAcc)
     in
-    Html.div
-        [ Attr.class "state" ]
-        [ Html.h3 [ Attr.class "state-title" ] [ Html.text title ]
-        , Html.div [ Attr.class "state-error" ] [ err ]
-        , Html.div [ Attr.class "state-body" ] [ body ]
-        ]
+    getFirstChunk
+        |> getFirstPage
+        |> getRemainingPages
 
 
-viewVM : Int -> VM -> Html msg
-viewVM _ (VM ctx s e c d) =
+
+-- VIEW
+
+
+view : Int -> VM -> Html msg
+view _ (VM ctx s e c d) =
     Html.div
         [ Attr.class "vm" ]
         [ Html.p [ Attr.class "vm-title ctx-title" ] [ Html.text "Context" ]
@@ -871,12 +1083,12 @@ stackDecoder =
 -- ENVIRONMENT
 
 
-encodeEnvironment : Environment Value -> Encode.Value
+encodeEnvironment : Environment -> Encode.Value
 encodeEnvironment =
     Env.encode encodeValue
 
 
-environmentDecoder : Decoder (Environment Value)
+environmentDecoder : Decoder Environment
 environmentDecoder =
     Env.decoder valueDecoder
 
