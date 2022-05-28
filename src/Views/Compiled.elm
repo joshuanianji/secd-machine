@@ -165,10 +165,10 @@ view : Model -> Element Msg
 view model =
     Element.column
         []
-        [ List.map Prog.view model.original
-            |> List.intersperse (Html.text ", ")
-            |> Html.div [ Html.Attributes.class "vm-body row control-body" ]
-            |> Element.html
+        [ Debug.toString model.original
+            |> Element.text
+            |> List.singleton
+            |> Element.paragraph []
         , case model.stuff of
             Err e ->
                 Element.html <| Error.view e
