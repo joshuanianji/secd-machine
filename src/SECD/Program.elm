@@ -7,6 +7,7 @@ import Json.Encode as Encode exposing (Value)
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
+import Result.Extra
 import SECD.Error exposing (Error)
 
 
@@ -35,6 +36,7 @@ type Op
     | DUM -- Create a dummy env
     | FUNC Func -- builtin functions
     | NESTED (List Op)
+    | FUNCBODY String (List Op)
 
 
 type Func
@@ -130,6 +132,9 @@ opToString op =
 
         NESTED ops ->
             "[" ++ (String.join ", " <| List.map opToString ops) ++ "]"
+
+        FUNCBODY name ops ->
+            name ++ ": [" ++ (String.join ", " <| List.map opToString ops) ++ "]"
 
 
 funcToString : Func -> String
@@ -230,6 +235,10 @@ view op =
                 |> List.intersperse (Html.text ",")
                 |> Util.wrapAdd (Html.text "[") (Html.text "]")
                 |> Html.div [ Attr.class "vm-op nested row" ]
+
+        -- a function body is just referred to by its name
+        FUNCBODY name _ ->
+            Html.div [ Attr.class "vm-op func func-name" ] [ Html.text name ]
 
 
 
@@ -538,37 +547,26 @@ compileFunc env f =
 compileArgs : Environment -> Bool -> List AST -> Result Error (List Op)
 compileArgs env isBuiltin args =
     let
-        compileNonBuiltin : List AST -> Result Error (List Op)
-        compileNonBuiltin args_ =
-            case args_ of
-                [] ->
-                    Ok []
+        customFunc =
+            not isBuiltin
 
-                arg :: xs ->
-                    Result.map2
-                        (\cmpArg cmpArgs -> cmpArg ++ FUNC CONS :: cmpArgs)
-                        (compile_ env arg)
-                        (compileNonBuiltin xs)
+        runIf condition f =
+            if condition then
+                f
 
-        compileBuiltin : List AST -> Result Error (List Op)
-        compileBuiltin args_ =
-            case args_ of
-                [] ->
-                    Ok []
-
-                arg :: xs ->
-                    Result.map2
-                        (\cmpArg cmpArgs -> cmpArg ++ cmpArgs)
-                        (compile_ env arg)
-                        (compileBuiltin xs)
+            else
+                identity
     in
-    if isBuiltin then
-        -- we want to push the arguments on the stack in REVERSE order
-        compileBuiltin <| List.reverse args
-
-    else
-        -- appending "NIL" to the front
-        Result.map ((::) NIL) (compileNonBuiltin <| List.reverse args)
+    List.reverse args
+        |> List.map (compile_ env)
+        |> Result.Extra.combine
+        -- add CONS between each arg
+        |> (Result.map <| runIf customFunc (List.intersperse [ FUNC CONS ]))
+        |> Result.map List.concat
+        -- add trailing cons if args is nonempty
+        |> (Result.map <| runIf (customFunc && List.length args /= 0) (\l -> l ++ [ FUNC CONS ]))
+        -- appending NIL to the front of custom functions (so we can built the argument list)
+        |> (Result.map <| runIf customFunc ((::) NIL))
 
 
 
@@ -686,6 +684,10 @@ encodeSingle op =
 
         NESTED ops ->
             Encode.list encodeSingle ops
+
+        FUNCBODY f ops ->
+            Encode.object
+                [ ( "name", Encode.string f ), ( "body", Encode.list encodeSingle ops ) ]
 
 
 encodeFunc : Func -> Value
