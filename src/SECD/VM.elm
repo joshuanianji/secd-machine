@@ -550,8 +550,13 @@ loadFunction (VM ctx s e c d) =
             VM ctx s e c d
     in
     case c of
-        (NESTED funcBody) :: c_ ->
+        -- named function
+        (FUNCBODY _ funcBody) :: c_ ->
             Unfinished (VM ctx (Closure funcBody e :: s) e c_ d)
+
+        -- unnamed function (e.g. lambda)
+        (NESTED funcbody) :: c_ ->
+            Unfinished (VM ctx (Closure funcbody e :: s) e c_ d)
 
         _ ->
             Error vm "VM: loadFunction: cannot find function body!"

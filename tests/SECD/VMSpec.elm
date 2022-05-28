@@ -26,7 +26,7 @@ recursiveLength =
             [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ]
     in
     Prog.fromList
-        [ DUM, NIL, LDF, NESTED func, FUNC CONS, LDF, NESTED funcApply, RAP ]
+        [ DUM, NIL, LDF, FUNCBODY "f" func, FUNC CONS, LDF, NESTED funcApply, RAP ]
 
 
 factorial : Int -> Prog.Program
@@ -39,17 +39,17 @@ factorial n =
         factCreateClosure =
             [ NIL, LD ( 1, 1 ), FUNC CONS, LD ( 1, 0 ), FUNC CONS, LD ( 0, 0 ), AP, RTN ]
     in
-    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, NESTED fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
+    Prog.fromList [ NIL, LDC 1, FUNC CONS, LDC n, FUNC CONS, LDF, NESTED [ DUM, NIL, LDF, FUNCBODY "fact" fact, FUNC CONS, LDF, NESTED factCreateClosure, RAP, RTN ], AP ]
 
 
 mutualRecursiveIsEven : Int -> Prog.Program
 mutualRecursiveIsEven n =
     let
         isEven =
-            mutualRecursive [ NIL ] ( 1, 1 )
+            mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
 
         isOdd =
-            mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+            mutualRecursive [ NIL ] ( 1, 1 )
 
         mutualRecursive onTrue letrecCoords =
             [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
@@ -58,7 +58,7 @@ mutualRecursiveIsEven n =
             [ NIL, LDC n, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
     in
     Prog.fromList
-        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED body, RAP ]
+        [ DUM, NIL, LDF, FUNCBODY "even" isEven, FUNC CONS, LDF, FUNCBODY "odd" isOdd, FUNC CONS, LDF, NESTED body, RAP ]
 
 
 

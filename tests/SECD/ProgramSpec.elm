@@ -285,15 +285,16 @@ testCompileLambda =
     Test.describe "Program.compileLambda" <|
         [ Test.test "compiled (lambda (x y) (+ x y))" <|
             \_ ->
-                compileLambda emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
+                compileLambda Nothing emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
                     |> Expect.equal (Ok [ LDF, NESTED [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ] ])
         , Test.test "No args - (lambda () 3)" <|
             \_ ->
-                compileLambda emptyEnv [] (AST.int 3)
+                compileLambda Nothing emptyEnv [] (AST.int 3)
                     |> Expect.equal (Ok [ LDF, NESTED [ LDC 3, RTN ] ])
         , Test.test "Nested Lambda - (lambda (z) ((lambda (x y) (+ (- x y) z)) 3 5))" <|
             \_ ->
-                compileLambda emptyEnv
+                compileLambda Nothing
+                    emptyEnv
                     [ AST.token "z" ]
                     (AST.FuncApp
                         (AST.Lambda [ AST.token "x", AST.token "y" ]
@@ -303,6 +304,10 @@ testCompileLambda =
                     )
                     |> Expect.equal
                         (Ok [ LDF, NESTED [ NIL, LDC 5, FUNC CONS, LDC 3, FUNC CONS, LDF, NESTED [ LD ( 1, 0 ), LD ( 0, 1 ), LD ( 0, 0 ), FUNC SUB, FUNC ADD, RTN ], AP, RTN ] ])
+        , Test.test "Uses FUNCBODY when given the name" <|
+            \_ ->
+                compileLambda (Just "f") emptyEnv [ AST.token "x", AST.token "y" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.var "y" ])
+                    |> Expect.equal (Ok [ LDF, FUNCBODY "f" [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC ADD, RTN ] ])
         ]
 
 
@@ -318,7 +323,7 @@ testCompileLet =
                 compileLet emptyEnv
                     [ ( AST.token "f", AST.Lambda [ AST.token "x" ] (AST.FuncApp (AST.var "+") [ AST.var "x", AST.int 1 ]) ) ]
                     (AST.FuncApp (AST.var "f") [ AST.int 3 ])
-                    |> Expect.equal (Ok [ NIL, LDF, NESTED [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ])
+                    |> Expect.equal (Ok [ NIL, LDF, FUNCBODY "f" [ LDC 1, LD ( 0, 0 ), FUNC ADD, RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 3, FUNC CONS, LD ( 0, 0 ), AP, RTN ], AP ])
         ]
 
 
@@ -335,7 +340,7 @@ testCompileLetrec =
                         AST.FuncApp (AST.var "f") [ AST.Quote <| Cons.fromList [ 1, 2, 3 ], AST.Val 0 ]
 
                     expected =
-                        [ DUM, NIL, LDF, NESTED [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ], RAP ]
+                        [ DUM, NIL, LDF, FUNCBODY "f" [ LD ( 0, 0 ), FUNC NULL, SEL, NESTED [ LD ( 0, 1 ), JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 1 ), FUNC ADD, FUNC CONS, LD ( 0, 0 ), FUNC CDR, FUNC CONS, LD ( 1, 0 ), AP, JOIN ], RTN ], FUNC CONS, LDF, NESTED [ NIL, LDC 0, FUNC CONS, NIL, LDC 3, FUNC CONS, LDC 2, FUNC CONS, LDC 1, FUNC CONS, FUNC CONS, LD ( 0, 0 ), AP, RTN ], RAP ]
                 in
                 compileLetrec emptyEnv bindings body
                     |> Expect.equal (Ok expected)
@@ -355,10 +360,10 @@ testCompileLetrec =
                         AST.FuncApp (AST.var "even") [ AST.Val 4 ]
 
                     isEven =
-                        mutualRecursive [ NIL ] ( 1, 1 )
+                        mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
 
                     isOdd =
-                        mutualRecursive [ NIL, FUNC ATOM ] ( 1, 0 )
+                        mutualRecursive [ NIL ] ( 1, 1 )
 
                     mutualRecursive onTrue letrecCoords =
                         [ LDC 0, LD ( 0, 0 ), FUNC (COMPARE CMP_EQ), SEL, NESTED <| onTrue ++ [ JOIN ], NESTED [ NIL, LDC 1, LD ( 0, 0 ), FUNC SUB, FUNC CONS, LD letrecCoords, AP, JOIN ], RTN ]
@@ -367,7 +372,7 @@ testCompileLetrec =
                         [ NIL, LDC 4, FUNC CONS, LD ( 0, 1 ), AP, RTN ]
 
                     expected =
-                        [ DUM, NIL, LDF, NESTED isOdd, FUNC CONS, LDF, NESTED isEven, FUNC CONS, LDF, NESTED compiledBody, RAP ]
+                        [ DUM, NIL, LDF, FUNCBODY "even" isEven, FUNC CONS, LDF, FUNCBODY "odd" isOdd, FUNC CONS, LDF, NESTED compiledBody, RAP ]
                 in
                 compileLetrec emptyEnv bindings astBody
                     |> Expect.equal (Ok expected)

@@ -49,6 +49,23 @@ foldResult r =
 {-|
 
 
+## runIf
+
+conditionally runs a function
+
+-}
+runIf : Bool -> (a -> a) -> a -> a
+runIf condition f =
+    if condition then
+        f
+
+    else
+        identity
+
+
+{-|
+
+
 ## focusN
 
 focus on the nth element in a zipper
