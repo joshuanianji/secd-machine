@@ -36,6 +36,7 @@ type Op
     | DUM -- Create a dummy env
     | FUNC Func -- builtin functions
     | NESTED (List Op)
+      -- Not necessary, but used for UI stuff
     | FUNCBODY String (List Op)
 
 
