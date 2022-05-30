@@ -180,7 +180,7 @@ chainTranspiled ops r =
 
 
 
--- add a transpiled list to the end of a single indexed
+-- add a transpiled list to the end of a single indexed code
 -- this is a special case of chain
 
 
