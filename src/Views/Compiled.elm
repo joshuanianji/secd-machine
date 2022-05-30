@@ -100,9 +100,10 @@ transpile_ n ops =
             initSingle n (LDC x)
                 |> prependTranspiled xs
 
-        Prog.LDF :: (Prog.FUNCBODY name _) :: xs ->
-            initSingle n (LDFunc name)
-                |> prependTranspiled xs
+        Prog.LDF :: (Prog.FUNCBODY name body) :: xs ->
+            initChain n (\funcBody rest -> Indexed ( n, LDFunc name funcBody ) :: rest)
+                |> chainTranspiled body
+                |> chainTranspiled xs
 
         Prog.LDF :: (Prog.NESTED nested) :: Prog.AP :: xs ->
             initChain n (\funcBody rest -> Indexed ( n, LDApply AP funcBody ) :: rest)
@@ -227,8 +228,8 @@ stripIndices (Indexed ( _, code )) =
         LDC x ->
             Unindexed (LDC x)
 
-        LDFunc name ->
-            Unindexed (LDFunc name)
+        LDFunc name body ->
+            Unindexed (LDFunc name (List.map stripIndices body))
 
         LDApply aptype nested ->
             Unindexed (LDApply aptype (List.map stripIndices nested))
@@ -274,12 +275,35 @@ getIndices ops =
                 SEL nestedT nestedF ->
                     n :: getIndices nestedT ++ getIndices nestedF
 
+                LDFunc _ nested ->
+                    n :: getIndices nested
+
                 -- single elements
                 _ ->
                     [ n ]
     in
     List.map getIndex ops
         |> List.concat
+
+
+
+-- gets all function definitions
+-- returns list of (Index, (funcName, funcBody))
+
+
+getFuncDefs : List Indexed -> List ( Int, ( String, List Indexed ) )
+getFuncDefs ops =
+    let
+        getFuncDef : Indexed -> Maybe ( Int, ( String, List Indexed ) )
+        getFuncDef (Indexed ( n, code )) =
+            case code of
+                LDFunc name body ->
+                    Just ( n, ( name, body ) )
+
+                _ ->
+                    Nothing
+    in
+    List.filterMap getFuncDef ops
 
 
 
@@ -292,7 +316,7 @@ type Code a
     = NIL
     | LD ( Int, Int )
     | LDC Int
-    | LDFunc String -- Loads a function name (when a function is defined in a let stmt)
+    | LDFunc String (List a) -- Loads a function name (when a function is defined in a let stmt)
     | LDLambda (List a) -- loads a lambda (when a lambda is an argument to a function)
     | LDApply APType (List a) -- loads a function and apply it
     | LoneAP -- if a function is loaded from the env then applied
@@ -358,13 +382,29 @@ view model =
 
 viewOk : OkModel -> Element Msg
 viewOk model =
-    Element.wrappedRow
-        [ Element.width Element.fill
+    let
+        viewCodes code =
+            List.map (viewCode model) code
+                |> List.intersperse [ Element.text "," ]
+                |> List.concat
+                |> Element.wrappedRow
+                    [ Element.width Element.fill ]
+    in
+    Element.column
+        []
+        [ -- possible function definitions
+          List.map
+            (\( n, ( name, body ) ) ->
+                Element.row
+                    []
+                    [ Element.text name, viewCodes body ]
+            )
+            (getFuncDefs model.code)
+            |> Element.column [ Element.spacing 4 ]
+
+        -- the compiled code
+        , viewCodes model.code
         ]
-        (List.map (viewCode model) model.code
-            |> List.intersperse [ Element.text "," ]
-            |> List.concat
-        )
 
 
 viewCode : OkModel -> Indexed -> List (Element Msg)
@@ -445,7 +485,7 @@ viewCode model (Indexed ( n, code )) =
         LDC x ->
             [ mainElem <| "LDC " ++ String.fromInt x ]
 
-        LDFunc name ->
+        LDFunc name _ ->
             [ mainElem "LDF"
             , whocaresElem ","
             , secondaryElem name
