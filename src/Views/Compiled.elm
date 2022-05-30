@@ -21,14 +21,11 @@ import Browser.Navigation exposing (Key)
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Html
 import Html.Attributes
-import Json.Decode as Decode
-import Json.Encode as Encode exposing (Value)
-import Keyboard exposing (Key(..))
-import Keyboard.Arrows
 import Lib.Colours as Colours
 import Lib.Util as Util
 import Lib.Views
@@ -38,6 +35,7 @@ import Ports
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Prog exposing (Program)
 import SECD.VM as VM exposing (VM, VMResult)
+import Set exposing (Set)
 
 
 
@@ -47,18 +45,28 @@ import SECD.VM as VM exposing (VM, VMResult)
 type alias Model =
     { -- remove original after more testing
       original : List Prog.Op
-    , stuff : Result Error OkModel
+    , transpiled : Result Error OkModel
     }
 
 
 type alias OkModel =
-    { code : List Indexed }
+    { code : List Indexed
+    , hovered : Maybe Int
+    , selected : Set Int
+    }
 
 
 init : Program -> ( Model, Cmd Msg )
 init prog =
+    let
+        transpiled =
+            transpile <| Prog.toList prog
+
+        transpiledModel =
+            Result.map (\indexed -> { code = indexed, hovered = Nothing, selected = Set.empty }) transpiled
+    in
     ( { original = Prog.toList prog
-      , stuff = Result.map (\code -> { code = code }) (transpile <| Prog.toList prog)
+      , transpiled = transpiledModel
       }
     , Cmd.none
     )
@@ -305,7 +313,9 @@ type APType
 
 
 type Msg
-    = NoOp
+    = ToggleSelected Int
+    | Hover Int
+    | UnHover Int
 
 
 
@@ -314,8 +324,21 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        NoOp ->
+    case ( model.transpiled, msg ) of
+        ( Ok okModel, ToggleSelected n ) ->
+            if Set.member n okModel.selected then
+                ( { model | transpiled = Ok { okModel | selected = Set.remove n okModel.selected } }, Cmd.none )
+
+            else
+                ( { model | transpiled = Ok { okModel | selected = Set.insert n okModel.selected } }, Cmd.none )
+
+        ( Ok okModel, Hover n ) ->
+            ( { model | transpiled = Ok { okModel | hovered = Just n } }, Cmd.none )
+
+        ( Ok okModel, UnHover _ ) ->
+            ( { model | transpiled = Ok { okModel | hovered = Nothing } }, Cmd.none )
+
+        ( _, _ ) ->
             ( model, Cmd.none )
 
 
@@ -325,7 +348,7 @@ update msg model =
 
 view : Model -> Element Msg
 view model =
-    case model.stuff of
+    case model.transpiled of
         Err e ->
             Element.html <| Error.view e
 
@@ -335,10 +358,110 @@ view model =
 
 viewOk : OkModel -> Element Msg
 viewOk model =
-    Debug.toString model.code
-        |> Element.text
-        |> List.singleton
-        |> Element.paragraph [ Font.size 20 ]
+    Element.wrappedRow
+        [ Element.width Element.fill
+        , Element.spacing 6
+        ]
+        (List.map (viewCode model) model.code
+            |> List.intersperse [ Element.text "," ]
+            |> List.concat
+        )
+
+
+viewCode : OkModel -> Indexed -> List (Element Msg)
+viewCode model (Indexed ( n, code )) =
+    let
+        addIf : Bool -> List a -> List a -> List a
+        addIf condition xs ys =
+            if condition then
+                xs ++ ys
+
+            else
+                ys
+
+        -- attrs for the "main elmeent" in a code block
+        mainAttrs =
+            [ Events.onClick (ToggleSelected n)
+            , Events.onMouseEnter (Hover n)
+            , Events.onMouseLeave (UnHover n)
+            , Element.pointer
+            ]
+                |> addIf (Set.member n model.selected) [ Font.underline ]
+                |> addIf (model.hovered == Just n) [ Font.bold ]
+
+        apToString : APType -> String
+        apToString apType =
+            case apType of
+                AP ->
+                    "AP"
+
+                RAP ->
+                    "RAP"
+
+        viewNested : List Indexed -> List (Element Msg)
+        viewNested =
+            List.map (viewCode model)
+                >> List.intersperse [ Element.text "," ]
+                >> List.concat
+    in
+    case code of
+        NIL ->
+            [ Element.el mainAttrs <| Element.text "NIL" ]
+
+        LD ( x, y ) ->
+            [ Element.el mainAttrs <| Element.text <| "LD (" ++ String.fromInt x ++ "." ++ String.fromInt y ++ ")" ]
+
+        LDC x ->
+            [ Element.el mainAttrs <| Element.text <| "LDC " ++ String.fromInt x ]
+
+        LDFunc name ->
+            [ Element.el mainAttrs <| Element.text "LDF"
+            , Element.text ","
+            , Element.text name
+            ]
+
+        LDApply aptype nested ->
+            [ Element.el mainAttrs <| Element.text "LDF"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewNested nested
+                ++ [ Element.text "]"
+                   , Element.el [] <| Element.text (apToString aptype)
+                   ]
+
+        LDLambda nested ->
+            [ Element.el mainAttrs <| Element.text "LDF"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewNested nested
+                ++ [ Element.text "]" ]
+
+        SEL nestedT nestedF ->
+            [ Element.el mainAttrs <| Element.text "SEL"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewNested nestedT
+                ++ [ Element.text "]", Element.text "[" ]
+                ++ viewNested nestedF
+                ++ [ Element.text "]" ]
+
+        RTN ->
+            [ Element.el mainAttrs <| Element.text "RTN" ]
+
+        JOIN ->
+            [ Element.el mainAttrs <| Element.text "JOIN" ]
+
+        DUM ->
+            [ Element.el mainAttrs <| Element.text "DUM" ]
+
+        FUNC f ->
+            [ Element.el mainAttrs <| Element.text f ]
+
+        LoneAP ->
+            [ Element.el mainAttrs <| Element.text "AP" ]
 
 
 
@@ -346,5 +469,5 @@ viewOk model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.none
