@@ -410,6 +410,16 @@ viewCode model (Indexed ( n, code )) =
         tertiaryElem =
             baseElem Colours.red
 
+        whocaresElem text =
+            Element.el
+                [ Events.onClick (ToggleSelected n)
+                , Events.onMouseEnter (Hover n)
+                , Events.onMouseLeave (UnHover n)
+                , Element.pointer
+                , Font.color Colours.black
+                ]
+                (Element.text text)
+
         apToString : APType -> String
         apToString apType =
             case apType of
@@ -437,24 +447,24 @@ viewCode model (Indexed ( n, code )) =
 
         LDFunc name ->
             [ mainElem "LDF"
-            , Element.text ","
+            , whocaresElem ","
             , secondaryElem name
             ]
 
         LDApply aptype nested ->
             [ mainElem "LDF"
-            , Element.text ","
+            , whocaresElem ","
             , secondaryElem "["
             ]
                 ++ viewNested nested
                 ++ [ secondaryElem "]"
-                   , Element.text ","
+                   , whocaresElem ","
                    , tertiaryElem <| apToString aptype
                    ]
 
         LDLambda nested ->
             [ mainElem "LDF"
-            , Element.text ","
+            , whocaresElem ","
             , secondaryElem "["
             ]
                 ++ viewNested nested
@@ -462,7 +472,7 @@ viewCode model (Indexed ( n, code )) =
 
         SEL nestedT nestedF ->
             [ mainElem "SEL"
-            , Element.text ","
+            , whocaresElem ","
             , secondaryElem "["
             ]
                 ++ viewNested nestedT
