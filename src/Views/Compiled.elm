@@ -360,7 +360,6 @@ viewOk : OkModel -> Element Msg
 viewOk model =
     Element.wrappedRow
         [ Element.width Element.fill
-        , Element.spacing 6
         ]
         (List.map (viewCode model) model.code
             |> List.intersperse [ Element.text "," ]
@@ -374,20 +373,42 @@ viewCode model (Indexed ( n, code )) =
         addIf : Bool -> List a -> List a -> List a
         addIf condition xs ys =
             if condition then
-                xs ++ ys
+                ys ++ xs
 
             else
                 ys
 
+        baseElem color text =
+            Element.el
+                [ Events.onClick (ToggleSelected n)
+                , Events.onMouseEnter (Hover n)
+                , Events.onMouseLeave (UnHover n)
+                , Element.pointer
+                , Element.paddingXY 3 0
+                , Font.color Colours.transparent
+                , Font.bold
+                , Element.behindContent <|
+                    Element.el
+                        ([ Element.centerX
+                         , Font.regular
+                         , Font.color Colours.black
+                         ]
+                            |> addIf (Set.member n model.selected || model.hovered == Just n) [ Font.color color, Font.bold ]
+                            |> addIf (Set.member n model.selected && model.hovered == Just n) [ Font.underline ]
+                        )
+                        (Element.text text)
+                ]
+                (Element.text text)
+
         -- attrs for the "main elmeent" in a code block
-        mainAttrs =
-            [ Events.onClick (ToggleSelected n)
-            , Events.onMouseEnter (Hover n)
-            , Events.onMouseLeave (UnHover n)
-            , Element.pointer
-            ]
-                |> addIf (Set.member n model.selected) [ Font.underline ]
-                |> addIf (model.hovered == Just n) [ Font.bold ]
+        mainElem =
+            baseElem Colours.purple
+
+        secondaryElem =
+            baseElem Colours.orange
+
+        tertiaryElem =
+            baseElem Colours.red
 
         apToString : APType -> String
         apToString apType =
@@ -406,62 +427,65 @@ viewCode model (Indexed ( n, code )) =
     in
     case code of
         NIL ->
-            [ Element.el mainAttrs <| Element.text "NIL" ]
+            [ mainElem "NIL" ]
 
         LD ( x, y ) ->
-            [ Element.el mainAttrs <| Element.text <| "LD (" ++ String.fromInt x ++ "." ++ String.fromInt y ++ ")" ]
+            [ mainElem <| "LD (" ++ String.fromInt x ++ "." ++ String.fromInt y ++ ")" ]
 
         LDC x ->
-            [ Element.el mainAttrs <| Element.text <| "LDC " ++ String.fromInt x ]
+            [ mainElem <| "LDC " ++ String.fromInt x ]
 
         LDFunc name ->
-            [ Element.el mainAttrs <| Element.text "LDF"
+            [ mainElem "LDF"
             , Element.text ","
-            , Element.text name
+            , secondaryElem name
             ]
 
         LDApply aptype nested ->
-            [ Element.el mainAttrs <| Element.text "LDF"
+            [ mainElem "LDF"
             , Element.text ","
-            , Element.text "["
+            , secondaryElem "["
             ]
                 ++ viewNested nested
-                ++ [ Element.text "]"
-                   , Element.el [] <| Element.text (apToString aptype)
+                ++ [ secondaryElem "]"
+                   , Element.text ","
+                   , tertiaryElem <| apToString aptype
                    ]
 
         LDLambda nested ->
-            [ Element.el mainAttrs <| Element.text "LDF"
+            [ mainElem "LDF"
             , Element.text ","
-            , Element.text "["
+            , secondaryElem "["
             ]
                 ++ viewNested nested
-                ++ [ Element.text "]" ]
+                ++ [ secondaryElem "]" ]
 
         SEL nestedT nestedF ->
-            [ Element.el mainAttrs <| Element.text "SEL"
+            [ mainElem "SEL"
             , Element.text ","
-            , Element.text "["
+            , secondaryElem "["
             ]
                 ++ viewNested nestedT
-                ++ [ Element.text "]", Element.text "[" ]
+                ++ [ secondaryElem "]"
+                   , tertiaryElem "["
+                   ]
                 ++ viewNested nestedF
-                ++ [ Element.text "]" ]
+                ++ [ tertiaryElem "]" ]
 
         RTN ->
-            [ Element.el mainAttrs <| Element.text "RTN" ]
+            [ mainElem "RTN" ]
 
         JOIN ->
-            [ Element.el mainAttrs <| Element.text "JOIN" ]
+            [ mainElem "JOIN" ]
 
         DUM ->
-            [ Element.el mainAttrs <| Element.text "DUM" ]
+            [ mainElem "DUM" ]
 
         FUNC f ->
-            [ Element.el mainAttrs <| Element.text f ]
+            [ mainElem f ]
 
         LoneAP ->
-            [ Element.el mainAttrs <| Element.text "AP" ]
+            [ mainElem "AP" ]
 
 
 
