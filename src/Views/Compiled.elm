@@ -81,81 +81,61 @@ transpile_ : Int -> List Prog.Op -> Result Error ( Int, List Indexed )
 transpile_ n ops =
     case ops of
         Prog.NIL :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, NIL ) :: rest)
+            initSingle n NIL
+                |> prependTranspiled xs
 
         (Prog.LD coords) :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, LD coords ) :: rest)
+            initSingle n (LD coords)
+                |> prependTranspiled xs
 
         (Prog.LDC x) :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, LDC x ) :: rest)
+            initSingle n (LDC x)
+                |> prependTranspiled xs
 
         Prog.LDF :: (Prog.FUNCBODY name _) :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, LDFunc name ) :: rest)
+            initSingle n (LDFunc name)
+                |> prependTranspiled xs
 
         Prog.LDF :: (Prog.NESTED nested) :: Prog.AP :: xs ->
-            transpile_ (n + 1) nested
-                |> Result.map (Tuple.mapSecond <| \nest -> Indexed ( n, LDApply AP nest ))
-                |> Result.andThen
-                    (\( m, code ) ->
-                        transpile_ m xs
-                            |> Result.map (Tuple.mapSecond <| \rest -> code :: rest)
-                    )
+            initChain n (\funcBody rest -> Indexed ( n, LDApply AP funcBody ) :: rest)
+                |> chainTranspiled nested
+                |> chainTranspiled xs
 
         Prog.LDF :: (Prog.NESTED nested) :: Prog.RAP :: xs ->
-            transpile_ (n + 1) nested
-                |> Result.map (Tuple.mapSecond <| \nest -> Indexed ( n, LDApply RAP nest ))
-                |> Result.andThen
-                    (\( m, code ) ->
-                        transpile_ m xs
-                            |> Result.map (Tuple.mapSecond <| \rest -> code :: rest)
-                    )
+            initChain n (\funcBody rest -> Indexed ( n, LDApply RAP funcBody ) :: rest)
+                |> chainTranspiled nested
+                |> chainTranspiled xs
 
         Prog.LDF :: (Prog.NESTED nested) :: xs ->
-            transpile_ (n + 1) nested
-                |> Result.map (Tuple.mapSecond <| \nest -> Indexed ( n, LDLambda nest ))
-                |> Result.andThen
-                    (\( m, code ) ->
-                        transpile_ m xs
-                            |> Result.map (Tuple.mapSecond <| \rest -> code :: rest)
-                    )
+            initChain n (\funcBody rest -> Indexed ( n, LDLambda funcBody ) :: rest)
+                |> chainTranspiled nested
+                |> chainTranspiled xs
 
         Prog.RTN :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, RTN ) :: rest)
+            initSingle n RTN
+                |> prependTranspiled xs
 
         Prog.SEL :: (Prog.NESTED nestedT) :: (Prog.NESTED nestedF) :: xs ->
-            transpile_ (n + 1) nestedT
-                |> Result.map (Tuple.mapSecond <| \nestT nestF -> Indexed ( n, SEL nestT nestF ))
-                |> Result.andThen
-                    (\( m, sel1 ) ->
-                        transpile_ m nestedF
-                            |> Result.map (Tuple.mapSecond <| \nestF -> sel1 nestF)
-                            |> Result.andThen
-                                (\( m1, sel2 ) ->
-                                    transpile_ m1 xs
-                                        |> Result.map (Tuple.mapSecond <| \rest -> sel2 :: rest)
-                                )
-                    )
+            initChain n (\onT onF rest -> Indexed ( n, SEL onT onF ) :: rest)
+                |> chainTranspiled nestedT
+                |> chainTranspiled nestedF
+                |> chainTranspiled xs
 
         Prog.JOIN :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, JOIN ) :: rest)
+            initSingle n JOIN
+                |> prependTranspiled xs
 
         Prog.DUM :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, DUM ) :: rest)
+            initSingle n DUM
+                |> prependTranspiled xs
 
         (Prog.FUNC f) :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, FUNC <| Prog.funcToString f ) :: rest)
+            initSingle n (FUNC <| Prog.funcToString f)
+                |> prependTranspiled xs
 
         Prog.AP :: xs ->
-            transpile_ (n + 1) xs
-                |> Result.map (Tuple.mapSecond <| \rest -> Indexed ( n, LoneAP ) :: rest)
+            initSingle n LoneAP
+                |> prependTranspiled xs
 
         [] ->
             Ok ( n, [] )
@@ -164,17 +144,48 @@ transpile_ n ops =
             Err <| "Unexpected op! " ++ Prog.opToString op
 
 
-initChain : Int -> a -> Result Error ( Int, ( Int, a ) )
-initChain n code =
-    Ok ( n, ( n, code ) )
+
+-- when we just want one element
+-- Kind of like a monadic succeed
+
+
+initChain : Int -> a -> Result Error ( Int, a )
+initChain n a =
+    Ok ( n + 1, a )
+
+
+
+-- special case of initChain
+
+
+initSingle : Int -> Code Indexed -> Result Error ( Int, Indexed )
+initSingle n a =
+    Ok ( n + 1, Indexed ( n, a ) )
+
+
+
+-- add an element to the chain
+-- a bit like a monadic bind
+
+
+chainTranspiled : List Prog.Op -> Result Error ( Int, List Indexed -> b ) -> Result Error ( Int, b )
+chainTranspiled ops r =
+    case r of
+        Ok ( startN, f ) ->
+            transpile_ startN ops
+                |> Result.map (Tuple.mapSecond <| \rest -> f rest)
+
+        Err e ->
+            Err e
 
 
 
 -- add a transpiled list to the end of a single indexed
+-- this is a special case of chain
 
 
-addTranspiled : List Prog.Op -> Result Error ( Int, Indexed ) -> Result Error ( Int, List Indexed )
-addTranspiled ops r =
+prependTranspiled : List Prog.Op -> Result Error ( Int, Indexed ) -> Result Error ( Int, List Indexed )
+prependTranspiled ops r =
     case r of
         Ok ( n, idxed ) ->
             transpile_ (n + 1) ops
