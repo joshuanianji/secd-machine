@@ -169,14 +169,12 @@ initSingle n a =
 
 
 chainTranspiled : List Prog.Op -> Result Error ( Int, List Indexed -> b ) -> Result Error ( Int, b )
-chainTranspiled ops r =
-    case r of
-        Ok ( startN, f ) ->
+chainTranspiled ops =
+    Result.andThen
+        (\( startN, f ) ->
             transpile_ startN ops
                 |> Result.map (Tuple.mapSecond <| \rest -> f rest)
-
-        Err e ->
-            Err e
+        )
 
 
 
@@ -185,14 +183,12 @@ chainTranspiled ops r =
 
 
 prependTranspiled : List Prog.Op -> Result Error ( Int, Indexed ) -> Result Error ( Int, List Indexed )
-prependTranspiled ops r =
-    case r of
-        Ok ( n, idxed ) ->
+prependTranspiled ops =
+    Result.andThen
+        (\( n, idxed ) ->
             transpile_ (n + 1) ops
                 |> Result.map (Tuple.mapSecond <| \rest -> idxed :: rest)
-
-        Err e ->
-            Err e
+        )
 
 
 
