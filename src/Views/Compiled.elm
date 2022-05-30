@@ -160,7 +160,7 @@ initChain n a =
 
 initSingle : Int -> Code Indexed -> Result Error ( Int, Indexed )
 initSingle n a =
-    Ok ( n + 1, Indexed ( n, a ) )
+    initChain n (Indexed ( n, a ))
 
 
 
