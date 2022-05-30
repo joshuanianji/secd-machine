@@ -186,7 +186,7 @@ prependTranspiled : List Prog.Op -> Result Error ( Int, Indexed ) -> Result Erro
 prependTranspiled ops =
     Result.andThen
         (\( n, idxed ) ->
-            transpile_ (n + 1) ops
+            transpile_ n ops
                 |> Result.map (Tuple.mapSecond <| \rest -> idxed :: rest)
         )
 
