@@ -395,12 +395,29 @@ viewOk model =
         [ -- possible function definitions
           List.map
             (\( n, ( name, body ) ) ->
+                let
+                    bg =
+                        if Set.member n model.selected || Just n == model.hovered then
+                            Colours.slateGrey
+
+                        else
+                            Colours.transparent
+                in
                 Element.row
-                    []
-                    [ Element.text name, viewCodes body ]
+                    [ Element.spacing 8
+                    , Element.padding 4
+                    , Background.color bg
+                    , Border.rounded 8
+                    ]
+                    [ Element.el [ Font.bold ] <| Element.text (name ++ ":")
+                    , viewCodes body
+                    ]
             )
             (getFuncDefs model.code)
-            |> Element.column [ Element.spacing 4 ]
+            |> Element.column
+                [ Element.spacing 6
+                , Element.paddingXY 24 8
+                ]
 
         -- the compiled code
         , viewCodes model.code
