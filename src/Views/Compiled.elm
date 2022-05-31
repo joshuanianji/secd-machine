@@ -394,8 +394,10 @@ viewOk : OkModel -> Element Msg
 viewOk model =
     Element.column
         []
-        [ -- possible function definitions
-          viewFunctionDefs model
+        [ Element.el [ Element.centerX, Font.size 36 ] <| Element.text "Function Definitions"
+
+        -- possible function definitions
+        , viewFunctionDefs model
 
         -- the compiled code
         , viewCodeBlock model model.code
@@ -411,12 +413,15 @@ viewFunctionDefs model =
             List.map
                 (\( n, ( name, bodyDef ) ) ->
                     let
-                        bg =
-                            if Set.member n model.selected || Just n == model.hovered then
-                                Colours.slateGrey
+                        ( fontColour, bgColour ) =
+                            if Just n == model.hovered then
+                                ( Colours.lightGrey, Colours.slateGrey )
+
+                            else if Set.member n model.selected then
+                                ( Colours.black, Colours.slateGrey )
 
                             else
-                                Colours.transparent
+                                ( Colours.black, Colours.transparent )
 
                         title =
                             Element.el
@@ -426,7 +431,9 @@ viewFunctionDefs model =
                                 , Element.pointer
                                 , Font.bold
                                 , Border.roundEach { eachZeroBorder | topLeft = 6, bottomLeft = 6 }
-                                , Background.color bg
+                                , Background.color bgColour
+                                , Font.color fontColour
+                                , Element.mouseDown [ Font.color <| Colours.greyAlpha 0.5 ]
                                 , Element.paddingXY 8 6
                                 , Element.width Element.fill
                                 ]
@@ -435,7 +442,7 @@ viewFunctionDefs model =
                         body =
                             Element.wrappedRow
                                 [ Border.roundEach { eachZeroBorder | topRight = 6, bottomRight = 6 }
-                                , Background.color bg
+                                , Background.color bgColour
                                 , Element.paddingXY 8 6
                                 ]
                                 (viewCodeBlock model bodyDef)
