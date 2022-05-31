@@ -5,6 +5,7 @@ import Fuzz
 import Lib.Cons as Cons
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
+import Programs
 import Test exposing (Test)
 
 
@@ -130,20 +131,14 @@ integrationGeneral =
         [ Test.test "Recursive length program" <|
             \_ ->
                 let
-                    program =
-                        "(letrec ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1)))))) (f '(1 2 3) 0))"
-
                     expected =
                         Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
                 in
-                parse program
+                parse Programs.recursiveLength
                     |> Expect.equal (Ok expected)
         , Test.test "Mutually recursive isEven" <|
             \_ ->
                 let
-                    program =
-                        "(letrec ((odd (lambda (n) (if (eq n 0) nil (even (- n 1))))) (even (lambda (n) (if (eq n 0) (atom nil) (odd (- n 1)))))) (even 4))"
-
                     oddFunc =
                         Lambda [ Token "n" ] (If (FuncApp (var "eq") [ var "n", Val 0 ]) nil (FuncApp (var "even") [ FuncApp (var "-") [ var "n", Val 1 ] ]))
 
@@ -153,7 +148,7 @@ integrationGeneral =
                     expected =
                         Letrec [ ( Token "odd", oddFunc ), ( Token "even", evenFunc ) ] (FuncApp (var "even") [ Val 4 ])
                 in
-                parse program
+                parse (Programs.mutuallyRecursiveIsEven 4)
                     |> Expect.equal (Ok expected)
         ]
 
@@ -164,13 +159,10 @@ integrationSpacing =
         [ Test.test "Recursive length program" <|
             \_ ->
                 let
-                    program =
-                        "(letrec ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))(f '(1 2 3) 0))"
-
                     programWithSpacing =
                         "(letrec\n\n((f    (\t\tlambda (x m) (if (\n\nnull \t\t\tx) m (f(\t\tcdr x)(+ m 1)))\t\t)))(f'(1 2 3)0)\t\t)"
                 in
-                parse program
+                parse Programs.recursiveLength
                     |> Expect.equal (parse programWithSpacing)
         , Test.test "Comments" <|
             \_ ->

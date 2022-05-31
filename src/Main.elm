@@ -21,7 +21,8 @@ import Ports
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
 import Set exposing (Set)
-import VMView
+import Views.Compiled as ViewCompiled
+import Views.VM as ViewVM
 
 
 main : Program Decode.Value Model Msg
@@ -62,7 +63,7 @@ type CompiledState
     = Idle
     | ParseError Error
     | CompileError AST Error
-    | CompileSuccess AST VMView.Model
+    | CompileSuccess AST ViewCompiled.Model ViewVM.Model
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -97,7 +98,8 @@ type Msg
       -- first arg is name, second is the code
     | UpdateCodeExample String String
     | Compile
-    | VMViewMsg VMView.Msg
+    | ViewVMMsg ViewVM.Msg
+    | ViewCompiledMsg ViewCompiled.Msg
       -- other
     | UpdateScreen Screen
 
@@ -164,17 +166,29 @@ updateSuccess msg model =
 
                         Ok prog ->
                             let
-                                ( vmViewModel, vmViewMsg ) =
-                                    VMView.init { maxPages = 15, pageSize = 10, chunkSize = 10 } prog
-                            in
-                            ( { model | compiled = CompileSuccess ast vmViewModel }, Cmd.map VMViewMsg vmViewMsg )
+                                ( viewVMModel, viewVMMsg ) =
+                                    ViewVM.init { maxPages = 15, pageSize = 10, chunkSize = 10 } prog
 
-        ( CompileSuccess ast vmModel, VMViewMsg subMsg ) ->
+                                ( viewCompiledModel, viewCompiledMsg ) =
+                                    ViewCompiled.init prog
+                            in
+                            ( { model | compiled = CompileSuccess ast viewCompiledModel viewVMModel }
+                            , Cmd.batch [ Cmd.map ViewVMMsg viewVMMsg, Cmd.map ViewCompiledMsg viewCompiledMsg ]
+                            )
+
+        ( CompileSuccess ast compiledModel vmModel, ViewVMMsg subMsg ) ->
             let
                 ( newVMModel, newVMMsg ) =
-                    VMView.update subMsg vmModel
+                    ViewVM.update subMsg vmModel
             in
-            ( { model | compiled = CompileSuccess ast newVMModel }, Cmd.map VMViewMsg newVMMsg )
+            ( { model | compiled = CompileSuccess ast compiledModel newVMModel }, Cmd.map ViewVMMsg newVMMsg )
+
+        ( CompileSuccess ast compiledModel vmModel, ViewCompiledMsg subMsg ) ->
+            let
+                ( newCompiledModel, newCompiledMsg ) =
+                    ViewCompiled.update subMsg compiledModel
+            in
+            ( { model | compiled = CompileSuccess ast newCompiledModel vmModel }, Cmd.map ViewCompiledMsg newCompiledMsg )
 
         ( _, UpdateScreen newScreen ) ->
             ( { model | screen = newScreen }, Cmd.none )
@@ -274,7 +288,7 @@ viewSuccess model =
                         , Element.paragraph [ Font.size 16 ] [ Element.text err ]
                         ]
 
-                CompileSuccess ast vmModel ->
+                CompileSuccess ast compiledModel vmModel ->
                     Element.column
                         [ Element.width Element.fill
                         , Element.height Element.fill
@@ -283,7 +297,8 @@ viewSuccess model =
                         [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Parse success"
                         , Element.paragraph [ Font.size 16 ] [ Element.text <| Debug.toString ast ]
                         , Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
-                        , Element.map VMViewMsg <| VMView.view vmModel
+                        , Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
+                        , Element.map ViewVMMsg <| ViewVM.view vmModel
                         ]
             ]
 
@@ -567,16 +582,19 @@ subscriptions model =
 
         Success m ->
             let
-                vmModelSub =
+                subModelSubscriptions =
                     case m.compiled of
-                        CompileSuccess _ vmModel ->
-                            VMView.subscriptions vmModel
+                        CompileSuccess _ compiledModel vmModel ->
+                            Sub.batch
+                                [ Sub.map ViewVMMsg <| ViewVM.subscriptions vmModel
+                                , Sub.map ViewCompiledMsg <| ViewCompiled.subscriptions compiledModel
+                                ]
 
                         _ ->
                             Sub.none
             in
             Sub.batch
-                [ Sub.map VMViewMsg vmModelSub
+                [ subModelSubscriptions
                 , Ports.updatedEditor CodeChanged
                 , Browser.Events.onResize (\w h -> UpdateScreen <| Screen w h)
                 ]

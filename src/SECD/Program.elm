@@ -7,6 +7,7 @@ import Json.Encode as Encode exposing (Value)
 import Lib.Cons as Cons exposing (Cons)
 import Lib.LispAST as AST exposing (AST, Token)
 import Lib.Util as Util
+import Result.Extra
 import SECD.Error exposing (Error)
 
 
@@ -35,6 +36,8 @@ type Op
     | DUM -- Create a dummy env
     | FUNC Func -- builtin functions
     | NESTED (List Op)
+      -- Not necessary, but used for UI stuff
+    | FUNCBODY String (List Op)
 
 
 type Func
@@ -130,6 +133,9 @@ opToString op =
 
         NESTED ops ->
             "[" ++ (String.join ", " <| List.map opToString ops) ++ "]"
+
+        FUNCBODY name ops ->
+            name ++ ": [" ++ (String.join ", " <| List.map opToString ops) ++ "]"
 
 
 funcToString : Func -> String
@@ -231,6 +237,10 @@ view op =
                 |> Util.wrapAdd (Html.text "[") (Html.text "]")
                 |> Html.div [ Attr.class "vm-op nested row" ]
 
+        -- a function body is just referred to by its name
+        FUNCBODY name _ ->
+            Html.div [ Attr.class "vm-op func func-name" ] [ Html.text name ]
+
 
 
 -- consumable by the SECD VM
@@ -299,7 +309,7 @@ compile_ env ast =
                 (compile_ env branchF)
 
         AST.Lambda vars body ->
-            compileLambda env vars body
+            compileLambda Nothing env vars body
 
         AST.Let bindings body ->
             compileLet env bindings body
@@ -363,22 +373,31 @@ compileFuncApp env f args isRecursive =
         |> Result.andThen addArguments
 
 
-compileLambda : Environment -> List Token -> AST -> Result Error (List Op)
-compileLambda env vars body =
+
+-- compiles a lambda expression
+-- if given a function name, compiled to FUNCBODY instead of "nested"
+
+
+compileLambda : Maybe String -> Environment -> List Token -> AST -> Result Error (List Op)
+compileLambda mFuncName env vars body =
     let
         newEnv =
             addVarNames (List.map AST.tokenToStr vars) env
 
         compiledBody =
             compile_ newEnv body
+
+        wrapper =
+            case mFuncName of
+                Nothing ->
+                    NESTED
+
+                Just funcName ->
+                    FUNCBODY funcName
     in
     Result.map
-        (\compiledBodyOk -> [ LDF, NESTED (compiledBodyOk ++ [ RTN ]) ])
+        (\compiledBodyOk -> [ LDF, wrapper (compiledBodyOk ++ [ RTN ]) ])
         compiledBody
-
-
-
--- A let function can be thought of as a lambda function application!
 
 
 compileLet : Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
@@ -392,7 +411,9 @@ compileLetrec =
 
 
 
--- extrapolates the similaries with compiling let and letrec
+-- helper function for compileLet and compileLetrec
+-- note this function is quite similar to compileFuncApp, because a lambda can be thought of as a function application!
+-- though, we need extra logic to handle storing code for function let statements
 
 
 compileLetHelper : Bool -> Environment -> List ( Token, AST ) -> AST -> Result Error (List Op)
@@ -401,22 +422,55 @@ compileLetHelper isRecursive env bindings body =
         vars =
             List.map Tuple.first bindings
 
-        -- the values, or the bound values, can be thought of as "arguments"
-        vals =
-            List.map Tuple.second bindings
-
+        -- in a letrec statement, the bindings have access to the new environment
+        -- in a let statement, they only use the old environment
         newEnv =
             addVarNames (List.map AST.tokenToStr vars) env
 
-        lambdaBody =
-            AST.Lambda vars body
-    in
-    if isRecursive then
-        -- add DUM in front
-        Result.map ((::) DUM) <| compileFuncApp newEnv lambdaBody vals isRecursive
+        letBindingEnv =
+            if isRecursive then
+                newEnv
 
-    else
-        compileFuncApp env lambdaBody vals isRecursive
+            else
+                env
+
+        apCall =
+            if isRecursive then
+                RAP
+
+            else
+                AP
+
+        -- similar to compileArgs, but we know this is a "custom function"
+        compiledBindings =
+            List.reverse bindings
+                |> List.map (compileLetBinding letBindingEnv)
+                |> Result.Extra.combine
+                -- add CONS between each arg
+                |> (Result.map <| List.intersperse [ FUNC CONS ])
+                |> Result.map List.concat
+                -- add trailing cons if args is nonempty
+                |> (Result.map <| Util.runIf (List.length bindings /= 0) (\l -> l ++ [ FUNC CONS ]))
+                -- appending NIL to the front of custom functions (so we can built the argument list)
+                |> (Result.map <| (::) NIL)
+
+        -- similar to the body of a lambda
+        compiledBody =
+            compile_ newEnv body
+                |> Result.map (\compiledBodyOk -> [ LDF, NESTED (compiledBodyOk ++ [ RTN ]) ])
+    in
+    Result.map2 (\bindings_ body_ -> bindings_ ++ body_ ++ [ apCall ]) compiledBindings compiledBody
+        |> Result.map (Util.runIf isRecursive ((::) DUM))
+
+
+compileLetBinding : Environment -> ( Token, AST ) -> Result Error (List Op)
+compileLetBinding env ( var, val ) =
+    case val of
+        AST.Lambda vars body ->
+            compileLambda (Just <| AST.tokenToStr var) env vars body
+
+        _ ->
+            compile_ env val
 
 
 
@@ -523,7 +577,7 @@ compileFunc env f =
                 |> Result.andThen addArgs
 
         AST.Lambda args f_ ->
-            compileLambda env args f_
+            compileLambda Nothing env args f_
                 |> Result.map (\ops -> ( Just <| List.length args, ops, False ))
 
         _ ->
@@ -538,37 +592,19 @@ compileFunc env f =
 compileArgs : Environment -> Bool -> List AST -> Result Error (List Op)
 compileArgs env isBuiltin args =
     let
-        compileNonBuiltin : List AST -> Result Error (List Op)
-        compileNonBuiltin args_ =
-            case args_ of
-                [] ->
-                    Ok []
-
-                arg :: xs ->
-                    Result.map2
-                        (\cmpArg cmpArgs -> cmpArg ++ FUNC CONS :: cmpArgs)
-                        (compile_ env arg)
-                        (compileNonBuiltin xs)
-
-        compileBuiltin : List AST -> Result Error (List Op)
-        compileBuiltin args_ =
-            case args_ of
-                [] ->
-                    Ok []
-
-                arg :: xs ->
-                    Result.map2
-                        (\cmpArg cmpArgs -> cmpArg ++ cmpArgs)
-                        (compile_ env arg)
-                        (compileBuiltin xs)
+        customFunc =
+            not isBuiltin
     in
-    if isBuiltin then
-        -- we want to push the arguments on the stack in REVERSE order
-        compileBuiltin <| List.reverse args
-
-    else
-        -- appending "NIL" to the front
-        Result.map ((::) NIL) (compileNonBuiltin <| List.reverse args)
+    List.reverse args
+        |> List.map (compile_ env)
+        |> Result.Extra.combine
+        -- add CONS between each arg
+        |> (Result.map <| Util.runIf customFunc (List.intersperse [ FUNC CONS ]))
+        |> Result.map List.concat
+        -- add trailing cons if args is nonempty
+        |> (Result.map <| Util.runIf (customFunc && List.length args /= 0) (\l -> l ++ [ FUNC CONS ]))
+        -- appending NIL to the front of custom functions (so we can built the argument list)
+        |> (Result.map <| Util.runIf customFunc ((::) NIL))
 
 
 
@@ -687,6 +723,10 @@ encodeSingle op =
         NESTED ops ->
             Encode.list encodeSingle ops
 
+        FUNCBODY f ops ->
+            Encode.object
+                [ ( "name", Encode.string f ), ( "body", Encode.list encodeSingle ops ) ]
+
 
 encodeFunc : Func -> Value
 encodeFunc f =
@@ -747,6 +787,7 @@ singleDecoder =
         [ Decode.int |> Decode.andThen (LDC >> Decode.succeed)
         , Decode.map2 (\x y -> LD ( x, y )) (Decode.index 0 Decode.int) (Decode.index 1 Decode.int)
         , Decode.lazy <| \_ -> Decode.map NESTED (Decode.list singleDecoder)
+        , Decode.lazy <| \_ -> Decode.map2 FUNCBODY (Decode.field "name" Decode.string) (Decode.field "body" (Decode.list singleDecoder))
         , Decode.string
             |> Decode.andThen
                 (\str ->

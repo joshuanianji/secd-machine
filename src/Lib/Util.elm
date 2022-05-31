@@ -49,6 +49,40 @@ foldResult r =
 {-|
 
 
+## addIf
+
+conditionally prepends a list
+
+-}
+addIf : Bool -> List a -> List a -> List a
+addIf condition xs ys =
+    if condition then
+        ys ++ xs
+
+    else
+        ys
+
+
+{-|
+
+
+## runIf
+
+conditionally runs a function
+
+-}
+runIf : Bool -> (a -> a) -> a -> a
+runIf condition f =
+    if condition then
+        f
+
+    else
+        identity
+
+
+{-|
+
+
 ## focusN
 
 focus on the nth element in a zipper
