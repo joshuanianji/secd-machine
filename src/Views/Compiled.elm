@@ -294,16 +294,19 @@ getIndices ops =
 getFuncDefs : List Indexed -> List ( Int, ( String, List Indexed ) )
 getFuncDefs ops =
     let
-        getFuncDef : Indexed -> Maybe ( Int, ( String, List Indexed ) )
+        getFuncDef : Indexed -> List ( Int, ( String, List Indexed ) )
         getFuncDef (Indexed ( n, code )) =
             case code of
                 LDFunc name body ->
-                    Just ( n, ( name, body ) )
+                    [ ( n, ( name, body ) ) ]
+
+                LDApply _ nested ->
+                    getFuncDefs nested
 
                 _ ->
-                    Nothing
+                    []
     in
-    List.filterMap getFuncDef ops
+    List.concatMap getFuncDef ops
 
 
 
@@ -402,6 +405,16 @@ viewOk model =
 
                         else
                             Colours.transparent
+
+                    title =
+                        Element.el
+                            [ Events.onClick (ToggleSelected n)
+                            , Events.onMouseEnter (Hover n)
+                            , Events.onMouseLeave (UnHover n)
+                            , Element.pointer
+                            , Font.bold
+                            ]
+                            (Element.text name)
                 in
                 Element.row
                     [ Element.spacing 8
@@ -409,7 +422,7 @@ viewOk model =
                     , Background.color bg
                     , Border.rounded 8
                     ]
-                    [ Element.el [ Font.bold ] <| Element.text (name ++ ":")
+                    [ title
                     , viewCodes body
                     ]
             )
