@@ -414,7 +414,7 @@ viewOk model =
         viewRaw =
             Element.wrappedRow
                 [ Element.spacing 4
-                , Element.paddingXY 16 12
+                , Element.paddingXY 32 12
                 , Element.centerX
                 ]
                 (viewCodesRaw model.code)
@@ -422,7 +422,7 @@ viewOk model =
         viewInteractive =
             Element.column
                 [ Element.spacing 16
-                , Element.paddingXY 16 12
+                , Element.paddingXY 32 12
                 , Element.centerX
                 ]
                 [ -- possible function definitions
@@ -502,7 +502,7 @@ viewFunctionDefs model =
                                 , Background.color bgColour
                                 , Font.color fontColour
                                 , Element.mouseDown [ Font.color <| Colours.greyAlpha 0.5 ]
-                                , Element.paddingXY 8 6
+                                , Element.paddingXY 8 9
                                 , Element.width Element.fill
                                 ]
                                 (Element.text name)
@@ -650,12 +650,15 @@ viewCodeInteractive model (Indexed ( n, code )) =
                 , Events.onMouseEnter (Hover n)
                 , Events.onMouseLeave (UnHover n)
                 , Element.pointer
-                , Element.paddingXY 3 0
+                , Element.paddingXY 4 3
                 , Font.color Colours.transparent
                 , Font.bold
+
+                -- this is what is actually displayed
                 , Element.behindContent <|
                     Element.el
                         ([ Element.centerX
+                         , Element.centerY
                          , Font.regular
                          , Font.color Colours.black
                          ]
@@ -664,6 +667,7 @@ viewCodeInteractive model (Indexed ( n, code )) =
                         )
                         (Element.text text)
                 ]
+                -- this bold text is to set the width
                 (Element.text text)
 
         -- attrs for the "main elmeent" in a code block
