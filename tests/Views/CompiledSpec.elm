@@ -15,7 +15,6 @@ suite =
     Test.describe "compiledSpec"
         [ testTranspiler
         , testTranspilerIndices
-        , testGetFuncDefs
         ]
 
 
