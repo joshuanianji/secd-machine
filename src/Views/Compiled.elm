@@ -27,7 +27,7 @@ import Element.Input as Input
 import Html
 import Html.Attributes
 import Lib.Colours as Colours
-import Lib.Util as Util
+import Lib.Util as Util exposing (eachZeroBorder)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -288,20 +288,27 @@ getIndices ops =
 
 
 -- gets all function definitions
--- returns list of (Index, (funcName, funcBody))
+-- returns flat list of (Index, (funcName, funcBody))
 
 
 getFuncDefs : List Indexed -> List ( Int, ( String, List Indexed ) )
 getFuncDefs ops =
     let
+        -- just look at all possible places where we can have a let statement.
         getFuncDef : Indexed -> List ( Int, ( String, List Indexed ) )
         getFuncDef (Indexed ( n, code )) =
             case code of
                 LDFunc name body ->
-                    [ ( n, ( name, body ) ) ]
+                    ( n, ( name, body ) ) :: getFuncDefs body
 
                 LDApply _ nested ->
                     getFuncDefs nested
+
+                SEL nestedT nestedF ->
+                    getFuncDefs nestedT ++ getFuncDefs nestedF
+
+                LDLambda body ->
+                    getFuncDefs body
 
                 _ ->
                     []
@@ -385,56 +392,82 @@ view model =
 
 viewOk : OkModel -> Element Msg
 viewOk model =
-    let
-        viewCodes code =
-            List.map (viewCode model) code
-                |> List.intersperse [ Element.text "," ]
-                |> List.concat
-                |> Element.wrappedRow
-                    [ Element.width Element.fill ]
-    in
     Element.column
         []
         [ -- possible function definitions
-          List.map
-            (\( n, ( name, body ) ) ->
-                let
-                    bg =
-                        if Set.member n model.selected || Just n == model.hovered then
-                            Colours.slateGrey
-
-                        else
-                            Colours.transparent
-
-                    title =
-                        Element.el
-                            [ Events.onClick (ToggleSelected n)
-                            , Events.onMouseEnter (Hover n)
-                            , Events.onMouseLeave (UnHover n)
-                            , Element.pointer
-                            , Font.bold
-                            ]
-                            (Element.text name)
-                in
-                Element.row
-                    [ Element.spacing 8
-                    , Element.padding 4
-                    , Background.color bg
-                    , Border.rounded 8
-                    ]
-                    [ title
-                    , viewCodes body
-                    ]
-            )
-            (getFuncDefs model.code)
-            |> Element.column
-                [ Element.spacing 6
-                , Element.paddingXY 24 8
-                ]
+          viewFunctionDefs model
 
         -- the compiled code
-        , viewCodes model.code
+        , viewCodeBlock model model.code
+            |> Element.wrappedRow
+                [ Element.width Element.fill ]
         ]
+
+
+viewFunctionDefs : OkModel -> Element Msg
+viewFunctionDefs model =
+    let
+        tabularData =
+            List.map
+                (\( n, ( name, bodyDef ) ) ->
+                    let
+                        bg =
+                            if Set.member n model.selected || Just n == model.hovered then
+                                Colours.slateGrey
+
+                            else
+                                Colours.transparent
+
+                        title =
+                            Element.el
+                                [ Events.onClick (ToggleSelected n)
+                                , Events.onMouseEnter (Hover n)
+                                , Events.onMouseLeave (UnHover n)
+                                , Element.pointer
+                                , Font.bold
+                                , Border.roundEach { eachZeroBorder | topLeft = 6, bottomLeft = 6 }
+                                , Background.color bg
+                                , Element.paddingXY 8 6
+                                , Element.width Element.fill
+                                ]
+                                (Element.text name)
+
+                        body =
+                            Element.wrappedRow
+                                [ Border.roundEach { eachZeroBorder | topRight = 6, bottomRight = 6 }
+                                , Background.color bg
+                                , Element.paddingXY 8 6
+                                ]
+                                (viewCodeBlock model bodyDef)
+                    in
+                    { title = title
+                    , body = body
+                    }
+                )
+                (getFuncDefs model.code)
+    in
+    Element.table
+        [ Element.paddingXY 24 12
+        ]
+        { data = tabularData
+        , columns =
+            [ { header = Element.none
+              , width = Element.shrink
+              , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.title
+              }
+            , { header = Element.none
+              , width = Element.fill
+              , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.body
+              }
+            ]
+        }
+
+
+viewCodeBlock : OkModel -> List Indexed -> List (Element Msg)
+viewCodeBlock model code =
+    List.map (viewCode model) code
+        |> List.intersperse [ Element.text "," ]
+        |> List.concat
 
 
 viewCode : OkModel -> Indexed -> List (Element Msg)

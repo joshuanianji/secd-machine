@@ -15,6 +15,7 @@ suite =
     Test.describe "compiledSpec"
         [ testTranspiler
         , testTranspilerIndices
+        , testGetFuncDefs
         ]
 
 
@@ -60,7 +61,7 @@ transpilerLDF =
             )
             [ ( "LDF followed by funcbody"
               , [ Prog.LDF, Prog.FUNCBODY "sub" [ Prog.LD ( 0, 1 ), Prog.LD ( 0, 0 ), Prog.FUNC Prog.SUB, Prog.RTN ] ]
-              , [ LDFunc "sub" ]
+              , [ LDFunc "sub" <| List.map Unindexed [ LD ( 0, 1 ), LD ( 0, 0 ), FUNC "-", RTN ] ]
                     |> List.map Unindexed
               )
             , ( "LDF with nested and rap"
