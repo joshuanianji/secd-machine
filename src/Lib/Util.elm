@@ -49,6 +49,23 @@ foldResult r =
 {-|
 
 
+## addIf
+
+conditionally prepends a list
+
+-}
+addIf : Bool -> List a -> List a -> List a
+addIf condition xs ys =
+    if condition then
+        ys ++ xs
+
+    else
+        ys
+
+
+{-|
+
+
 ## runIf
 
 conditionally runs a function

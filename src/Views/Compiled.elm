@@ -50,10 +50,16 @@ type alias Model =
 
 
 type alias OkModel =
-    { code : List Indexed
+    { viewType : ViewType
+    , code : List Indexed
     , hovered : Maybe Int
     , selected : Set Int
     }
+
+
+type ViewType
+    = RawView
+    | InteractiveView
 
 
 init : Program -> ( Model, Cmd Msg )
@@ -63,7 +69,15 @@ init prog =
             transpile <| Prog.toList prog
 
         transpiledModel =
-            Result.map (\indexed -> { code = indexed, hovered = Nothing, selected = Set.empty }) transpiled
+            Result.map
+                (\indexed ->
+                    { code = indexed
+                    , hovered = Nothing
+                    , selected = Set.empty
+                    , viewType = InteractiveView
+                    }
+                )
+                transpiled
     in
     ( { original = Prog.toList prog
       , transpiled = transpiledModel
@@ -350,6 +364,7 @@ type Msg
     = ToggleSelected Int
     | Hover Int
     | UnHover Int
+    | SetViewType ViewType
 
 
 
@@ -372,6 +387,9 @@ update msg model =
         ( Ok okModel, UnHover _ ) ->
             ( { model | transpiled = Ok { okModel | hovered = Nothing } }, Cmd.none )
 
+        ( Ok okModel, SetViewType viewType ) ->
+            ( { model | transpiled = Ok { okModel | viewType = viewType } }, Cmd.none )
+
         ( _, _ ) ->
             ( model, Cmd.none )
 
@@ -392,20 +410,67 @@ view model =
 
 viewOk : OkModel -> Element Msg
 viewOk model =
+    let
+        viewRaw =
+            Element.wrappedRow
+                [ Element.spacing 4
+                , Element.paddingXY 16 12
+                , Element.centerX
+                ]
+                (viewCodesRaw model.code)
+
+        viewInteractive =
+            Element.column
+                [ Element.spacing 16
+                , Element.paddingXY 16 12
+                , Element.centerX
+                ]
+                [ -- possible function definitions
+                  viewFunctionDefs model
+
+                -- the compiled code
+                , viewCompiledCode model
+                ]
+    in
     Element.column
         [ Element.spacing 16
-        , Element.paddingXY 16 12
+        , Element.width Element.fill
         ]
-        [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Function Definitions"
+        [ Element.el [ Element.centerX ] <| viewTypeButtons model
+        , case model.viewType of
+            RawView ->
+                viewRaw
 
-        -- possible function definitions
-        , viewFunctionDefs model
-        , Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Actual Code"
+            InteractiveView ->
+                viewInteractive
+        ]
 
-        -- the compiled code
-        , viewCodeBlock model model.code
-            |> Element.wrappedRow
-                [ Element.width Element.fill ]
+
+viewTypeButtons : OkModel -> Element Msg
+viewTypeButtons model =
+    let
+        attrs : ViewType -> List (Element.Attribute Msg)
+        attrs viewType =
+            [ Element.padding 8
+            , Border.color Colours.black
+            , Border.width 1
+            ]
+                |> Util.addIf (model.viewType == viewType) [ Background.color Colours.black, Font.color Colours.white ]
+                |> Util.addIf (viewType == RawView) [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
+                |> Util.addIf (viewType == InteractiveView) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
+    in
+    Element.row
+        []
+        [ Input.button
+            (attrs RawView)
+            { onPress = Just <| SetViewType RawView
+            , label = Element.text "Raw code"
+            }
+        , Input.button
+            (attrs InteractiveView)
+            { onPress = Just <| SetViewType InteractiveView
+            , label = Element.text "Interactive"
+            }
         ]
 
 
@@ -448,7 +513,7 @@ viewFunctionDefs model =
                                 , Background.color bgColour
                                 , Element.paddingXY 8 6
                                 ]
-                                (viewCodeBlock model bodyDef)
+                                (viewCodesInteractive model bodyDef)
                     in
                     { title = title
                     , body = body
@@ -456,41 +521,127 @@ viewFunctionDefs model =
                 )
                 (getFuncDefs model.code)
     in
-    Element.table
-        [ Element.paddingXY 24 0
-        ]
-        { data = tabularData
-        , columns =
-            [ { header = Element.none
-              , width = Element.shrink
-              , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.title
-              }
-            , { header = Element.none
-              , width = Element.fill
-              , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.body
-              }
+    if List.isEmpty tabularData then
+        Element.none
+
+    else
+        Element.column
+            [ Element.spacing 16 ]
+            [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Function Definitions"
+            , Element.table
+                [ Element.paddingXY 24 0
+                ]
+                { data = tabularData
+                , columns =
+                    [ { header = Element.none
+                      , width = Element.shrink
+                      , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.title
+                      }
+                    , { header = Element.none
+                      , width = Element.fill
+                      , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.body
+                      }
+                    ]
+                }
             ]
-        }
 
 
-viewCodeBlock : OkModel -> List Indexed -> List (Element Msg)
-viewCodeBlock model code =
-    List.map (viewCode model) code
+viewCodesRaw : List Indexed -> List (Element Msg)
+viewCodesRaw =
+    List.map viewCodeRaw
+        >> List.intersperse [ Element.text "," ]
+        >> List.concat
+
+
+viewCodeRaw : Indexed -> List (Element Msg)
+viewCodeRaw (Indexed ( _, code )) =
+    case code of
+        NIL ->
+            [ Element.text "NIL" ]
+
+        LD ( x, y ) ->
+            [ Element.text <| "LD (" ++ String.fromInt x ++ "." ++ String.fromInt y ++ ")" ]
+
+        LDC x ->
+            [ Element.text <| "LDC " ++ String.fromInt x ]
+
+        LDFunc _ nested ->
+            [ Element.text "LDF"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewCodesRaw nested
+
+        LDApply aptype nested ->
+            [ Element.text "LDF"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewCodesRaw nested
+                ++ [ Element.text "]"
+                   , Element.text ","
+                   , Element.text <| apToString aptype
+                   ]
+
+        LDLambda nested ->
+            [ Element.text "LDF"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewCodesRaw nested
+                ++ [ Element.text "]" ]
+
+        SEL nestedT nestedF ->
+            [ Element.text "SEL"
+            , Element.text ","
+            , Element.text "["
+            ]
+                ++ viewCodesRaw nestedT
+                ++ [ Element.text "]"
+                   , Element.text "["
+                   ]
+                ++ viewCodesRaw nestedF
+                ++ [ Element.text "]" ]
+
+        RTN ->
+            [ Element.text "RTN" ]
+
+        JOIN ->
+            [ Element.text "JOIN" ]
+
+        DUM ->
+            [ Element.text "DUM" ]
+
+        FUNC f ->
+            [ Element.text f ]
+
+        LoneAP ->
+            [ Element.text "AP" ]
+
+
+viewCompiledCode : OkModel -> Element Msg
+viewCompiledCode model =
+    Element.column
+        [ Element.spacing 16
+        , Element.width Element.fill
+        ]
+        [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Program Code"
+        , viewCodesInteractive model model.code
+            |> Element.wrappedRow
+                [ Element.centerX ]
+        ]
+
+
+viewCodesInteractive : OkModel -> List Indexed -> List (Element Msg)
+viewCodesInteractive model code =
+    List.map (viewCodeInteractive model) code
         |> List.intersperse [ Element.text "," ]
         |> List.concat
 
 
-viewCode : OkModel -> Indexed -> List (Element Msg)
-viewCode model (Indexed ( n, code )) =
+viewCodeInteractive : OkModel -> Indexed -> List (Element Msg)
+viewCodeInteractive model (Indexed ( n, code )) =
     let
-        addIf : Bool -> List a -> List a -> List a
-        addIf condition xs ys =
-            if condition then
-                ys ++ xs
-
-            else
-                ys
-
         baseElem color text =
             Element.el
                 [ Events.onClick (ToggleSelected n)
@@ -506,8 +657,8 @@ viewCode model (Indexed ( n, code )) =
                          , Font.regular
                          , Font.color Colours.black
                          ]
-                            |> addIf (Set.member n model.selected || model.hovered == Just n) [ Font.color color, Font.bold ]
-                            |> addIf (Set.member n model.selected && model.hovered == Just n) [ Font.underline ]
+                            |> Util.addIf (Set.member n model.selected || model.hovered == Just n) [ Font.color color, Font.bold ]
+                            |> Util.addIf (Set.member n model.selected && model.hovered == Just n) [ Font.underline ]
                         )
                         (Element.text text)
                 ]
@@ -532,21 +683,6 @@ viewCode model (Indexed ( n, code )) =
                 , Font.color Colours.black
                 ]
                 (Element.text text)
-
-        apToString : APType -> String
-        apToString apType =
-            case apType of
-                AP ->
-                    "AP"
-
-                RAP ->
-                    "RAP"
-
-        viewNested : List Indexed -> List (Element Msg)
-        viewNested =
-            List.map (viewCode model)
-                >> List.intersperse [ Element.text "," ]
-                >> List.concat
     in
     case code of
         NIL ->
@@ -569,7 +705,7 @@ viewCode model (Indexed ( n, code )) =
             , whocaresElem ","
             , secondaryElem "["
             ]
-                ++ viewNested nested
+                ++ viewCodesInteractive model nested
                 ++ [ secondaryElem "]"
                    , whocaresElem ","
                    , tertiaryElem <| apToString aptype
@@ -580,7 +716,7 @@ viewCode model (Indexed ( n, code )) =
             , whocaresElem ","
             , secondaryElem "["
             ]
-                ++ viewNested nested
+                ++ viewCodesInteractive model nested
                 ++ [ secondaryElem "]" ]
 
         SEL nestedT nestedF ->
@@ -588,11 +724,11 @@ viewCode model (Indexed ( n, code )) =
             , whocaresElem ","
             , secondaryElem "["
             ]
-                ++ viewNested nestedT
+                ++ viewCodesInteractive model nestedT
                 ++ [ secondaryElem "]"
                    , tertiaryElem "["
                    ]
-                ++ viewNested nestedF
+                ++ viewCodesInteractive model nestedF
                 ++ [ tertiaryElem "]" ]
 
         RTN ->
@@ -609,6 +745,16 @@ viewCode model (Indexed ( n, code )) =
 
         LoneAP ->
             [ mainElem "AP" ]
+
+
+apToString : APType -> String
+apToString apType =
+    case apType of
+        AP ->
+            "AP"
+
+        RAP ->
+            "RAP"
 
 
 
