@@ -393,11 +393,14 @@ view model =
 viewOk : OkModel -> Element Msg
 viewOk model =
     Element.column
-        []
-        [ Element.el [ Element.centerX, Font.size 36 ] <| Element.text "Function Definitions"
+        [ Element.spacing 16
+        , Element.paddingXY 16 12
+        ]
+        [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Function Definitions"
 
         -- possible function definitions
         , viewFunctionDefs model
+        , Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Actual Code"
 
         -- the compiled code
         , viewCodeBlock model model.code
@@ -454,7 +457,7 @@ viewFunctionDefs model =
                 (getFuncDefs model.code)
     in
     Element.table
-        [ Element.paddingXY 24 12
+        [ Element.paddingXY 24 0
         ]
         { data = tabularData
         , columns =
