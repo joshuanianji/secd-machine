@@ -526,7 +526,9 @@ viewFunctionDefs model =
 
     else
         Element.column
-            [ Element.spacing 16 ]
+            [ Element.spacing 16
+            , Element.centerX
+            ]
             [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Function Definitions"
             , Element.table
                 [ Element.paddingXY 24 0
