@@ -287,7 +287,7 @@ update msg model =
                 update Previous newModel
 
             else
-                ( model, Cmd.none )
+                ( newModel, Cmd.none )
 
         ( Loading locs, GotPage res ) ->
             case res of
