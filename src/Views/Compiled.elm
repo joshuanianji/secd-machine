@@ -415,7 +415,7 @@ viewOk model =
             Element.paragraph
                 [ Element.spacing 8
                 , Element.paddingXY 32 12
-                , Element.centerX
+                , Font.center
                 ]
                 (viewCodesRaw model.code)
 
