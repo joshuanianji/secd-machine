@@ -13,7 +13,7 @@ import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours
-import Lib.Util as Util
+import Lib.Util as Util exposing (eachZero)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -387,7 +387,7 @@ view model =
     let
         title =
             Lib.Views.togglableTitle
-                []
+                [ Element.paddingEach { eachZero | bottom = 16 } ]
                 { label = "Execute Program on VM"
                 , activeWhen = True
                 , onClick = NoOp
