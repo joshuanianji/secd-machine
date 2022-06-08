@@ -116,6 +116,7 @@ type Msg
     | UpdateSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
+    | NoOp
 
 
 
@@ -379,17 +380,37 @@ updateStateIndex newIdx model =
 
 view : Model -> Element Msg
 view model =
+    let
+        title =
+            Lib.Views.togglableTitle
+                []
+                { label = "Execute Program on VM"
+                , activeWhen = True
+                , onClick = NoOp
+                }
+
+        totalSize =
+            Element.paragraph
+                []
+                [ Element.text "Total size: "
+                , Lib.Views.bold <| String.fromInt model.totalStates
+                , case model.latestVM of
+                    Err _ ->
+                        Lib.Views.bold "+"
+
+                    Ok _ ->
+                        Element.none
+                , Element.text " states"
+                ]
+    in
     Element.column
         [ Element.width Element.fill
         , Element.height Element.fill
-        , Element.spacing 8
+        , Element.spacing 16
         , Element.spacingXY 8 12
         ]
-        [ Element.paragraph
-            []
-            [ Element.text "Total size: "
-            , Lib.Views.bold <| String.fromInt model.totalStates
-            ]
+        [ title
+        , totalSize
         , viewSlider model
 
         -- renders if the fetch status is error

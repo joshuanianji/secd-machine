@@ -286,7 +286,7 @@ viewSuccess model =
                 Element.column
                     [ Element.width Element.fill
                     , Element.height Element.fill
-                    , Element.spacing 8
+                    , Element.spacing 32
                     ]
                     [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
                     , Element.map ViewVMMsg <| ViewVM.view vmModel
@@ -356,7 +356,7 @@ descriptionWhatis =
             ]
             [ Element.text "An SECD is a virtual machine designed primarily for running compiled code from functional languages.  It consists of four stacks: the "
             , Lib.Views.bold "S"
-            , Element.text "tack, holding the 'values' of the code, "
+            , Element.text "tack, holding the 'values' of the executed code, "
             , Lib.Views.bold "E"
             , Element.text "nvironment, containing values of the current scope, "
             , Lib.Views.bold "C"
@@ -410,7 +410,7 @@ descriptionHowto =
             , Lib.Views.bold "parsing"
             , Element.text " my code into an AST, "
             , Lib.Views.bold "compiling"
-            , Element.text " my code into the SECD instruction set, then "
+            , Element.text " the AST into the SECD instruction set, then "
             , Lib.Views.bold "running"
             , Element.text " it on the VM."
             ]

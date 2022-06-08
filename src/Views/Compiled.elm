@@ -416,7 +416,8 @@ viewOk model =
             Element.paragraph
                 [ Element.spacing 8
                 , Element.paddingXY 32 12
-                , Font.center
+                , Element.centerX
+                , Element.width Element.shrink
                 ]
                 (viewCodesRaw model.code)
 
@@ -539,8 +540,7 @@ viewFunctionDefs model =
             ]
             [ Element.el [ Element.centerX, Font.size 32 ] <| Element.text "Function Definitions"
             , Element.table
-                [ Element.paddingXY 24 0
-                ]
+                []
                 { data = tabularData
                 , columns =
                     [ { header = Element.none
