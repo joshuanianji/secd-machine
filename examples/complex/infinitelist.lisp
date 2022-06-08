@@ -13,4 +13,4 @@
             (let
                 ((tookN (lambda () (takeN (- n 1) (cdr (s))))))
                  (cons (car (s)) (tookN)))))))
-    (takeN 4 stream2))
+    (takeN 4 stream1))
