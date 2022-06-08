@@ -273,7 +273,6 @@ update msg model =
             let
                 newPressedKeys =
                     Keyboard.update keyMsg model.pressedKeys
-                        |> Debug.log "Pressed keys"
 
                 newModel =
                     { model | pressedKeys = newPressedKeys }
