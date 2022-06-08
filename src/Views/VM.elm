@@ -13,7 +13,7 @@ import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours
-import Lib.Util as Util
+import Lib.Util as Util exposing (eachZero)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -116,6 +116,8 @@ type Msg
     | UpdateSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
+    | Blur
+    | NoOp
 
 
 
@@ -286,7 +288,7 @@ update msg model =
                 update Previous newModel
 
             else
-                ( model, Cmd.none )
+                ( newModel, Cmd.none )
 
         ( Loading locs, GotPage res ) ->
             case res of
@@ -301,6 +303,9 @@ update msg model =
 
                 Err n ->
                     ( { model | fetchStatus = Error n }, Cmd.none )
+
+        ( _, Blur ) ->
+            ( { model | pressedKeys = [] }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
@@ -379,17 +384,37 @@ updateStateIndex newIdx model =
 
 view : Model -> Element Msg
 view model =
+    let
+        title =
+            Lib.Views.togglableTitle
+                [ Element.paddingEach { eachZero | bottom = 16 } ]
+                { label = "Execute Program on VM"
+                , activeWhen = True
+                , onClick = NoOp
+                }
+
+        totalSize =
+            Element.paragraph
+                []
+                [ Element.text "Total size: "
+                , Lib.Views.bold <| String.fromInt model.totalStates
+                , case model.latestVM of
+                    Err _ ->
+                        Lib.Views.bold "+"
+
+                    Ok _ ->
+                        Element.none
+                , Element.text " states"
+                ]
+    in
     Element.column
         [ Element.width Element.fill
         , Element.height Element.fill
-        , Element.spacing 8
+        , Element.spacing 16
         , Element.spacingXY 8 12
         ]
-        [ Element.paragraph
-            []
-            [ Element.text "Total size: "
-            , Lib.Views.bold <| String.fromInt model.totalStates
-            ]
+        [ title
+        , totalSize
         , viewSlider model
 
         -- renders if the fetch status is error
@@ -523,6 +548,7 @@ subscriptions model =
     Sub.batch
         [ fetchSub
         , Sub.map KeyMsg Keyboard.subscriptions
+        , Ports.blurs (\_ -> Blur)
         ]
 
 

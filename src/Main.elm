@@ -286,14 +286,14 @@ viewSuccess model =
                 Element.column
                     [ Element.width Element.fill
                     , Element.height Element.fill
-                    , Element.spacing 8
+                    , Element.spacing 32
                     ]
                     [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
                     , Element.map ViewVMMsg <| ViewVM.view vmModel
                     ]
         ]
         |> Util.surround
-            [ Element.paddingXY 0 24 ]
+            [ Element.paddingXY 8 24 ]
             { left = surroundSize
             , middle = mainSize
             , right = surroundSize
@@ -326,7 +326,7 @@ description : SuccessModel -> Element Msg
 description model =
     Element.column
         [ Element.spacing 32
-        , Element.paddingXY 8 24
+        , Element.paddingXY 0 24
         , Element.width Element.fill
         ]
         [ Lib.Views.viewTogglable []
@@ -356,7 +356,7 @@ descriptionWhatis =
             ]
             [ Element.text "An SECD is a virtual machine designed primarily for running compiled code from functional languages.  It consists of four stacks: the "
             , Lib.Views.bold "S"
-            , Element.text "tack, holding the 'values' of the code, "
+            , Element.text "tack, holding the 'values' of the executed code, "
             , Lib.Views.bold "E"
             , Element.text "nvironment, containing values of the current scope, "
             , Lib.Views.bold "C"
@@ -410,7 +410,7 @@ descriptionHowto =
             , Lib.Views.bold "parsing"
             , Element.text " my code into an AST, "
             , Lib.Views.bold "compiling"
-            , Element.text " my code into the SECD instruction set, then "
+            , Element.text " the AST into the SECD instruction set, then "
             , Lib.Views.bold "running"
             , Element.text " it on the VM."
             ]
@@ -502,9 +502,7 @@ codeEditor model =
                 ]
     in
     Element.row
-        [ Element.width Element.fill
-        , Element.paddingXY 8 0
-        ]
+        [ Element.width Element.fill ]
         [ Element.el
             [ Element.width <| Element.fillPortion 5
             , Element.height <| Element.px 500
