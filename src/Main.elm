@@ -321,22 +321,11 @@ description model =
 
         showTitleTab : String -> String -> Element Msg
         showTitleTab id content =
-            Element.el
-                [ Font.size 32
-                , Font.color <|
-                    if Set.member id model.openTabs then
-                        Colours.grey
-
-                    else
-                        Colours.greyAlpha 0.5
-                , Font.bold
-                , Events.onClick (ToggleTab id)
-                , Lib.Views.unselectable
-                , Element.pointer
-                , Element.mouseOver
-                    [ Font.color <| Colours.lightGrey ]
-                ]
-                (Element.text content)
+            Lib.Views.togglableTitle []
+                { label = content
+                , activeWhen = Set.member id model.openTabs
+                , onClick = ToggleTab id
+                }
 
         showConditional : String -> Element Msg -> Element Msg
         showConditional id content =

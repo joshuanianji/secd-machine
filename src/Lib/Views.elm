@@ -3,6 +3,7 @@ module Lib.Views exposing (..)
 import Element exposing (Attribute, Element)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Html.Attributes
@@ -56,6 +57,32 @@ link attrs { url, label } =
 unselectable : Attribute msg
 unselectable =
     Element.htmlAttribute <| Html.Attributes.class "unselectable"
+
+
+
+-- a title for a block of content that conditionally displays
+
+
+togglableTitle : List (Attribute msg) -> { label : String, activeWhen : Bool, onClick : msg } -> Element msg
+togglableTitle attrs { label, activeWhen, onClick } =
+    Element.el
+        ([ Font.size 32
+         , Font.color <|
+            if activeWhen then
+                Colours.grey
+
+            else
+                Colours.greyAlpha 0.5
+         , Font.bold
+         , Events.onClick onClick
+         , unselectable
+         , Element.pointer
+         , Element.mouseOver
+            [ Font.color <| Colours.lightGrey ]
+         ]
+            ++ attrs
+        )
+        (Element.text label)
 
 
 

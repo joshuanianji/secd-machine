@@ -465,23 +465,12 @@ viewOk model =
 
 mainTitle : OkModel -> Element Msg
 mainTitle model =
-    Element.el
-        [ Font.size 36
-        , Font.color <|
-            if model.view then
-                Colours.grey
-
-            else
-                Colours.greyAlpha 0.5
-        , Font.bold
-        , Element.centerX
-        , Events.onClick ToggleView
-        , Lib.Views.unselectable
-        , Element.pointer
-        , Element.mouseOver
-            [ Font.color <| Colours.lightGrey ]
-        ]
-        (Element.text "Compiled Code")
+    Lib.Views.togglableTitle
+        [ Element.centerX ]
+        { label = "Compiled Code"
+        , activeWhen = model.view
+        , onClick = ToggleView
+        }
 
 
 viewTypeButtons : OkModel -> Element Msg
