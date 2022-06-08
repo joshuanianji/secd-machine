@@ -276,27 +276,23 @@ viewSuccess model =
                         , Element.paragraph [ Font.size 16 ] [ Element.text err ]
                         ]
 
-                CompileError ast err ->
+                CompileError _ err ->
                     Element.column
                         [ Element.width Element.fill
                         , Element.height Element.fill
                         , Element.spacing 8
                         ]
-                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Parse success"
-                        , Element.paragraph [ Font.size 16 ] [ Element.text <| Debug.toString ast ]
-                        , Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
                         , Element.paragraph [ Font.size 16 ] [ Element.text err ]
                         ]
 
-                CompileSuccess ast compiledModel vmModel ->
+                CompileSuccess _ compiledModel vmModel ->
                     Element.column
                         [ Element.width Element.fill
                         , Element.height Element.fill
                         , Element.spacing 8
                         ]
-                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Parse success"
-                        , Element.paragraph [ Font.size 16 ] [ Element.text <| Debug.toString ast ]
-                        , Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
                         , Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
                         , Element.map ViewVMMsg <| ViewVM.view vmModel
                         ]
