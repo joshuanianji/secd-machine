@@ -661,6 +661,7 @@ viewCodeInteractive model (Indexed ( n, code )) =
                          , Element.centerY
                          , Font.regular
                          , Font.color Colours.black
+                         , Element.htmlAttribute <| Html.Attributes.class "unselectable"
                          ]
                             |> Util.addIf (Set.member n model.selected || model.hovered == Just n) [ Font.color color, Font.bold ]
                             |> Util.addIf (Set.member n model.selected && model.hovered == Just n) [ Font.underline ]
