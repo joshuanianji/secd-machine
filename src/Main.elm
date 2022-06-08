@@ -292,8 +292,7 @@ viewSuccess model =
                         , Element.height Element.fill
                         , Element.spacing 8
                         ]
-                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compilation success!"
-                        , Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
+                        [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
                         , Element.map ViewVMMsg <| ViewVM.view vmModel
                         ]
             ]

@@ -412,8 +412,8 @@ viewOk : OkModel -> Element Msg
 viewOk model =
     let
         viewRaw =
-            Element.wrappedRow
-                [ Element.spacing 4
+            Element.paragraph
+                [ Element.spacing 8
                 , Element.paddingXY 32 12
                 , Element.centerX
                 ]
@@ -435,8 +435,10 @@ viewOk model =
     Element.column
         [ Element.spacing 16
         , Element.width Element.fill
+        , Element.paddingXY 0 32
         ]
-        [ Element.el [ Element.centerX ] <| viewTypeButtons model
+        [ mainTitle
+        , Element.el [ Element.centerX ] <| viewTypeButtons model
         , case model.viewType of
             RawView ->
                 viewRaw
@@ -444,6 +446,13 @@ viewOk model =
             InteractiveView ->
                 viewInteractive
         ]
+
+
+mainTitle : Element Msg
+mainTitle =
+    Element.el
+        [ Font.size 36, Font.bold, Element.centerX ]
+        (Element.text "Compiled Code")
 
 
 viewTypeButtons : OkModel -> Element Msg
@@ -537,11 +546,11 @@ viewFunctionDefs model =
                 , columns =
                     [ { header = Element.none
                       , width = Element.shrink
-                      , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.title
+                      , view = \data -> Element.el [ Element.paddingXY 0 2, Element.width Element.fill ] data.title
                       }
                     , { header = Element.none
                       , width = Element.fill
-                      , view = \data -> Element.el [ Element.paddingXY 0 3, Element.width Element.fill ] data.body
+                      , view = \data -> Element.el [ Element.paddingXY 0 2, Element.width Element.fill ] data.body
                       }
                     ]
                 }
@@ -551,7 +560,7 @@ viewFunctionDefs model =
 viewCodesRaw : List Indexed -> List (Element Msg)
 viewCodesRaw =
     List.map viewCodeRaw
-        >> List.intersperse [ Element.text "," ]
+        >> List.intersperse [ Element.text ", " ]
         >> List.concat
 
 
@@ -569,25 +578,25 @@ viewCodeRaw (Indexed ( _, code )) =
 
         LDFunc _ nested ->
             [ Element.text "LDF"
-            , Element.text ","
+            , Element.text ", "
             , Element.text "["
             ]
                 ++ viewCodesRaw nested
 
         LDApply aptype nested ->
             [ Element.text "LDF"
-            , Element.text ","
+            , Element.text ", "
             , Element.text "["
             ]
                 ++ viewCodesRaw nested
                 ++ [ Element.text "]"
-                   , Element.text ","
+                   , Element.text ", "
                    , Element.text <| apToString aptype
                    ]
 
         LDLambda nested ->
             [ Element.text "LDF"
-            , Element.text ","
+            , Element.text ", "
             , Element.text "["
             ]
                 ++ viewCodesRaw nested
@@ -595,11 +604,11 @@ viewCodeRaw (Indexed ( _, code )) =
 
         SEL nestedT nestedF ->
             [ Element.text "SEL"
-            , Element.text ","
+            , Element.text ", "
             , Element.text "["
             ]
                 ++ viewCodesRaw nestedT
-                ++ [ Element.text "]"
+                ++ [ Element.text "] "
                    , Element.text "["
                    ]
                 ++ viewCodesRaw nestedF
