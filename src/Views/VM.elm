@@ -9,7 +9,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Input as Input
 import Json.Decode as Decode
-import Json.Encode as Encode exposing (Value)
+import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours

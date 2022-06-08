@@ -17,24 +17,17 @@ module Views.Compiled exposing
 -- | Compiled View
 -- Views the compiled code.
 
-import Browser.Navigation exposing (Key)
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
-import Html
-import Html.Attributes
 import Lib.Colours as Colours
 import Lib.Util as Util exposing (eachZeroBorder)
 import Lib.Views
-import List.Zipper as Zipper exposing (Zipper)
-import Ordinal exposing (ordinal)
-import Ports
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Prog exposing (Program)
-import SECD.VM as VM exposing (VM, VMResult)
 import Set exposing (Set)
 
 
