@@ -213,97 +213,6 @@ view model =
 
 viewSuccess : SuccessModel -> Html Msg
 viewSuccess model =
-    Element.layoutWith
-        { options =
-            [ Element.focusStyle
-                { borderColor = Nothing
-                , backgroundColor = Nothing
-                , shadow = Nothing
-                }
-            ]
-        }
-        [ Font.family
-            [ Font.typeface "Avenir"
-            , Font.typeface "Helvetica"
-            , Font.typeface "Arial"
-            , Font.sansSerif
-            ]
-        , Element.width Element.fill
-        , Element.height Element.fill
-        ]
-    <|
-        Element.column
-            [ Element.width Element.fill
-            , Element.height Element.fill
-            , Element.spacing 8
-            ]
-            [ Element.el
-                [ Font.size 36
-                , Font.bold
-                , Element.centerX
-                , Element.paddingXY 0 16
-                ]
-              <|
-                Element.text "SECD Machine"
-            , Element.el
-                [ Font.size 18
-                , Font.bold
-                , Element.centerX
-                , Element.paddingXY 0 8
-                ]
-              <|
-                Element.text "An implementation as seen in Ualberta's CMPUT 325"
-            , description model
-            , codeEditor model
-            , Element.row
-                [ Element.spacing 8
-                , Element.centerX
-                ]
-                [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
-                , Lib.Views.button Compile <| Element.text "Parse + Compile"
-                ]
-            , case model.compiled of
-                Idle ->
-                    Element.none
-
-                ParseError err ->
-                    Element.column
-                        [ Element.width Element.fill
-                        , Element.height Element.fill
-                        , Element.spacing 8
-                        ]
-                        [ Element.el [ Font.size 24 ] <| Element.text "Parse error!"
-                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
-                        ]
-
-                CompileError _ err ->
-                    Element.column
-                        [ Element.width Element.fill
-                        , Element.height Element.fill
-                        , Element.spacing 8
-                        ]
-                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
-                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
-                        ]
-
-                CompileSuccess _ compiledModel vmModel ->
-                    Element.column
-                        [ Element.width Element.fill
-                        , Element.height Element.fill
-                        , Element.spacing 8
-                        ]
-                        [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
-                        , Element.map ViewVMMsg <| ViewVM.view vmModel
-                        ]
-            ]
-
-
-
--- contains the description of the SECD machine and stuff
-
-
-description : SuccessModel -> Element Msg
-description model =
     let
         ( surroundSize, mainSize ) =
             case .class (Element.classifyDevice model.screen) of
@@ -318,32 +227,70 @@ description model =
 
                 Element.BigDesktop ->
                     ( 1, 3 )
-
-        showTitleTab : String -> String -> Element Msg
-        showTitleTab id content =
-            Lib.Views.togglableTitle []
-                { label = content
-                , activeWhen = Set.member id model.openTabs
-                , onClick = ToggleTab id
-                }
-
-        showConditional : String -> Element Msg -> Element Msg
-        showConditional id content =
-            if Set.member id model.openTabs then
-                content
-
-            else
-                Element.none
     in
     Element.column
-        [ Element.spacing 32
-        , Element.paddingXY 8 0
-        , Element.width Element.fill
+        [ Element.width Element.fill
+        , Element.height Element.fill
+        , Element.spacing 8
         ]
-        [ showTitleTab "whatis" "What is an SECD Machine?"
-        , showConditional "whatis" descriptionWhatis
-        , showTitleTab "howto" "How does this work?"
-        , showConditional "howto" descriptionHowto
+        [ Element.el
+            [ Font.size 36
+            , Font.bold
+            , Element.centerX
+            , Element.paddingXY 0 16
+            ]
+          <|
+            Element.text "SECD Machine"
+        , Element.el
+            [ Font.size 18
+            , Font.bold
+            , Element.centerX
+            , Element.paddingXY 0 8
+            ]
+          <|
+            Element.text "An implementation as seen in Ualberta's CMPUT 325"
+        , description model
+        , codeEditor model
+        , Element.row
+            [ Element.spacing 8
+            , Element.centerX
+            ]
+            [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
+            , Lib.Views.button Compile <| Element.text "Parse + Compile"
+            ]
+        , case model.compiled of
+            Idle ->
+                Element.none
+
+            ParseError err ->
+                Element.column
+                    [ Element.width Element.fill
+                    , Element.height Element.fill
+                    , Element.spacing 8
+                    ]
+                    [ Element.el [ Font.size 24 ] <| Element.text "Parse error!"
+                    , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                    ]
+
+            CompileError _ err ->
+                Element.column
+                    [ Element.width Element.fill
+                    , Element.height Element.fill
+                    , Element.spacing 8
+                    ]
+                    [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
+                    , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                    ]
+
+            CompileSuccess _ compiledModel vmModel ->
+                Element.column
+                    [ Element.width Element.fill
+                    , Element.height Element.fill
+                    , Element.spacing 8
+                    ]
+                    [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
+                    , Element.map ViewVMMsg <| ViewVM.view vmModel
+                    ]
         ]
         |> Util.surround
             [ Element.paddingXY 0 24 ]
@@ -351,6 +298,50 @@ description model =
             , middle = mainSize
             , right = surroundSize
             }
+        |> Element.layoutWith
+            { options =
+                [ Element.focusStyle
+                    { borderColor = Nothing
+                    , backgroundColor = Nothing
+                    , shadow = Nothing
+                    }
+                ]
+            }
+            [ Font.family
+                [ Font.typeface "Avenir"
+                , Font.typeface "Helvetica"
+                , Font.typeface "Arial"
+                , Font.sansSerif
+                ]
+            , Element.width Element.fill
+            , Element.height Element.fill
+            ]
+
+
+
+-- contains the description of the SECD machine and stuff
+
+
+description : SuccessModel -> Element Msg
+description model =
+    Element.column
+        [ Element.spacing 32
+        , Element.paddingXY 8 24
+        , Element.width Element.fill
+        ]
+        [ Lib.Views.viewTogglable []
+            { title = "What is an SECD Machine?"
+            , activeWhen = Set.member "whatis" model.openTabs
+            , onClick = ToggleTab "whatis"
+            , body = descriptionWhatis
+            }
+        , Lib.Views.viewTogglable []
+            { title = "How does this work?"
+            , activeWhen = Set.member "howto" model.openTabs
+            , onClick = ToggleTab "howto"
+            , body = descriptionHowto
+            }
+        ]
 
 
 descriptionWhatis : Element Msg
@@ -433,20 +424,6 @@ descriptionHowto =
 codeEditor : SuccessModel -> Element Msg
 codeEditor model =
     let
-        ( surroundSize, mainSize ) =
-            case .class (Element.classifyDevice model.screen) of
-                Element.Desktop ->
-                    ( 1, 10 )
-
-                Element.Phone ->
-                    ( 0, 1 )
-
-                Element.Tablet ->
-                    ( 1, 16 )
-
-                Element.BigDesktop ->
-                    ( 1, 3 )
-
         viewCodeExamples : CodeExamples -> Element Msg
         viewCodeExamples progs =
             Element.column
@@ -546,12 +523,6 @@ codeEditor model =
             ]
             (viewCodeExamples model.codeExamples)
         ]
-        |> Util.surround
-            [ Element.paddingXY 0 24 ]
-            { left = surroundSize
-            , middle = mainSize
-            , right = surroundSize
-            }
 
 
 

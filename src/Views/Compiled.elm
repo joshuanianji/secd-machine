@@ -432,14 +432,8 @@ viewOk model =
                 -- the compiled code
                 , viewCompiledCode model
                 ]
-    in
-    Element.column
-        [ Element.spacing 32
-        , Element.width Element.fill
-        , Element.paddingXY 0 32
-        ]
-        [ mainTitle model
-        , if model.view then
+
+        body =
             Element.column
                 [ Element.spacing 16, Element.width Element.fill ]
                 [ Element.el [ Element.centerX ] <| viewTypeButtons model
@@ -450,19 +444,13 @@ viewOk model =
                     InteractiveView ->
                         viewInteractive
                 ]
-
-          else
-            Element.none
-        ]
-
-
-mainTitle : OkModel -> Element Msg
-mainTitle model =
-    Lib.Views.togglableTitle
-        [ Element.centerX ]
-        { label = "Compiled Code"
+    in
+    Lib.Views.viewTogglable
+        []
+        { title = "Compiled Code"
         , activeWhen = model.view
         , onClick = ToggleView
+        , body = body
         }
 
 

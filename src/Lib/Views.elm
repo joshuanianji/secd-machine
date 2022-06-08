@@ -85,6 +85,28 @@ togglableTitle attrs { label, activeWhen, onClick } =
         (Element.text label)
 
 
+viewTogglable : List (Attribute msg) -> { title : String, activeWhen : Bool, onClick : msg, body : Element msg } -> Element msg
+viewTogglable attrs { title, activeWhen, onClick, body } =
+    Element.column
+        ([ Element.spacing 32
+         , Element.width Element.fill
+         ]
+            ++ attrs
+        )
+        [ togglableTitle
+            []
+            { label = title
+            , activeWhen = activeWhen
+            , onClick = onClick
+            }
+        , if activeWhen then
+            body
+
+          else
+            Element.none
+        ]
+
+
 
 -- Paragraph helpers
 
