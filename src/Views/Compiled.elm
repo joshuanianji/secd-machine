@@ -54,6 +54,9 @@ type alias OkModel =
     , code : List Indexed
     , hovered : Maybe Int
     , selected : Set Int
+
+    -- whether or not to show the code
+    , view : Bool
     }
 
 
@@ -75,6 +78,7 @@ init prog =
                     , hovered = Nothing
                     , selected = Set.empty
                     , viewType = InteractiveView
+                    , view = True
                     }
                 )
                 transpiled
@@ -365,6 +369,7 @@ type Msg
     | Hover Int
     | UnHover Int
     | SetViewType ViewType
+    | ToggleView
 
 
 
@@ -389,6 +394,9 @@ update msg model =
 
         ( Ok okModel, SetViewType viewType ) ->
             ( { model | transpiled = Ok { okModel | viewType = viewType } }, Cmd.none )
+
+        ( Ok okModel, ToggleView ) ->
+            ( { model | transpiled = Ok { okModel | view = not okModel.view } }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
@@ -433,25 +441,46 @@ viewOk model =
                 ]
     in
     Element.column
-        [ Element.spacing 16
+        [ Element.spacing 32
         , Element.width Element.fill
         , Element.paddingXY 0 32
         ]
-        [ mainTitle
-        , Element.el [ Element.centerX ] <| viewTypeButtons model
-        , case model.viewType of
-            RawView ->
-                viewRaw
+        [ mainTitle model
+        , if model.view then
+            Element.column
+                [ Element.spacing 16, Element.width Element.fill ]
+                [ Element.el [ Element.centerX ] <| viewTypeButtons model
+                , case model.viewType of
+                    RawView ->
+                        viewRaw
 
-            InteractiveView ->
-                viewInteractive
+                    InteractiveView ->
+                        viewInteractive
+                ]
+
+          else
+            Element.none
         ]
 
 
-mainTitle : Element Msg
-mainTitle =
+mainTitle : OkModel -> Element Msg
+mainTitle model =
     Element.el
-        [ Font.size 36, Font.bold, Element.centerX ]
+        [ Font.size 36
+        , Font.color <|
+            if model.view then
+                Colours.grey
+
+            else
+                Colours.greyAlpha 0.5
+        , Font.bold
+        , Element.centerX
+        , Events.onClick ToggleView
+        , Lib.Views.unselectable
+        , Element.pointer
+        , Element.mouseOver
+            [ Font.color <| Colours.lightGrey ]
+        ]
         (Element.text "Compiled Code")
 
 
@@ -670,7 +699,7 @@ viewCodeInteractive model (Indexed ( n, code )) =
                          , Element.centerY
                          , Font.regular
                          , Font.color Colours.black
-                         , Element.htmlAttribute <| Html.Attributes.class "unselectable"
+                         , Lib.Views.unselectable
                          ]
                             |> Util.addIf (Set.member n model.selected || model.hovered == Just n) [ Font.color color, Font.bold ]
                             |> Util.addIf (Set.member n model.selected && model.hovered == Just n) [ Font.underline ]
