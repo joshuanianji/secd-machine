@@ -116,6 +116,7 @@ type Msg
     | UpdateSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
+    | Blur
     | NoOp
 
 
@@ -272,6 +273,7 @@ update msg model =
             let
                 newPressedKeys =
                     Keyboard.update keyMsg model.pressedKeys
+                        |> Debug.log "Pressed keys"
 
                 newModel =
                     { model | pressedKeys = newPressedKeys }
@@ -302,6 +304,9 @@ update msg model =
 
                 Err n ->
                     ( { model | fetchStatus = Error n }, Cmd.none )
+
+        ( _, Blur ) ->
+            ( { model | pressedKeys = [] }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
@@ -544,6 +549,7 @@ subscriptions model =
     Sub.batch
         [ fetchSub
         , Sub.map KeyMsg Keyboard.subscriptions
+        , Ports.blurs (\_ -> Blur)
         ]
 
 
