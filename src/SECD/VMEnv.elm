@@ -1,9 +1,12 @@
 module SECD.VMEnv exposing (..)
 
+import Element exposing (Element)
+import Element.Border as Border
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Lib.Colours as Colours
 import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 
@@ -27,24 +30,27 @@ type EnvItem a
 -- debug
 
 
-view : (a -> Html msg) -> Environment a -> Html msg
-view viewA env =
+view : Int -> (a -> Element msg) -> Environment a -> Element msg
+view n viewA env =
     List.map (viewEnvItem viewA) env
-        |> Html.div
-            [ Attr.class "vm-body row env-body" ]
+        |> Element.row
+            [ Element.padding 8
+            , Border.color Colours.purple
+            , Border.width 1
+            ]
 
 
-viewEnvItem : (a -> Html msg) -> EnvItem a -> Html msg
+viewEnvItem : (a -> Element msg) -> EnvItem a -> Element msg
 viewEnvItem viewA item =
     case item of
         ListItem cs ->
             List.map (Cons.view viewA) cs
-                |> List.intersperse (Html.text ",")
-                |> Util.wrapAdd (Html.text "(") (Html.text ")")
-                |> Html.div [ Attr.class "vm-env row complex vm-listitem" ]
+                |> List.intersperse (Element.text ",")
+                |> Util.wrapAdd (Element.text "(") (Element.text ")")
+                |> Element.row []
 
         Dummy ->
-            Html.div [ Attr.class "vm-env dummy" ] [ Html.text "Dummy" ]
+            Element.text "Dummy"
 
 
 envItemToString : (a -> String) -> EnvItem a -> String

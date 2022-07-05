@@ -1,5 +1,6 @@
 module Lib.Cons exposing (..)
 
+import Element exposing (Element)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
@@ -116,32 +117,32 @@ toStringHelper aToString c =
 -- toString but instead, it returns it as an HTML element
 
 
-view : (a -> Html msg) -> Cons a -> Html msg
+view : (a -> Element msg) -> Cons a -> Element msg
 view viewA c =
     case c of
         Nil ->
-            Html.div [ Attr.class "vm-cons cons-nil" ] [ Html.text "Nil" ]
+            Element.text "Nil"
 
         Val a ->
-            Html.div [ Attr.class "vm-cons cons-val" ] [ viewA a ]
+            viewA a
 
         ct ->
-            Html.div
-                [ Attr.class "vm-cons row cons-cons" ]
-                [ Html.text "("
+            Element.row
+                [ Element.width Element.fill ]
+                [ Element.text "("
                 , viewHelper viewA ct
-                , Html.text ")"
+                , Element.text ")"
                 ]
 
 
-viewHelper : (a -> Html msg) -> Cons a -> Html msg
+viewHelper : (a -> Element msg) -> Cons a -> Element msg
 viewHelper viewA c =
     case c of
         Nil ->
-            Html.div [ Attr.class "vm-cons cons-nil" ] [ Html.text "Nil" ]
+            Element.text "Nil"
 
         Val a ->
-            Html.div [ Attr.class "vm-cons cons-val" ] [ viewA a ]
+            viewA a
 
         -- end of list
         Cons a Nil ->
@@ -149,19 +150,19 @@ viewHelper viewA c =
 
         -- add a dot
         Cons ca (Val a) ->
-            Html.div
-                [ Attr.class "vm-cons row cons-val" ]
+            Element.row
+                [ Element.width Element.fill, Element.spacing 4 ]
                 [ view viewA ca
-                , Html.text "."
+                , Element.text "."
                 , viewA a
                 ]
 
         -- run toStringHelper on the remaining, because we don't need parentheses
         Cons ca rest ->
-            Html.div
-                [ Attr.class "vm-cons row cons-val" ]
+            Element.row
+                [ Element.width Element.fill, Element.spacing 4 ]
                 [ view viewA ca
-                , Html.text " "
+                , Element.text " "
                 , viewHelper viewA rest
                 ]
 
