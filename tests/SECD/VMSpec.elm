@@ -635,16 +635,16 @@ testValueDecoder =
                     |> Expect.equal (Ok <| VM.Array <| Cons.fromList [ VM.Integer 1, VM.Integer 2, VM.Integer 3 ])
         , Test.test "Empty Closure" <|
             \_ ->
-                VM.Closure [] Env.init
+                VM.Closure Nothing [] Env.init
                     |> VM.encodeValue
                     |> Decode.decodeValue VM.valueDecoder
-                    |> Expect.equal (Ok <| VM.Closure [] Env.init)
+                    |> Expect.equal (Ok <| VM.Closure Nothing [] Env.init)
         , Test.test "Nonempty closure" <|
             \_ ->
-                VM.Closure [ NIL ] Env.init
+                VM.Closure Nothing [ NIL ] Env.init
                     |> VM.encodeValue
                     |> Decode.decodeValue VM.valueDecoder
-                    |> Expect.equal (Ok <| VM.Closure [ NIL ] Env.init)
+                    |> Expect.equal (Ok <| VM.Closure Nothing [ NIL ] Env.init)
         ]
 
 

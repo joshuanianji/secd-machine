@@ -1,10 +1,15 @@
 module SECD.VM exposing (..)
 
+import Element exposing (Element)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
 import Html exposing (Html)
-import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Lib.Colours as Colours
 import Lib.Cons as Cons exposing (Cons)
+import Lib.Util as Util
 import List.Zipper as Zipper exposing (Zipper)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
@@ -73,7 +78,8 @@ type Value
     = Integer Int
     | Truthy -- false is represented by Nil
     | Array (Cons Value)
-    | Closure (List Op) Environment -- When loading a function, dump the closure of the function (i think?)
+      -- closure holds the name of the function as well (if necessary)
+    | Closure (Maybe String) (List Op) Environment -- When loading a function, dump the closure of the function (i think?)
 
 
 boolToValue : Bool -> Value
@@ -144,7 +150,7 @@ vmAtom v =
         Array _ ->
             Ok nil
 
-        Closure _ _ ->
+        Closure _ _ _ ->
             Ok nil
 
 
@@ -235,28 +241,35 @@ valueToString val =
         Array arr ->
             Cons.toString valueToString arr
 
-        Closure _ _ ->
+        Closure (Just funcName) _ _ ->
+            "Closure of " ++ funcName
+
+        Closure Nothing _ _ ->
             "Closure"
 
 
-viewValue : Value -> Html msg
-viewValue val =
+viewValue : Int -> Value -> Element msg
+viewValue n val =
     case val of
         Integer i ->
-            Html.div [ Attr.class "vm-val vm-int" ] [ Html.text (String.fromInt i) ]
+            Element.text (String.fromInt i)
 
         Truthy ->
-            Html.div [ Attr.class "vm-val vm-truthy" ] [ Html.text "true" ]
+            Element.text "true"
 
         Array arr ->
-            Html.div [ Attr.class "vm-val row vm-array" ] [ Cons.view viewValue arr ]
+            Cons.view (viewValue n) arr
 
-        Closure f env ->
-            Html.div
-                [ Attr.class "vm-val row complex vm-closure" ]
-                [ Html.text "Closure"
-                , Html.div [ Attr.class "vm-closure-func" ] [ viewControl f ]
-                , Html.div [ Attr.class "vm-closure-env" ] [ Env.view viewValue env ]
+        Closure mName f env ->
+            Element.row
+                [ Element.spacing 4
+                , Element.width Element.fill
+                ]
+                [ Element.text "Closure"
+
+                -- Show name if possible, else just show the operands
+                , Maybe.withDefault (viewControl n f) (Maybe.map Element.text mName)
+                , Env.view n (viewValue n) env
                 ]
 
 
@@ -551,12 +564,12 @@ loadFunction (VM ctx s e c d) =
     in
     case c of
         -- named function
-        (FUNCBODY _ funcBody) :: c_ ->
-            Unfinished (VM ctx (Closure funcBody e :: s) e c_ d)
+        (FUNCBODY funcName funcBody) :: c_ ->
+            Unfinished (VM ctx (Closure (Just funcName) funcBody e :: s) e c_ d)
 
         -- unnamed function (e.g. lambda)
         (NESTED funcbody) :: c_ ->
-            Unfinished (VM ctx (Closure funcbody e :: s) e c_ d)
+            Unfinished (VM ctx (Closure Nothing funcbody e :: s) e c_ d)
 
         _ ->
             Error vm "VM: loadFunction: cannot find function body!"
@@ -571,7 +584,7 @@ applyFunction (VM ctx s e c d) =
     case s of
         -- vals is a list of the values of the arguments
         -- if there are no arguments, such as `lambda () ...`, then vals is Nil
-        (Closure funcBody env) :: (Array vals) :: s_ ->
+        (Closure _ funcBody env) :: (Array vals) :: s_ ->
             case Cons.toList vals of
                 Nothing ->
                     Error vm "VM: applyFunction: badly formatted closure!"
@@ -607,7 +620,7 @@ recursiveApply (VM ctx s e c d) =
             VM ctx s e c d
     in
     case ( s, e ) of
-        ( (Closure funcBody env) :: (Array vals) :: s_, Env.Dummy :: e_ ) ->
+        ( (Closure _ funcBody env) :: (Array vals) :: s_, Env.Dummy :: e_ ) ->
             case Cons.toList vals of
                 Nothing ->
                     Error vm "VM: recursiveApply: badly formatted closure!"
@@ -927,88 +940,124 @@ getPages { maxPages, pageSize, chunkSize } vm =
 -- VIEW
 
 
-view : Int -> VM -> Html msg
-view _ (VM ctx s e c d) =
-    Html.div
-        [ Attr.class "vm" ]
-        [ Html.p [ Attr.class "vm-title ctx-title" ] [ Html.text "Context" ]
-        , viewContext ctx
-        , Html.p [ Attr.class "vm-title stack-title" ] [ Html.text "Stack" ]
-        , viewStack s
-        , Html.p [ Attr.class "vm-title env-title" ] [ Html.text "Environment" ]
-        , Env.view viewValue e
-        , Html.p [ Attr.class "vm-title control-title" ] [ Html.text "Control" ]
-        , viewControl c
-        , Html.p [ Attr.class "vm-title dump-title" ] [ Html.text "Dump" ]
-        , viewDump d
+view : Int -> VM -> Element msg
+view n (VM ctx s e c d) =
+    Element.wrappedRow
+        [ Element.width Element.fill
+        , Font.size 18
+        , Element.paddingXY 12 18
+        , Element.spacing 6
+        ]
+        [ viewStack n s
+        , Env.view n (viewValue n) e
+        , viewControl n c
+        , viewDump n d
+        , viewContext n ctx
         ]
 
 
-viewContext : Context -> Html msg
-viewContext ctx =
+viewContext : Int -> Context -> Element msg
+viewContext n ctx =
     let
         dummyVal =
             case ctx.dummyVal of
                 Nothing ->
-                    Html.text "Nothing"
+                    Element.text "Nothing"
 
                 Just v ->
-                    List.map (Cons.view viewValue) v
-                        |> List.intersperse (Html.text ",")
-                        |> Html.div [ Attr.class "dummy-val" ]
+                    List.map (Cons.view (viewValue n)) v
+                        |> List.intersperse (Element.text ",")
+                        |> Element.row []
     in
-    Html.div [ Attr.class "vm-body row ctx-body" ]
-        [ Html.text "dummyVal = ", dummyVal ]
+    Element.row []
+        [ Element.text "dummyVal = ", dummyVal ]
 
+-- generic stack view
 
-viewStack : Stack -> Html msg
-viewStack s =
+viewVMStack : { n : Int, viewStackChunk : List a -> List (Element msg), stack : List a, stackName : String} -> Element msg 
+viewVMStack { n, viewStackChunk, stack, stackName}  = 
     let
-        stackElems =
-            List.map viewValue s
-                |> List.intersperse (Html.text ",")
+        take =
+            if n == 0 then
+                identity
+
+            else
+                List.take n
+
+        stackElements =
+            viewStackChunk (take stack)
+                |> Util.addIf (List.length stack > 0) [ Element.text "." ]
+                |> Util.addIf True [ trailingS ]
+
+        trailingS =
+            if List.length stack > n && n > 0 then
+                Element.el [] (Element.text stackName)
+
+            else
+                Element.el [ Font.color Colours.lightGrey ] (Element.text stackName)
     in
-    Html.div
-        [ Attr.class "vm-body row stack-body" ]
-        stackElems
+    Element.row
+        [ Element.spacing 2
+        , Element.paddingXY 8 4
+        , Border.rounded 4
+        , Element.mouseOver
+            [ Background.color Colours.slateGrey ]
+        ]
+        stackElements
+
+viewStack : Int -> Stack -> Element msg
+viewStack n s =
+    viewVMStack
+        { n = n
+        , viewStackChunk = List.map (viewValue n)
+            >> List.intersperse (Element.text " ")
+        , stack = s
+        , stackName = "s" 
+        }
 
 
-viewControl : Control -> Html msg
-viewControl c =
-    let
-        controlElems =
-            List.map Program.view c
-                |> List.intersperse (Html.text ",")
-    in
-    Html.div
-        [ Attr.class "vm-body row control-body" ]
-        controlElems
+viewControl : Int -> Control -> Element msg
+viewControl n c =
+    viewVMStack
+        { n = n
+        -- we want to flatten the control stack, so nested code can wrap nicely
+        , viewStackChunk = 
+            List.map Program.view 
+                >> List.intersperse [ Element.text " " ]
+                >> List.concat
+        , stack = c
+        , stackName = "c"
+        }
 
 
-viewDump : Dump -> Html msg
-viewDump d =
-    Html.div
-        [ Attr.class "vm-body row dump-body" ]
-        (List.map viewDumpVal d)
+
+viewDump : Int -> Dump -> Element msg
+viewDump n d =
+    viewVMStack
+        { n = n
+        , viewStackChunk = List.map (viewDumpVal n)
+            >> List.intersperse (Element.text " ")
+        , stack = d
+        , stackName = "d" 
+        }
 
 
-viewDumpVal : DumpValue -> Html msg
-viewDumpVal dv =
+viewDumpVal : Int -> DumpValue -> Element msg
+viewDumpVal n dv =
     case dv of
         Control c ->
-            Html.div
-                [ Attr.class "row dump-val dump-control" ]
-                [ Html.text "Control"
-                , viewControl c
+            Element.row
+                []
+                [ Element.text "Control"
+                , viewControl n c
                 ]
 
         EntireState s e c ->
-            Html.div
-                [ Attr.class "row dump-val dump-entire-state" ]
-                [ Html.text "EntireState"
-                , viewStack s
-                , Env.view viewValue e
-                , viewControl c
+            Element.row []
+                [ Element.text "EntireState"
+                , viewStack n s
+                , Env.view n (viewValue n) e
+                , viewControl n c
                 ]
 
 
@@ -1186,9 +1235,10 @@ encodeValue v =
                 , ( "v", Cons.encode encodeValue cons )
                 ]
 
-        Closure ops env ->
+        Closure mName ops env ->
             Encode.object
                 [ ( "t", Encode.string "c" )
+                , ( "n", Maybe.withDefault Encode.null <| Maybe.map Encode.string mName )
                 , ( "o", Encode.list Program.encodeSingle ops )
                 , ( "e", encodeEnvironment env )
                 ]
@@ -1210,7 +1260,7 @@ valueDecoder =
                         Decode.map Array (Decode.field "v" <| Cons.decoder valueDecoder)
 
                     "c" ->
-                        Decode.map2 Closure (Decode.field "o" <| Decode.list Program.singleDecoder) (Decode.field "e" environmentDecoder)
+                        Decode.map3 Closure (Decode.field "n" <| Decode.nullable Decode.string) (Decode.field "o" <| Decode.list Program.singleDecoder) (Decode.field "e" environmentDecoder)
 
                     _ ->
                         Decode.fail <| "Decoding value: unknown tag " ++ tag

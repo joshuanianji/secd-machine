@@ -31,7 +31,7 @@ type alias Model =
     { -- which state index are we in?
       -- also, keep track of the slider position separately
       index : Int
-    , sliderIdx : Int
+    , stateSliderIdx : Int
 
     -- current chunk holds the VM states in the current chunk
     , chunk : Zipper VM
@@ -49,6 +49,9 @@ type alias Model =
     , totalStates : Int
     , pressedKeys : List Key
     , pagesInfo : PagesInfo
+
+    -- how much of the VM to show
+    , vmSliderVal : Int
 
     -- keeping compiled code to view
     , compiled : Program
@@ -88,7 +91,7 @@ init pagesInfo prog =
             VM.getPages pagesInfo vm
     in
     ( { index = 0
-      , sliderIdx = 0
+      , stateSliderIdx = 0
       , chunk = pagesData.initialChunk
       , page = pagesData.initialPage
       , pages = pagesData.pages
@@ -96,6 +99,7 @@ init pagesInfo prog =
       , totalStates = pagesData.totalVMCount
       , pressedKeys = []
       , pagesInfo = pagesInfo
+      , vmSliderVal = 0
       , compiled = prog
       , fetchStatus = Idle
       }
@@ -113,7 +117,8 @@ type Msg
     | Step
     | Last
     | ToIndex Int
-    | UpdateSlider Int
+    | UpdateStateSlider Int
+    | UpdateVMSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
 
@@ -264,8 +269,11 @@ update msg model =
                 , Ports.fetchPage pageNum
                 )
 
-        ( _, UpdateSlider val ) ->
-            ( { model | sliderIdx = val }, Cmd.none )
+        ( _, UpdateStateSlider val ) ->
+            ( { model | stateSliderIdx = val }, Cmd.none )
+
+        ( _, UpdateVMSlider val ) ->
+            ( { model | vmSliderVal = val }, Cmd.none )
 
         ( _, KeyMsg keyMsg ) ->
             let
@@ -365,12 +373,12 @@ updatePageLocation { pageLocation, chunkLocation } model =
 
 ## updateStateIndex
 
-updates `index` and `sliderIdx` fields of the model.
+updates `index` and `stateSliderIdx` fields of the model.
 
 -}
 updateStateIndex : Int -> Model -> Model
 updateStateIndex newIdx model =
-    { model | index = newIdx, sliderIdx = newIdx }
+    { model | index = newIdx, stateSliderIdx = newIdx }
 
 
 
@@ -390,7 +398,9 @@ view model =
             [ Element.text "Total size: "
             , Lib.Views.bold <| String.fromInt model.totalStates
             ]
-        , viewSlider model
+
+        -- this slider lets us jump states
+        , viewStateSlider model
 
         -- renders if the fetch status is error
         , viewFetchError model
@@ -410,14 +420,17 @@ view model =
             , Lib.Views.button Last <| Element.text "Last"
             ]
 
+        -- this slider determines how much of the VM we show
+        , viewVMSlider model
+
         -- stuff to render when we're at the final VM state
         , finalVMState model
-        , Element.html <| VM.view 6 <| Zipper.current model.chunk
+        , VM.view model.vmSliderVal <| Zipper.current model.chunk
         ]
 
 
-viewSlider : Model -> Element Msg
-viewSlider model =
+viewStateSlider : Model -> Element Msg
+viewStateSlider model =
     Element.column
         [ Element.width Element.fill
         , Element.paddingXY 8 12
@@ -440,11 +453,11 @@ viewSlider model =
                     Element.none
                 )
             ]
-            { onChange = round >> UpdateSlider
+            { onChange = round >> UpdateStateSlider
             , label = Input.labelAbove [] <| Element.text ("Current State: " ++ String.fromInt (model.index + 1))
             , min = 0
             , max = toFloat <| model.totalStates - 1
-            , value = toFloat model.sliderIdx
+            , value = toFloat model.stateSliderIdx
             , thumb =
                 Input.thumb
                     [ Element.width (Element.px 24)
@@ -454,8 +467,8 @@ viewSlider model =
                     ]
             , step = Just 1
             }
-        , if model.sliderIdx /= model.index then
-            Lib.Views.button (ToIndex model.sliderIdx) <| Element.text ("Go to " ++ ordinal (model.sliderIdx + 1) ++ " state")
+        , if model.stateSliderIdx /= model.index then
+            Lib.Views.button (ToIndex model.stateSliderIdx) <| Element.text ("Go to " ++ ordinal (model.stateSliderIdx + 1) ++ " state")
 
           else
             Element.none
@@ -474,6 +487,52 @@ viewFetchError model =
 
         _ ->
             Element.none
+
+
+viewVMSlider : Model -> Element Msg
+viewVMSlider model =
+    let
+        labelText =
+            if model.vmSliderVal == 0 then
+                Element.text "Showing entire VM"
+
+            else
+                Element.text ("Peeking " ++ String.fromInt model.vmSliderVal ++ " values into the VM")
+    in
+    Element.column
+        [ Element.width Element.fill ]
+        [ Input.slider
+            [ -- same height as the thumb
+              Element.height (Element.px 24)
+
+            -- establish the "track"
+            , Element.behindContent
+                (Element.el
+                    [ Element.width Element.fill
+                    , Element.height (Element.px 8)
+                    , Element.centerY
+                    , Background.color <| Colours.greyAlpha 0.1
+                    , Border.rounded 4
+                    ]
+                    Element.none
+                )
+            ]
+            { onChange = round >> UpdateVMSlider
+            , label = Input.labelAbove [] labelText
+            , min = 0
+            , max = 20
+            , value = toFloat model.vmSliderVal
+            , thumb =
+                Input.thumb
+                    [ Element.width (Element.px 24)
+                    , Element.height (Element.px 24)
+                    , Border.rounded 24
+                    , Background.color <| Colours.purple
+                    ]
+            , step = Just 1
+            }
+            |> Util.surround [] { left = 1, middle = 1, right = 1 }
+        ]
 
 
 finalVMState : Model -> Element Msg

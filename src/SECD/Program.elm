@@ -1,5 +1,6 @@
 module SECD.Program exposing (..)
 
+import Element exposing (Element)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
@@ -195,51 +196,51 @@ cmpToString cmp =
 -- views
 
 
-view : Op -> Html msg
-view op =
-    case op of
+view : Op -> List (Element msg)
+view op_ =
+    case op_ of
         NIL ->
-            Html.div [ Attr.class "vm-op nil" ] [ Html.text "NIL" ]
+            [ Element.text "NIL" ]
 
         LD ( i, j ) ->
-            Html.div [ Attr.class "vm-op ld" ] [ Html.text <| "LD (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")" ]
+            [ Element.text <| "LD (" ++ String.fromInt i ++ ", " ++ String.fromInt j ++ ")" ]
 
         LDC i ->
-            Html.div [ Attr.class "vm-op ldc" ] [ Html.text <| "LDC " ++ String.fromInt i ]
+            [ Element.text <| "LDC " ++ String.fromInt i ]
 
         LDF ->
-            Html.div [ Attr.class "vm-op lfc" ] [ Html.text <| "LDF" ]
+            [ Element.text "LDF" ]
 
         AP ->
-            Html.div [ Attr.class "vm-op ap" ] [ Html.text <| "AP" ]
+            [ Element.text "AP" ]
 
         RTN ->
-            Html.div [ Attr.class "vm-op rtn" ] [ Html.text <| "RTN" ]
+            [ Element.text "RTN" ]
 
         SEL ->
-            Html.div [ Attr.class "vm-op sel" ] [ Html.text <| "SEL" ]
+            [ Element.text "SEL" ]
 
         JOIN ->
-            Html.div [ Attr.class "vm-op join" ] [ Html.text <| "JOIN" ]
+            [ Element.text "JOIN" ]
 
         RAP ->
-            Html.div [ Attr.class "vm-op rap" ] [ Html.text <| "RAP" ]
+            [ Element.text "RAP" ]
 
         DUM ->
-            Html.div [ Attr.class "vm-op dum" ] [ Html.text <| "DUM" ]
+            [ Element.text "DUM" ]
 
         FUNC f ->
-            Html.div [ Attr.class "vm-op func" ] [ Html.text <| funcToString f ]
+            [ Element.text <| funcToString f ]
 
         NESTED ops ->
             List.map view ops
-                |> List.intersperse (Html.text ",")
-                |> Util.wrapAdd (Html.text "[") (Html.text "]")
-                |> Html.div [ Attr.class "vm-op nested row" ]
+                |> List.intersperse [ Element.text " " ]
+                |> List.concat
+                |> Util.wrapAdd (Element.text "(") (Element.text ")")
 
         -- a function body is just referred to by its name
         FUNCBODY name _ ->
-            Html.div [ Attr.class "vm-op func func-name" ] [ Html.text name ]
+            [ Element.text name ]
 
 
 
