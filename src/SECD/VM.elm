@@ -248,31 +248,6 @@ valueToString val =
             "Closure"
 
 
-viewValue : Int -> Value -> Element msg
-viewValue n val =
-    case val of
-        Integer i ->
-            Element.text (String.fromInt i)
-
-        Truthy ->
-            Element.text "true"
-
-        Array arr ->
-            Cons.view (viewValue n) arr
-
-        Closure mName f env ->
-            Element.row
-                [ Element.spacing 4
-                , Element.width Element.fill
-                ]
-                [ Element.text "Closure"
-
-                -- Show name if possible, else just show the operands
-                , Maybe.withDefault (viewControl n f) (Maybe.map Element.text mName)
-                , Env.view n (viewValue n) env
-                ]
-
-
 
 -- types of values we can store in the dump stack
 
@@ -942,16 +917,20 @@ getPages { maxPages, pageSize, chunkSize } vm =
 
 view : Int -> VM -> Element msg
 view n (VM ctx s e c d) =
-    Element.wrappedRow
+    Element.column
         [ Element.width Element.fill
         , Font.size 18
-        , Element.paddingXY 12 18
-        , Element.spacing 6
         ]
-        [ viewStack n s
-        , Env.view n (viewValue n) e
-        , viewControl n c
-        , viewDump n d
+        [ Element.wrappedRow
+            [ Element.width Element.fill
+            , Element.paddingXY 12 18
+            , Element.spacing 6
+            ]
+            [ viewStack n s
+            , Env.view n (viewValue n) e
+            , viewControl n c
+            , viewDump n d
+            ]
         , viewContext n ctx
         ]
 
@@ -972,10 +951,13 @@ viewContext n ctx =
     Element.row []
         [ Element.text "dummyVal = ", dummyVal ]
 
+
+
 -- generic stack view
 
-viewVMStack : { n : Int, viewStackChunk : List a -> List (Element msg), stack : List a, stackName : String} -> Element msg 
-viewVMStack { n, viewStackChunk, stack, stackName}  = 
+
+viewVMStack : { n : Int, viewStackChunk : List a -> List (Element msg), stack : List a, stackName : String } -> Element msg
+viewVMStack { n, viewStackChunk, stack, stackName } =
     let
         take =
             if n == 0 then
@@ -1005,24 +987,52 @@ viewVMStack { n, viewStackChunk, stack, stackName}  =
         ]
         stackElements
 
+
 viewStack : Int -> Stack -> Element msg
 viewStack n s =
     viewVMStack
         { n = n
-        , viewStackChunk = List.map (viewValue n)
-            >> List.intersperse (Element.text " ")
+        , viewStackChunk =
+            List.map (viewValue n)
+                >> List.intersperse (Element.text " ")
         , stack = s
-        , stackName = "s" 
+        , stackName = "s"
         }
+
+
+viewValue : Int -> Value -> Element msg
+viewValue n val =
+    case val of
+        Integer i ->
+            Element.text (String.fromInt i)
+
+        Truthy ->
+            Element.text "true"
+
+        Array arr ->
+            Cons.view (viewValue n) arr
+
+        Closure mName f env ->
+            Element.row
+                [ Element.spacing 4
+                , Element.width Element.fill
+                ]
+                [ Element.text "Closure"
+
+                -- Show name if possible, else just show the operands
+                , Maybe.withDefault (viewControl n f) (Maybe.map Element.text mName)
+                , Env.view n (viewValue n) env
+                ]
 
 
 viewControl : Int -> Control -> Element msg
 viewControl n c =
     viewVMStack
         { n = n
+
         -- we want to flatten the control stack, so nested code can wrap nicely
-        , viewStackChunk = 
-            List.map Program.view 
+        , viewStackChunk =
+            List.map Program.view
                 >> List.intersperse [ Element.text " " ]
                 >> List.concat
         , stack = c
@@ -1030,15 +1040,15 @@ viewControl n c =
         }
 
 
-
 viewDump : Int -> Dump -> Element msg
 viewDump n d =
     viewVMStack
         { n = n
-        , viewStackChunk = List.map (viewDumpVal n)
-            >> List.intersperse (Element.text " ")
+        , viewStackChunk =
+            List.map (viewDumpVal n)
+                >> List.intersperse (Element.text " ")
         , stack = d
-        , stackName = "d" 
+        , stackName = "d"
         }
 
 
