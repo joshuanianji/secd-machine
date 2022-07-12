@@ -1,6 +1,6 @@
 module SECD.VM exposing (..)
 
-import Element exposing (Element)
+import Element exposing (Attribute, Element)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
@@ -11,9 +11,9 @@ import Lib.Colours as Colours
 import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 import List.Zipper as Zipper exposing (Zipper)
+import SECD.EnvItem as EnvItem exposing (EnvItem)
 import SECD.Error as Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
-import SECD.VMEnv as Env exposing (EnvItem(..))
 
 
 
@@ -59,7 +59,7 @@ type alias Stack =
 
 
 type alias Environment =
-    Env.Environment Value
+    List (EnvItem Value)
 
 
 type alias Control =
@@ -268,7 +268,7 @@ init prog =
 
 initRaw : Program -> VM
 initRaw prog =
-    VM initCtx [] Env.init (Program.toList prog) []
+    VM initCtx [] [] (Program.toList prog) []
 
 
 
@@ -364,7 +364,7 @@ step vm =
 
         -- Recursive functions
         DUM :: c_ ->
-            Unfinished (VM ctx s (Env.pushDummy e) c_ d)
+            Unfinished (VM ctx s (EnvItem.Dummy :: e) c_ d)
 
         RAP :: c_ ->
             recursiveApply (VM ctx s e c_ d)
@@ -392,10 +392,51 @@ loadFromEnv ( x, y ) (VM ctx s e c d) =
     let
         vm =
             VM ctx s e c d
+
+        coordsString =
+            "(" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")"
+
+        -- locates a row in the environment
+        locateRow : Int -> List a -> Result String a
+        locateRow y_ row =
+            case ( y_, row ) of
+                ( _, [] ) ->
+                    Err "y-value out of bounds!"
+
+                ( 0, h :: _ ) ->
+                    Ok h
+
+                ( _, _ :: t ) ->
+                    locateRow (y_ - 1) t
+
+        -- recursively looks through the environment
+        locate : ( Int, Int ) -> Environment -> Result String (Cons Value)
+        locate ( x_, y_ ) env =
+            if (x_ < 0) || (y_ < 0) then
+                Err "Negative index out of bounds"
+
+            else
+                case ( x_, env ) of
+                    ( _, [] ) ->
+                        Err "Locate: out of bounds!"
+
+                    ( 0, (EnvItem.ListItem h) :: _ ) ->
+                        locateRow y_ h
+
+                    ( 0, EnvItem.Dummy :: _ ) ->
+                        case ctx.dummyVal of
+                            Nothing ->
+                                Err "Locate: attempt to access uninitialized Dummy Env value!"
+
+                            Just dummyVal ->
+                                locateRow y_ dummyVal
+
+                    ( _, _ :: t ) ->
+                        locate ( x_ - 1, y_ ) t
     in
-    case Env.locate ( x, y ) ctx.dummyVal e of
+    case locate ( x, y ) e of
         Err errStr ->
-            Error vm <| "VM: loadFromEnv: Variable not found from coords (" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")\n" ++ errStr
+            Error vm <| "VM: loadFromEnv: Variable not found from coords " ++ coordsString ++ "\n" ++ errStr
 
         Ok (Cons.Val a) ->
             Unfinished (VM ctx (a :: s) e c d)
@@ -565,7 +606,7 @@ applyFunction (VM ctx s e c d) =
                     Error vm "VM: applyFunction: badly formatted closure!"
 
                 Just values ->
-                    Unfinished (VM ctx [] (Env.push values env) funcBody (EntireState s_ e c :: d))
+                    Unfinished (VM ctx [] (EnvItem.ListItem values :: env) funcBody (EntireState s_ e c :: d))
 
         _ ->
             Error vm "VM: applyFunction: cannot find function body!"
@@ -595,18 +636,21 @@ recursiveApply (VM ctx s e c d) =
             VM ctx s e c d
     in
     case ( s, e ) of
-        ( (Closure _ funcBody env) :: (Array vals) :: s_, Env.Dummy :: e_ ) ->
-            case Cons.toList vals of
-                Nothing ->
-                    Error vm "VM: recursiveApply: badly formatted closure!"
+        ( (Closure f funcBody env) :: (Array vals) :: s_, EnvItem.Dummy :: e_ ) ->
+            case ( Cons.toList vals, env ) of
+                ( Nothing, _ ) ->
+                    Error vm ("VM: recursiveApply: badly formatted closure" ++ Maybe.withDefault "!" (Maybe.map ((++) " from function ") f))
 
-                Just values ->
-                    case Env.replaceDummy values env of
-                        Ok newEnv ->
-                            Unfinished (VM { ctx | dummyVal = Just values } [] newEnv funcBody (EntireState s_ e_ c :: d))
+                ( _, [] ) ->
+                    Error vm "VM: recursiveApply: empty environment!"
 
-                        Err errStr ->
-                            Error vm ("VM: recursiveApply: " ++ errStr)
+                ( Just values, EnvItem.Dummy :: env_ ) ->
+                    -- (ListItem values :: env_) is the new environment
+                    -- replace dummy value with the closure (?) of the recursive function i think
+                    Unfinished (VM { ctx | dummyVal = Just values } [] (EnvItem.ListItem values :: env_) funcBody (EntireState s_ e_ c :: d))
+
+                ( _, _ ) ->
+                    Error vm "VM: recursiveApply: malformed environment!"
 
         _ ->
             Error vm "VM: recursiveApply: Cannot find function body!"
@@ -922,16 +966,16 @@ view n (VM ctx s e c d) =
         , Font.size 18
         ]
         [ Element.wrappedRow
-            [ Element.width Element.fill
+            [ Element.centerX
             , Element.paddingXY 12 18
             , Element.spacing 6
             ]
             [ viewStack n s
-            , Env.view n (viewValue n) e
+            , viewEnv n e
             , viewControl n c
             , viewDump n d
             ]
-        , viewContext n ctx
+        , Element.el [ Element.centerX ] <| viewContext n ctx
         ]
 
 
@@ -966,38 +1010,29 @@ viewVMStack { n, viewStackChunk, stack, stackName } =
             else
                 List.take n
 
+        -- instead of having an opinionated view of the entire stack, we have a "view stack chunk" input
+        -- this allows the stack view function to dictate how to view a list of elements
+        -- for example, the control stack wants to flatten nested code, so the code wraps nicely.
+        -- this would not be possible with a "viewStackElem" function
         stackElements =
             viewStackChunk (take stack)
                 |> Util.addIf (List.length stack > 0) [ Element.text "." ]
                 |> Util.addIf True [ trailingS ]
 
         trailingS =
-            if List.length stack > n && n > 0 then
-                Element.el [] (Element.text stackName)
-
-            else
-                Element.el [ Font.color Colours.lightGrey ] (Element.text stackName)
+            viewStackName stackName (List.drop n stack)
     in
     Element.row
-        [ Element.spacing 2
-        , Element.paddingXY 8 4
-        , Border.rounded 4
-        , Element.mouseOver
-            [ Background.color Colours.slateGrey ]
-        ]
+        ([ Element.spacing 2
+         , Element.paddingXY 8 4
+         ]
+            |> addHoverable
+        )
         stackElements
 
 
-viewStack : Int -> Stack -> Element msg
-viewStack n s =
-    viewVMStack
-        { n = n
-        , viewStackChunk =
-            List.map (viewValue n)
-                >> List.intersperse (Element.text " ")
-        , stack = s
-        , stackName = "s"
-        }
+
+-- view a VM value
 
 
 viewValue : Int -> Value -> Element msg
@@ -1013,16 +1048,64 @@ viewValue n val =
             Cons.view (viewValue n) arr
 
         Closure mName f env ->
-            Element.row
-                [ Element.spacing 4
-                , Element.width Element.fill
-                ]
-                [ Element.text "Closure"
+            let
+                stackName =
+                    case env of
+                        EnvItem.Dummy :: env_ ->
+                            Element.row
+                                [ Element.spacing 2 ]
+                                [ Element.text "("
+                                , EnvItem.view (viewValue n) EnvItem.Dummy
+                                , Element.text "."
+                                , viewStackName "e" env_
+                                , Element.text ")"
+                                ]
 
-                -- Show name if possible, else just show the operands
-                , Maybe.withDefault (viewControl n f) (Maybe.map Element.text mName)
-                , Env.view n (viewValue n) env
+                        _ ->
+                            viewStackName "e" env
+            in
+            Element.row
+                ([ Element.spacing 2
+                 , Element.width Element.fill
+                 , Element.paddingXY 8 4
+                 ]
+                    |> addHoverable
+                )
+                [ Element.text "("
+
+                -- Show name if possible, else say "BODY", expandable upon click
+                , Maybe.withDefault (Element.text "BODY") (Maybe.map Element.text mName)
+
+                -- show just "e", more data on click
+                -- , viewEnv n env
+                , Element.text "."
+                , stackName
+                , Element.text ")"
                 ]
+
+
+viewStack : Int -> Stack -> Element msg
+viewStack n s =
+    viewVMStack
+        { n = n
+        , viewStackChunk =
+            List.map (viewValue n)
+                >> List.intersperse (Element.text " ")
+        , stack = s
+        , stackName = "s"
+        }
+
+
+viewEnv : Int -> Environment -> Element msg
+viewEnv n e =
+    viewVMStack
+        { n = n
+        , viewStackChunk =
+            List.map (EnvItem.view <| viewValue n)
+                >> List.intersperse (Element.text " ")
+        , stack = e
+        , stackName = "e"
+        }
 
 
 viewControl : Int -> Control -> Element msg
@@ -1056,19 +1139,43 @@ viewDumpVal : Int -> DumpValue -> Element msg
 viewDumpVal n dv =
     case dv of
         Control c ->
-            Element.row
-                []
-                [ Element.text "Control"
-                , viewControl n c
-                ]
+            viewStackName "c" c
 
         EntireState s e c ->
-            Element.row []
-                [ Element.text "EntireState"
-                , viewStack n s
-                , Env.view n (viewValue n) e
-                , viewControl n c
+            Element.row
+                ([ Element.paddingXY 6 4
+                 , Element.spacing 8
+                 ]
+                    |> addHoverable
+                )
+                [ viewStackName "s" s
+                , viewStackName "e" e
+                , viewStackName "c" c
                 ]
+
+
+
+-- view helpers
+-- view a stack name (e.g. "e") based on its length
+-- if the length of zero, make it light
+
+
+viewStackName : String -> List a -> Element msg
+viewStackName name stack =
+    if List.length stack > 0 then
+        Element.el [] (Element.text name)
+
+    else
+        Element.el [ Font.color Colours.lightGrey ] (Element.text name)
+
+
+addHoverable : List (Attribute msg) -> List (Attribute msg)
+addHoverable attrs =
+    attrs
+        ++ [ Border.rounded 4
+           , Element.mouseOver
+                [ Background.color Colours.slateGrey ]
+           ]
 
 
 
@@ -1149,12 +1256,12 @@ stackDecoder =
 
 encodeEnvironment : Environment -> Encode.Value
 encodeEnvironment =
-    Env.encode encodeValue
+    Encode.list (EnvItem.encode encodeValue)
 
 
 environmentDecoder : Decoder Environment
 environmentDecoder =
-    Env.decoder valueDecoder
+    Decode.list (EnvItem.decoder valueDecoder)
 
 
 
