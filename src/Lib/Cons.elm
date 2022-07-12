@@ -162,7 +162,6 @@ viewHelper viewA c =
             Element.row
                 [ Element.width Element.fill, Element.spacing 4 ]
                 [ view viewA ca
-                , Element.text " "
                 , viewHelper viewA rest
                 ]
 
