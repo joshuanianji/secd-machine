@@ -1,12 +1,12 @@
 module SECD.VMSpec exposing (suite)
 
 import Expect exposing (Expectation)
-import Fuzz
+import Fuzz exposing (Fuzzer)
 import Json.Decode as Decode
 import Lib.Cons as Cons
+import SECD.EnvItem as EnvItem exposing (EnvItem(..))
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..), Program)
 import SECD.VM as VM exposing (Value)
-import SECD.VMEnv as Env
 import Test exposing (Test)
 
 
@@ -75,6 +75,7 @@ suite =
         , testRecursiveFuncs
         , testEvalFuncs
         , testDecoder
+        , testLocateInEnv
         ]
 
 
@@ -635,16 +636,16 @@ testValueDecoder =
                     |> Expect.equal (Ok <| VM.Array <| Cons.fromList [ VM.Integer 1, VM.Integer 2, VM.Integer 3 ])
         , Test.test "Empty Closure" <|
             \_ ->
-                VM.Closure Nothing [] Env.init
+                VM.Closure Nothing [] []
                     |> VM.encodeValue
                     |> Decode.decodeValue VM.valueDecoder
-                    |> Expect.equal (Ok <| VM.Closure Nothing [] Env.init)
+                    |> Expect.equal (Ok <| VM.Closure Nothing [] [])
         , Test.test "Nonempty closure" <|
             \_ ->
-                VM.Closure Nothing [ NIL ] Env.init
+                VM.Closure Nothing [ NIL ] []
                     |> VM.encodeValue
                     |> Decode.decodeValue VM.valueDecoder
-                    |> Expect.equal (Ok <| VM.Closure Nothing [ NIL ] Env.init)
+                    |> Expect.equal (Ok <| VM.Closure Nothing [ NIL ] [])
         ]
 
 
@@ -687,7 +688,65 @@ testWithPrograms =
 
 
 
+-- other tests
+
+
+testLocateInEnv : Test
+testLocateInEnv =
+    let
+        env1 : VM.Environment
+        env1 =
+            [ [ 1, 2 ], [ 3, 4 ] ]
+                |> List.map (List.map singleConsInt >> ListItem)
+
+        nothingCtx =
+            { dummyVal = Nothing }
+
+        env2 =
+            [ Dummy ]
+
+        somethingCtx =
+            { dummyVal = Just [ singleConsInt 1 ] }
+
+        singleConsInt : Int -> Cons.Cons VM.Value
+        singleConsInt =
+            VM.Integer >> Cons.single
+    in
+    Test.describe "Environment.locate"
+        [ Test.test "Locates (0,0)" <|
+            \_ ->
+                Expect.equal (VM.locateInEnv ( 0, 0 ) env1 nothingCtx) (Ok <| singleConsInt 1)
+        , Test.test "Locates (1,1)" <|
+            \_ ->
+                Expect.equal (VM.locateInEnv ( 1, 1 ) env1 nothingCtx) (Ok <| singleConsInt 4)
+        , Test.test "Locates (1,0)" <|
+            \_ ->
+                Expect.equal (VM.locateInEnv ( 1, 0 ) env1 nothingCtx) (Ok <| singleConsInt 3)
+        , Test.test "Fails in out of bound range" <|
+            \_ ->
+                Expect.err (VM.locateInEnv ( 2, 1 ) env1 nothingCtx)
+        , Test.fuzz (fuzzIntPairRange 2 10) "fails in out of bound range (fuzz)" <|
+            \( x, y ) ->
+                Expect.err (VM.locateInEnv ( x, y ) env1 nothingCtx)
+        , Test.fuzz (fuzzIntPairRange -10 -1) "Fails at negative indices" <|
+            \( x, y ) ->
+                Expect.err (VM.locateInEnv ( x, y ) env1 nothingCtx)
+        , Test.test "Fails with uniniitalized dummy value" <|
+            \_ ->
+                Expect.err (VM.locateInEnv ( 0, 0 ) env2 nothingCtx)
+        , Test.test "Returns dummy value when dummy is present" <|
+            \_ ->
+                Expect.equal (VM.locateInEnv ( 0, 0 ) env2 somethingCtx) (Ok <| singleConsInt 1)
+        ]
+
+
+
 -- Helpers
+
+
+fuzzIntPairRange : Int -> Int -> Fuzzer ( Int, Int )
+fuzzIntPairRange start end =
+    Fuzz.tuple ( Fuzz.intRange start end, Fuzz.intRange start end )
 
 
 vmExpectSuccess : Program -> Value -> Expectation

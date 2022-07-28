@@ -395,8 +395,25 @@ loadFromEnv ( x, y ) (VM ctx s e c d) =
 
         coordsString =
             "(" ++ String.fromInt x ++ ", " ++ String.fromInt y ++ ")"
+    in
+    case locateInEnv ( x, y ) e ctx of
+        Err errStr ->
+            Error vm <| "VM: loadFromEnv: Variable not found from coords " ++ coordsString ++ "\n" ++ errStr
 
-        -- locates a row in the environment
+        Ok (Cons.Val a) ->
+            Unfinished (VM ctx (a :: s) e c d)
+
+        Ok consArr ->
+            Unfinished (VM ctx (Array consArr :: s) e c d)
+
+
+
+-- recursively looks through the environment
+
+
+locateInEnv : ( Int, Int ) -> Environment -> Context -> Result String (Cons Value)
+locateInEnv ( x, y ) env ctx =
+    let
         locateRow : Int -> List a -> Result String a
         locateRow y_ row =
             case ( y_, row ) of
@@ -408,41 +425,28 @@ loadFromEnv ( x, y ) (VM ctx s e c d) =
 
                 ( _, _ :: t ) ->
                     locateRow (y_ - 1) t
-
-        -- recursively looks through the environment
-        locate : ( Int, Int ) -> Environment -> Result String (Cons Value)
-        locate ( x_, y_ ) env =
-            if (x_ < 0) || (y_ < 0) then
-                Err "Negative index out of bounds"
-
-            else
-                case ( x_, env ) of
-                    ( _, [] ) ->
-                        Err "Locate: out of bounds!"
-
-                    ( 0, (EnvItem.ListItem h) :: _ ) ->
-                        locateRow y_ h
-
-                    ( 0, EnvItem.Dummy :: _ ) ->
-                        case ctx.dummyVal of
-                            Nothing ->
-                                Err "Locate: attempt to access uninitialized Dummy Env value!"
-
-                            Just dummyVal ->
-                                locateRow y_ dummyVal
-
-                    ( _, _ :: t ) ->
-                        locate ( x_ - 1, y_ ) t
     in
-    case locate ( x, y ) e of
-        Err errStr ->
-            Error vm <| "VM: loadFromEnv: Variable not found from coords " ++ coordsString ++ "\n" ++ errStr
+    if (x < 0) || (y < 0) then
+        Err "Negative index out of bounds"
 
-        Ok (Cons.Val a) ->
-            Unfinished (VM ctx (a :: s) e c d)
+    else
+        case ( x, env ) of
+            ( _, [] ) ->
+                Err "Locate: out of bounds!"
 
-        Ok consArr ->
-            Unfinished (VM ctx (Array consArr :: s) e c d)
+            ( 0, (EnvItem.ListItem h) :: _ ) ->
+                locateRow y h
+
+            ( 0, EnvItem.Dummy :: _ ) ->
+                case ctx.dummyVal of
+                    Nothing ->
+                        Err "Locate: attempt to access uninitialized Dummy Env value!"
+
+                    Just dummyVal ->
+                        locateRow y dummyVal
+
+            ( _, _ :: t ) ->
+                locateInEnv ( x - 1, y ) t ctx
 
 
 evalFunc : Func -> VM -> State
