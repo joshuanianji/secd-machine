@@ -975,9 +975,13 @@ view n (VM ctx s e c d) =
             -- lots of y padding because, somehow, scrollbarX makes the height 0
             , Element.paddingXY 12 28
             , Element.spacing 6
-            , Element.width Element.fill
+
+            -- some CSS stuff to center the element when it's smaller than the parent
+            -- but overflow on scroll when it is too wide
             , Element.scrollbarX
             , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
+            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
+            , Element.htmlAttribute <| Html.Attributes.style "max-width" "100%"
             ]
             [ viewStack n s
             , viewEnv n e
