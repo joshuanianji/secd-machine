@@ -227,6 +227,85 @@ viewSuccess model =
 
                 Element.BigDesktop ->
                     Element.px <| model.screen.width * 3 // 5
+
+        title =
+            Element.el
+                [ Font.size 36
+                , Font.bold
+                , Element.centerX
+                , Element.paddingXY 0 16
+                ]
+                (Element.text "SECD Machine")
+
+        subtitle =
+            Element.el
+                [ Font.size 18
+                , Font.bold
+                , Element.centerX
+                , Element.paddingXY 0 8
+                ]
+                (Element.text "An implementation as seen in Ualberta's CMPUT 325")
+
+        parseBtns =
+            Element.row
+                [ Element.spacing 8
+                , Element.centerX
+                ]
+                [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
+                , Lib.Views.button Compile <| Element.text "Parse + Compile"
+                ]
+
+        vmEditor =
+            case model.compiled of
+                Idle ->
+                    Element.none
+
+                ParseError err ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.el [ Font.size 24 ] <| Element.text "Parse error!"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                        ]
+
+                CompileError _ err ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 8
+                        ]
+                        [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
+                        , Element.paragraph [ Font.size 16 ] [ Element.text err ]
+                        ]
+
+                CompileSuccess _ compiledModel vmModel ->
+                    Element.column
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.spacing 32
+                        ]
+                        [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
+                        , Element.map ViewVMMsg <| ViewVM.view vmModel
+                        ]
+
+        footer =
+            Element.column
+                [ Element.centerX
+                , Element.paddingXY 0 96
+                , Element.spacing 32
+                ]
+                -- mimic an <hr />
+                [ Element.el
+                    [ Element.width Element.fill
+                    , Element.height Element.shrink
+                    , Border.width 1
+                    , Border.color <| Colours.greyAlpha 0.2
+                    ]
+                    Element.none
+                , Element.el [ Element.centerX ] <| Element.text "Made with ♥ by Joshua Ji"
+                ]
     in
     Element.column
         -- forced 80% width
@@ -236,62 +315,13 @@ viewSuccess model =
         , Element.paddingXY 24 0
         , Element.centerX
         ]
-        [ Element.el
-            [ Font.size 36
-            , Font.bold
-            , Element.centerX
-            , Element.paddingXY 0 16
-            ]
-            (Element.text "SECD Machine")
-        , Element.el
-            [ Font.size 18
-            , Font.bold
-            , Element.centerX
-            , Element.paddingXY 0 8
-            ]
-            (Element.text "An implementation as seen in Ualberta's CMPUT 325")
+        [ title
+        , subtitle
         , description model
         , codeEditor model
-        , Element.row
-            [ Element.spacing 8
-            , Element.centerX
-            ]
-            [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
-            , Lib.Views.button Compile <| Element.text "Parse + Compile"
-            ]
-        , case model.compiled of
-            Idle ->
-                Element.none
-
-            ParseError err ->
-                Element.column
-                    [ Element.width Element.fill
-                    , Element.height Element.fill
-                    , Element.spacing 8
-                    ]
-                    [ Element.el [ Font.size 24 ] <| Element.text "Parse error!"
-                    , Element.paragraph [ Font.size 16 ] [ Element.text err ]
-                    ]
-
-            CompileError _ err ->
-                Element.column
-                    [ Element.width Element.fill
-                    , Element.height Element.fill
-                    , Element.spacing 8
-                    ]
-                    [ Element.el [ Font.size 24, Font.bold ] <| Element.text "Compile error!"
-                    , Element.paragraph [ Font.size 16 ] [ Element.text err ]
-                    ]
-
-            CompileSuccess _ compiledModel vmModel ->
-                Element.column
-                    [ Element.width Element.fill
-                    , Element.height Element.fill
-                    , Element.spacing 32
-                    ]
-                    [ Element.map ViewCompiledMsg <| ViewCompiled.view compiledModel
-                    , Element.map ViewVMMsg <| ViewVM.view vmModel
-                    ]
+        , parseBtns
+        , vmEditor
+        , footer
         ]
         |> Element.layoutWith
             { options =
