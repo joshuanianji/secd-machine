@@ -414,6 +414,13 @@ view model =
                         Element.none
                 , Element.text " states"
                 ]
+
+        n =
+            if model.vmSliderVal == 21 then
+                Nothing
+
+            else
+                Just model.vmSliderVal
     in
     Element.column
         [ Element.width Element.fill
@@ -450,7 +457,7 @@ view model =
 
         -- stuff to render when we're at the final VM state
         , finalVMState model
-        , VM.view model.vmSliderVal <| Zipper.current model.chunk
+        , VM.view n <| Zipper.current model.chunk
         ]
 
 
@@ -518,15 +525,18 @@ viewVMSlider : Model -> Element Msg
 viewVMSlider model =
     let
         labelText =
-            if model.vmSliderVal == 0 then
+            if model.vmSliderVal == 21 then
                 Element.text "Showing entire VM"
 
             else
-                Element.text ("Peeking " ++ String.fromInt model.vmSliderVal ++ " values into the VM")
+                Element.text ("Peeking " ++ String.fromInt model.vmSliderVal ++ " value(s) into the VM")
     in
-    Element.column
-        [ Element.width Element.fill ]
-        [ Input.slider
+    Element.row
+        [ Element.width Element.fill
+        , Element.spacing 8
+        ]
+        [ Element.el [ Element.alignBottom, Element.padding 2 ] <| Element.text "1"
+        , Input.slider
             [ -- same height as the thumb
               Element.height (Element.px 24)
 
@@ -544,8 +554,8 @@ viewVMSlider model =
             ]
             { onChange = round >> UpdateVMSlider
             , label = Input.labelAbove [] labelText
-            , min = 0
-            , max = 20
+            , min = 1
+            , max = 21
             , value = toFloat model.vmSliderVal
             , thumb =
                 Input.thumb
@@ -556,8 +566,9 @@ viewVMSlider model =
                     ]
             , step = Just 1
             }
-            |> Util.surround [] { left = 1, middle = 1, right = 1 }
+        , Element.el [ Element.alignBottom, Element.padding 2 ] <| Element.text "∞"
         ]
+        |> Util.surround [] { left = 1, middle = 1, right = 1 }
 
 
 finalVMState : Model -> Element Msg
