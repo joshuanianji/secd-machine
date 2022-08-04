@@ -215,7 +215,7 @@ viewSuccess : SuccessModel -> Html Msg
 viewSuccess model =
     let
         ( surroundSize, mainSize ) =
-            case .class (Element.classifyDevice model.screen) of
+            case Util.classifyDevice model.screen.width of
                 Element.Desktop ->
                     ( 1, 10 )
 
@@ -239,16 +239,14 @@ viewSuccess model =
             , Element.centerX
             , Element.paddingXY 0 16
             ]
-          <|
-            Element.text "SECD Machine"
+            (Element.text "SECD Machine")
         , Element.el
             [ Font.size 18
             , Font.bold
             , Element.centerX
             , Element.paddingXY 0 8
             ]
-          <|
-            Element.text "An implementation as seen in Ualberta's CMPUT 325"
+            (Element.text "An implementation as seen in Ualberta's CMPUT 325")
         , description model
         , codeEditor model
         , Element.row
