@@ -2,7 +2,6 @@ module Lib.Util exposing (..)
 
 import Element exposing (Attribute, Element)
 import FeatherIcons exposing (Icon)
-import Json.Decode as Decode exposing (Decoder)
 import List.Zipper as Zipper exposing (Zipper)
 import Parser exposing (DeadEnd, Problem(..))
 
