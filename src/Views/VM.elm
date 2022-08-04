@@ -99,7 +99,7 @@ init pagesInfo prog =
       , totalStates = pagesData.totalVMCount
       , pressedKeys = []
       , pagesInfo = pagesInfo
-      , vmSliderVal = 0
+      , vmSliderVal = 5
       , compiled = prog
       , fetchStatus = Idle
       }
