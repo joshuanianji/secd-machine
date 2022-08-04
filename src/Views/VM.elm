@@ -13,7 +13,7 @@ import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours
-import Lib.Util as Util
+import Lib.Util as Util exposing (eachZero)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -121,6 +121,7 @@ type Msg
     | UpdateVMSlider Int
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
+    | Blur
     | NoOp
 
 
@@ -295,7 +296,7 @@ update msg model =
                 update Previous newModel
 
             else
-                ( model, Cmd.none )
+                ( newModel, Cmd.none )
 
         ( Loading locs, GotPage res ) ->
             case res of
@@ -310,6 +311,9 @@ update msg model =
 
                 Err n ->
                     ( { model | fetchStatus = Error n }, Cmd.none )
+
+        ( _, Blur ) ->
+            ( { model | pressedKeys = [] }, Cmd.none )
 
         ( _, _ ) ->
             ( model, Cmd.none )
@@ -391,7 +395,7 @@ view model =
     let
         title =
             Lib.Views.togglableTitle
-                []
+                [ Element.paddingEach { eachZero | bottom = 16 } ]
                 { label = "Execute Program on VM"
                 , activeWhen = True
                 , onClick = NoOp
@@ -603,6 +607,7 @@ subscriptions model =
     Sub.batch
         [ fetchSub
         , Sub.map KeyMsg Keyboard.subscriptions
+        , Ports.blurs (\_ -> Blur)
         ]
 
 

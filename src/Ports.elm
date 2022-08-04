@@ -39,3 +39,6 @@ port fetchPageResponse : (( Int, Value ) -> msg) -> Sub msg
 
 
 port log : String -> Cmd msg
+
+
+port blurs : (() -> msg) -> Sub msg

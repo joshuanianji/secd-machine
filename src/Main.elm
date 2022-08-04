@@ -351,7 +351,7 @@ description : SuccessModel -> Element Msg
 description model =
     Element.column
         [ Element.spacing 32
-        , Element.paddingXY 8 24
+        , Element.paddingXY 0 24
         , Element.width Element.fill
         ]
         [ Lib.Views.viewTogglable []
@@ -527,9 +527,7 @@ codeEditor model =
                 ]
     in
     Element.row
-        [ Element.width Element.fill
-        , Element.paddingXY 8 0
-        ]
+        [ Element.width Element.fill ]
         [ Element.el
             [ Element.width <| Element.fillPortion 5
             , Element.height <| Element.px 500

@@ -86,5 +86,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     app.ports.log.subscribe((str) => {
       console.info(`From ELM: ${str}`);
     });
+
+    window.onblur = () => {
+      console.log("blur");
+      app.ports.blurs.send(null);
+    };
   });
 });
