@@ -4,6 +4,7 @@ import Element exposing (Attribute, Element)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Html exposing (th)
 import Html.Attributes
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -961,36 +962,55 @@ getPages { maxPages, pageSize, chunkSize } vm =
 
 
 -- VIEW
--- n is how deep into the VM stacks we view. `nothing` means we see the whole stack
 
 
-view : Maybe Int -> VM -> Element msg
-view n (VM ctx s e c d) =
-    Element.column
-        [ Element.width Element.fill
-        , Font.size 18
-        ]
-        [ Element.row
-            [ Element.centerX
+view : Maybe Int -> Bool -> VM -> Element msg
+view depth rowView (VM ctx s e c d) =
+    if rowView then
+        Element.column
+            [ Element.width Element.fill
+            , Font.size 18
+            ]
+            [ Element.row
+                [ Element.centerX
 
-            -- lots of y padding because, somehow, scrollbarX makes the height 0
-            , Element.paddingXY 12 28
-            , Element.spacing 6
+                -- lots of y padding because, somehow, scrollbarX makes the height 0
+                , Element.paddingXY 12 16
+                , Element.spacing 6
 
-            -- some CSS stuff to center the element when it's smaller than the parent
-            -- but overflow on scroll when it is too wide
+                -- some CSS stuff to center the element when it's smaller than the parent
+                -- but overflow on scroll when it is too wide
+                , Element.scrollbarX
+                , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
+                , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
+                , Element.htmlAttribute <| Html.Attributes.style "max-width" "100%"
+                , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+                ]
+                [ viewStack depth s
+                , viewEnv depth e
+                , viewControl depth c
+                , viewDump depth d
+                ]
+            , Element.el [ Element.centerX ] <| viewContext depth ctx
+            ]
+
+    else
+        Element.column
+            [ Element.paddingXY 0 8
+            , Element.spacing 8
+            , Element.width Element.fill
             , Element.scrollbarX
-            , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
-            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
-            , Element.htmlAttribute <| Html.Attributes.style "max-width" "100%"
+
+            -- without this, the height will be 0
+            , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+            , Font.size 18
             ]
-            [ viewStack n s
-            , viewEnv n e
-            , viewControl n c
-            , viewDump n d
+            [ viewStack depth s
+            , viewEnv depth e
+            , viewControl depth c
+            , viewDump depth d
+            , Element.el [ Element.padding 8 ] <| viewContext depth ctx
             ]
-        , Element.el [ Element.centerX ] <| viewContext n ctx
-        ]
 
 
 viewContext : Maybe Int -> Context -> Element msg

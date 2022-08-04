@@ -7,13 +7,14 @@ import Browser.Navigation exposing (Key)
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Font as Font
 import Element.Input as Input
 import Json.Decode as Decode
 import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours
-import Lib.Util as Util exposing (eachZero)
+import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -50,8 +51,9 @@ type alias Model =
     , pressedKeys : List Key
     , pagesInfo : PagesInfo
 
-    -- how much of the VM to show
-    , vmSliderVal : Int
+    -- | OPTIONS
+    , viewDepth : Int
+    , rowView : Bool
 
     -- keeping compiled code to view
     , compiled : Program
@@ -99,7 +101,8 @@ init pagesInfo prog =
       , totalStates = pagesData.totalVMCount
       , pressedKeys = []
       , pagesInfo = pagesInfo
-      , vmSliderVal = 5
+      , viewDepth = 10
+      , rowView = True
       , compiled = prog
       , fetchStatus = Idle
       }
@@ -119,6 +122,7 @@ type Msg
     | ToIndex Int
     | UpdateStateSlider Int
     | UpdateVMSlider Int
+    | SetRowView Bool
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
     | Blur
@@ -275,7 +279,10 @@ update msg model =
             ( { model | stateSliderIdx = val }, Cmd.none )
 
         ( _, UpdateVMSlider val ) ->
-            ( { model | vmSliderVal = val }, Cmd.none )
+            ( { model | viewDepth = val }, Cmd.none )
+
+        ( _, SetRowView rowView ) ->
+            ( { model | rowView = rowView }, Cmd.none )
 
         ( _, KeyMsg keyMsg ) ->
             let
@@ -416,11 +423,11 @@ view model =
                 ]
 
         n =
-            if model.vmSliderVal == 21 then
+            if model.viewDepth == 21 then
                 Nothing
 
             else
-                Just model.vmSliderVal
+                Just model.viewDepth
     in
     Element.column
         [ Element.width Element.fill
@@ -451,13 +458,11 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-
-        -- this slider determines how much of the VM we show
-        , viewVMSlider model
+        , options model
 
         -- stuff to render when we're at the final VM state
         , finalVMState model
-        , VM.view n <| Zipper.current model.chunk
+        , VM.view n model.rowView <| Zipper.current model.chunk
         ]
 
 
@@ -521,15 +526,35 @@ viewFetchError model =
             Element.none
 
 
-viewVMSlider : Model -> Element Msg
-viewVMSlider model =
+
+-- | renders the options menu
+
+
+options : Model -> Element Msg
+options model =
+    Element.row
+        [ Element.width Element.fill
+        , Element.spacing 24
+        ]
+        [ vmViewSlider model
+        , rowToggle model
+        ]
+        |> Util.surround [] { left = 1, middle = 3, right = 1 }
+
+
+
+-- this slider determines how much of the VM we show
+
+
+vmViewSlider : Model -> Element Msg
+vmViewSlider model =
     let
         labelText =
-            if model.vmSliderVal == 21 then
+            if model.viewDepth == 21 then
                 Element.text "Showing entire VM"
 
             else
-                Element.text ("Peeking " ++ String.fromInt model.vmSliderVal ++ " value(s) into the VM")
+                Element.text ("Peeking " ++ String.fromInt model.viewDepth ++ " value(s) into the VM")
     in
     Element.row
         [ Element.width Element.fill
@@ -553,10 +578,10 @@ viewVMSlider model =
                 )
             ]
             { onChange = round >> UpdateVMSlider
-            , label = Input.labelAbove [] labelText
+            , label = Input.labelAbove [ Font.center ] labelText
             , min = 1
             , max = 21
-            , value = toFloat model.vmSliderVal
+            , value = toFloat model.viewDepth
             , thumb =
                 Input.thumb
                     [ Element.width (Element.px 24)
@@ -568,7 +593,38 @@ viewVMSlider model =
             }
         , Element.el [ Element.alignBottom, Element.padding 2 ] <| Element.text "∞"
         ]
-        |> Util.surround [] { left = 1, middle = 1, right = 1 }
+
+
+
+-- toggles between rows and column views
+
+
+rowToggle : Model -> Element Msg
+rowToggle model =
+    let
+        attrs : Bool -> List (Element.Attribute Msg)
+        attrs viewRow =
+            [ Element.padding 8
+            , Border.color Colours.black
+            , Border.width 1
+            ]
+                |> Util.addIf (model.rowView == viewRow) [ Background.color Colours.black, Font.color Colours.white ]
+                |> Util.addIf viewRow [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
+                |> Util.addIf (not viewRow) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
+    in
+    Element.row
+        []
+        [ Input.button
+            (attrs True)
+            { onPress = Just <| SetRowView True
+            , label = Element.text "Row View"
+            }
+        , Input.button
+            (attrs False)
+            { onPress = Just <| SetRowView False
+            , label = Element.text "Column View"
+            }
+        ]
 
 
 finalVMState : Model -> Element Msg
