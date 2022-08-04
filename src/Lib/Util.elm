@@ -47,6 +47,27 @@ foldResult r =
             a
 
 
+
+-- same as Element.classifyDevice but only looks at the width lol
+
+
+classifyDevice : Int -> Element.DeviceClass
+classifyDevice width =
+    -- Tested in this ellie:
+    -- https://ellie-app.com/68QM7wLW8b9a1
+    if width < 600 then
+        Element.Phone
+
+    else if width <= 1200 then
+        Element.Tablet
+
+    else if width > 1200 && width <= 1920 then
+        Element.Desktop
+
+    else
+        Element.BigDesktop
+
+
 {-|
 
 
