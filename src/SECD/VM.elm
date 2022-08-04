@@ -4,7 +4,6 @@ import Element exposing (Attribute, Element)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
-import Html exposing (Html)
 import Html.Attributes
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -1057,7 +1056,7 @@ viewValue n val =
         Array arr ->
             Cons.view (viewValue n) arr
 
-        Closure mName f env ->
+        Closure mName _ env ->
             let
                 stackName =
                     case env of
