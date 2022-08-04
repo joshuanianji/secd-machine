@@ -5,6 +5,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Html exposing (Html)
+import Html.Attributes
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Lib.Colours as Colours
@@ -969,10 +970,15 @@ view n (VM ctx s e c d) =
         [ Element.width Element.fill
         , Font.size 18
         ]
-        [ Element.wrappedRow
+        [ Element.row
             [ Element.centerX
-            , Element.paddingXY 12 18
+
+            -- lots of y padding because, somehow, scrollbarX makes the height 0
+            , Element.paddingXY 12 28
             , Element.spacing 6
+            , Element.width Element.fill
+            , Element.scrollbarX
+            , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
             ]
             [ viewStack n s
             , viewEnv n e

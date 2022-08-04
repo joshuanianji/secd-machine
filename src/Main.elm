@@ -214,24 +214,27 @@ view model =
 viewSuccess : SuccessModel -> Html Msg
 viewSuccess model =
     let
-        ( surroundSize, mainSize ) =
+        contentWidth =
             case Util.classifyDevice model.screen.width of
                 Element.Desktop ->
-                    ( 1, 10 )
+                    Element.px <| model.screen.width * 8 // 10
 
                 Element.Phone ->
-                    ( 0, 1 )
+                    Element.fill
 
                 Element.Tablet ->
-                    ( 1, 16 )
+                    Element.px <| model.screen.width * 16 // 17
 
                 Element.BigDesktop ->
-                    ( 1, 3 )
+                    Element.px <| model.screen.width * 3 // 5
     in
     Element.column
-        [ Element.width Element.fill
+        -- forced 80% width
+        [ Element.width contentWidth
         , Element.height Element.fill
         , Element.spacing 8
+        , Element.paddingXY 24 0
+        , Element.centerX
         ]
         [ Element.el
             [ Font.size 36
@@ -290,12 +293,6 @@ viewSuccess model =
                     , Element.map ViewVMMsg <| ViewVM.view vmModel
                     ]
         ]
-        |> Util.surround
-            [ Element.paddingXY 0 24 ]
-            { left = surroundSize
-            , middle = mainSize
-            , right = surroundSize
-            }
         |> Element.layoutWith
             { options =
                 [ Element.focusStyle
