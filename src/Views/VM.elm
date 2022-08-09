@@ -50,16 +50,40 @@ type alias Model =
     , totalStates : Int
     , pressedKeys : List Key
     , pagesInfo : PagesInfo
-
-    -- | OPTIONS
-    , viewDepth : Int
-    , rowView : Bool
+    , options : Options
 
     -- keeping compiled code to view
     , compiled : Program
 
     -- status when we're fetching a page
     , fetchStatus : FetchStatus
+    }
+
+
+
+-- OPTIONS
+
+
+type alias Options =
+    { viewDepth : Int
+    , rowView : Bool
+
+    -- separately keep align options
+    , aligns : { row : Align, col : Align }
+    }
+
+
+type Align
+    = Center
+    | Left
+    | Right
+
+
+initOptions : Options
+initOptions =
+    { viewDepth = 10
+    , rowView = False
+    , aligns = { row = Center, col = Center }
     }
 
 
@@ -101,8 +125,7 @@ init pagesInfo prog =
       , totalStates = pagesData.totalVMCount
       , pressedKeys = []
       , pagesInfo = pagesInfo
-      , viewDepth = 10
-      , rowView = True
+      , options = initOptions
       , compiled = prog
       , fetchStatus = Idle
       }
@@ -121,12 +144,16 @@ type Msg
     | Last
     | ToIndex Int
     | UpdateStateSlider Int
-    | UpdateVMSlider Int
-    | SetRowView Bool
+    | UpdateOptions OptionsMsg
     | KeyMsg Keyboard.Msg
     | GotPage (Result Error ( Int, Zipper VM ))
     | Blur
     | NoOp
+
+
+type OptionsMsg
+    = UpdateDepth Int
+    | UpdateRowView Bool
 
 
 
@@ -278,11 +305,8 @@ update msg model =
         ( _, UpdateStateSlider val ) ->
             ( { model | stateSliderIdx = val }, Cmd.none )
 
-        ( _, UpdateVMSlider val ) ->
-            ( { model | viewDepth = val }, Cmd.none )
-
-        ( _, SetRowView rowView ) ->
-            ( { model | rowView = rowView }, Cmd.none )
+        ( _, UpdateOptions optionsMsg ) ->
+            ( { model | options = updateOptions optionsMsg model.options }, Cmd.none )
 
         ( _, KeyMsg keyMsg ) ->
             let
@@ -324,6 +348,16 @@ update msg model =
 
         ( _, _ ) ->
             ( model, Cmd.none )
+
+
+updateOptions : OptionsMsg -> Options -> Options
+updateOptions msg options =
+    case msg of
+        UpdateDepth n ->
+            { options | viewDepth = n }
+
+        UpdateRowView b ->
+            { options | rowView = b }
 
 
 {-|
@@ -423,11 +457,11 @@ view model =
                 ]
 
         n =
-            if model.viewDepth == 21 then
+            if model.options.viewDepth == 21 then
                 Nothing
 
             else
-                Just model.viewDepth
+                Just model.options.viewDepth
     in
     Element.column
         [ Element.width Element.fill
@@ -458,11 +492,11 @@ view model =
             , Lib.Views.button Step <| Element.text "Step"
             , Lib.Views.button Last <| Element.text "Last"
             ]
-        , options model
+        , viewOptions model.options
 
         -- stuff to render when we're at the final VM state
         , finalVMState model
-        , VM.view n model.rowView <| Zipper.current model.chunk
+        , VM.view n model.options.rowView <| Zipper.current model.chunk
         ]
 
 
@@ -530,14 +564,15 @@ viewFetchError model =
 -- | renders the options menu
 
 
-options : Model -> Element Msg
-options model =
+viewOptions : Options -> Element Msg
+viewOptions options =
     Element.row
         [ Element.width Element.fill
         , Element.spacing 24
         ]
-        [ vmViewSlider model
-        , rowToggle model
+        [ vmViewSlider options
+        , rowToggle options
+        , alignToggles options
         ]
         |> Util.surround [] { left = 1, middle = 3, right = 1 }
 
@@ -546,15 +581,15 @@ options model =
 -- this slider determines how much of the VM we show
 
 
-vmViewSlider : Model -> Element Msg
-vmViewSlider model =
+vmViewSlider : Options -> Element Msg
+vmViewSlider options =
     let
         labelText =
-            if model.viewDepth == 21 then
+            if options.viewDepth == 21 then
                 Element.text "Showing entire VM"
 
             else
-                Element.text ("Peeking " ++ String.fromInt model.viewDepth ++ " value(s) into the VM")
+                Element.text ("Peeking " ++ String.fromInt options.viewDepth ++ " value(s) into the VM")
     in
     Element.row
         [ Element.width Element.fill
@@ -577,11 +612,11 @@ vmViewSlider model =
                     Element.none
                 )
             ]
-            { onChange = round >> UpdateVMSlider
+            { onChange = round >> UpdateDepth >> UpdateOptions
             , label = Input.labelAbove [ Font.center ] labelText
             , min = 1
             , max = 21
-            , value = toFloat model.viewDepth
+            , value = toFloat options.viewDepth
             , thumb =
                 Input.thumb
                     [ Element.width (Element.px 24)
@@ -599,8 +634,8 @@ vmViewSlider model =
 -- toggles between rows and column views
 
 
-rowToggle : Model -> Element Msg
-rowToggle model =
+rowToggle : Options -> Element Msg
+rowToggle options =
     let
         attrs : Bool -> List (Element.Attribute Msg)
         attrs viewRow =
@@ -608,7 +643,7 @@ rowToggle model =
             , Border.color Colours.black
             , Border.width 1
             ]
-                |> Util.addIf (model.rowView == viewRow) [ Background.color Colours.black, Font.color Colours.white ]
+                |> Util.addIf (options.rowView == viewRow) [ Background.color Colours.black, Font.color Colours.white ]
                 |> Util.addIf viewRow [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
                 |> Util.addIf (not viewRow) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
     in
@@ -616,15 +651,20 @@ rowToggle model =
         []
         [ Input.button
             (attrs True)
-            { onPress = Just <| SetRowView True
+            { onPress = Just (UpdateOptions <| UpdateRowView True)
             , label = Element.text "Row View"
             }
         , Input.button
             (attrs False)
-            { onPress = Just <| SetRowView False
+            { onPress = Just (UpdateOptions <| UpdateRowView False)
             , label = Element.text "Column View"
             }
         ]
+
+
+alignToggles : Options -> Element Msg
+alignToggles options =
+    Element.none
 
 
 finalVMState : Model -> Element Msg
