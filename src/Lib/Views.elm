@@ -55,26 +55,6 @@ link attrs { url, label } =
         }
 
 
-featherIcon : List (Element.Attribute msg) -> { icon : FeatherIcons.Icon, color : Color, size : Float, strokeWidth : Float } -> Element msg
-featherIcon attrs data =
-    let
-        icon =
-            data.icon
-                |> FeatherIcons.withStrokeWidth data.strokeWidth
-                |> FeatherIcons.withSize data.size
-                |> FeatherIcons.toHtml []
-                |> Element.html
-    in
-    Element.el
-        ([ Font.color data.color
-         , Element.padding (round data.size // 4)
-         , Border.rounded (round data.size)
-         ]
-            ++ attrs
-        )
-        icon
-
-
 unselectable : Attribute msg
 unselectable =
     Element.htmlAttribute <| Html.Attributes.class "unselectable"
