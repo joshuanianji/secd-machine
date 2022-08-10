@@ -9,6 +9,8 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import FeatherIcons
+import Html.Attributes
 import Json.Decode as Decode
 import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
@@ -21,7 +23,7 @@ import Ordinal exposing (ordinal)
 import Ports
 import SECD.Error as Error exposing (Error)
 import SECD.Program exposing (Program)
-import SECD.VM as VM exposing (VM, VMResult)
+import SECD.VM as VM exposing (Align(..), VM, VMResult)
 
 
 
@@ -68,22 +70,16 @@ type alias Options =
     { viewDepth : Int
     , rowView : Bool
 
-    -- separately keep align options
-    , aligns : { row : Align, col : Align }
+    -- this only affects column views
+    , align : Align
     }
-
-
-type Align
-    = Center
-    | Left
-    | Right
 
 
 initOptions : Options
 initOptions =
     { viewDepth = 10
     , rowView = False
-    , aligns = { row = Center, col = Center }
+    , align = Center
     }
 
 
@@ -154,6 +150,7 @@ type Msg
 type OptionsMsg
     = UpdateDepth Int
     | UpdateRowView Bool
+    | UpdateAlign Align
 
 
 
@@ -359,6 +356,9 @@ updateOptions msg options =
         UpdateRowView b ->
             { options | rowView = b }
 
+        UpdateAlign newAlign ->
+            { options | align = newAlign }
+
 
 {-|
 
@@ -496,7 +496,23 @@ view model =
 
         -- stuff to render when we're at the final VM state
         , finalVMState model
-        , VM.view n model.options.rowView <| Zipper.current model.chunk
+        , Zipper.current model.chunk
+            |> VM.view
+                { depth = n
+                , aligns = model.options.align
+                , rowView = model.options.rowView
+                }
+            |> Element.el
+                [ Element.width Element.fill
+                , Element.paddingXY 8 12
+                , Border.rounded 8
+                , Border.width 1
+                , Border.color <| Colours.greyAlpha 0.2
+                , Element.scrollbarX
+
+                -- without this (while we have scrollbarX), the height will be 0
+                , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+                ]
         ]
 
 
@@ -639,16 +655,16 @@ rowToggle options =
     let
         attrs : Bool -> List (Element.Attribute Msg)
         attrs viewRow =
-            [ Element.padding 8
-            , Border.color Colours.black
-            , Border.width 1
-            ]
+            [ Element.padding 8 ]
                 |> Util.addIf (options.rowView == viewRow) [ Background.color Colours.black, Font.color Colours.white ]
-                |> Util.addIf viewRow [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
-                |> Util.addIf (not viewRow) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
     in
     Element.row
-        []
+        [ Border.rounded 8
+        , Border.color Colours.black
+        , Border.width 1
+        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
+        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+        ]
         [ Input.button
             (attrs True)
             { onPress = Just (UpdateOptions <| UpdateRowView True)
@@ -662,9 +678,60 @@ rowToggle options =
         ]
 
 
+
+-- toggles between the three aligns
+
+
 alignToggles : Options -> Element Msg
 alignToggles options =
-    Element.none
+    let
+        ( onPress, parentColour, attrs ) =
+            if options.rowView then
+                -- disable on rowview
+                ( \_ -> Nothing
+                , Colours.greyAlpha 0.3
+                , \_ ->
+                    [ Element.padding 8
+                    , Font.color <| Colours.greyAlpha 0.3
+                    , Element.htmlAttribute <| Html.Attributes.style "cursor" "not-allowed"
+                    ]
+                )
+
+            else
+                ( \align -> Just (UpdateOptions <| UpdateAlign align)
+                , Colours.black
+                , enabledAttrs
+                )
+
+        enabledAttrs : Align -> List (Element.Attribute Msg)
+        enabledAttrs align =
+            [ Element.padding 8 ]
+                |> Util.addIf (options.align == align) [ Background.color Colours.black, Font.color Colours.white ]
+                |> Util.addIf (options.align /= align) [ Element.mouseOver [ Background.color <| Colours.greyAlpha 0.1 ] ]
+    in
+    Element.row
+        [ Border.rounded 8
+        , Border.color parentColour
+        , Border.width 1
+        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
+        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+        ]
+        [ Input.button
+            (attrs Left)
+            { onPress = onPress Left
+            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+            }
+        , Input.button
+            (attrs Center)
+            { onPress = onPress Center
+            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignCenter
+            }
+        , Input.button
+            (attrs Right)
+            { onPress = onPress Right
+            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignRight
+            }
+        ]
 
 
 finalVMState : Model -> Element Msg

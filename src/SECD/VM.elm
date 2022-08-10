@@ -964,53 +964,70 @@ getPages { maxPages, pageSize, chunkSize } vm =
 -- VIEW
 
 
-view : Maybe Int -> Bool -> VM -> Element msg
-view depth rowView (VM ctx s e c d) =
+type alias ViewOptions =
+    { depth : Maybe Int
+    , rowView : Bool
+    , aligns : Align
+    }
+
+
+type Align
+    = Center
+    | Left
+    | Right
+
+
+view : ViewOptions -> VM -> Element msg
+view { rowView, depth, aligns } (VM ctx s e c d) =
+    let
+        getAlign =
+            case aligns of
+                Center ->
+                    Element.centerX
+
+                Left ->
+                    Element.alignLeft
+
+                Right ->
+                    Element.alignRight
+    in
     if rowView then
         Element.column
-            [ Element.width Element.fill
-            , Font.size 18
+            [ Font.size 18
+
+            -- fit parent element when content is too small, but grow to scale content
+            , Element.htmlAttribute <| Html.Attributes.style "min-width" "100%"
+            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
             ]
             [ Element.row
                 [ Element.centerX
-
-                -- lots of y padding because, somehow, scrollbarX makes the height 0
-                , Element.paddingXY 12 16
+                , Element.padding 8
                 , Element.spacing 6
-
-                -- some CSS stuff to center the element when it's smaller than the parent
-                -- but overflow on scroll when it is too wide
-                , Element.scrollbarX
-                , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
-                , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
-                , Element.htmlAttribute <| Html.Attributes.style "max-width" "100%"
-                , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
                 ]
                 [ viewStack depth s
                 , viewEnv depth e
                 , viewControl depth c
                 , viewDump depth d
                 ]
-            , Element.el [ Element.centerX ] <| viewContext depth ctx
+            , Element.el [ Element.centerX, Element.padding 8 ] <| viewContext depth ctx
             ]
 
     else
         Element.column
             [ Element.paddingXY 0 8
             , Element.spacing 8
-            , Element.width Element.fill
-            , Element.scrollbarX
-
-            -- without this, the height will be 0
-            , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
             , Font.size 18
+            , Element.htmlAttribute <| Html.Attributes.style "min-width" "100%"
+            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
             ]
-            [ viewStack depth s
-            , viewEnv depth e
-            , viewControl depth c
-            , viewDump depth d
-            , Element.el [ Element.padding 8 ] <| viewContext depth ctx
-            ]
+            (List.map (Element.el [ getAlign ])
+                [ viewStack depth s
+                , viewEnv depth e
+                , viewControl depth c
+                , viewDump depth d
+                , Element.el [ Element.paddingXY 8 0 ] <| viewContext depth ctx
+                ]
+            )
 
 
 viewContext : Maybe Int -> Context -> Element msg

@@ -1,11 +1,12 @@
 module Lib.Views exposing (..)
 
-import Element exposing (Attribute, Element)
+import Element exposing (Attribute, Color, Element)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import FeatherIcons
 import Html.Attributes
 import Lib.Colours as Colours
 
@@ -52,6 +53,26 @@ link attrs { url, label } =
         { url = url
         , label = Element.text label
         }
+
+
+featherIcon : List (Element.Attribute msg) -> { icon : FeatherIcons.Icon, color : Color, size : Float, strokeWidth : Float } -> Element msg
+featherIcon attrs data =
+    let
+        icon =
+            data.icon
+                |> FeatherIcons.withStrokeWidth data.strokeWidth
+                |> FeatherIcons.withSize data.size
+                |> FeatherIcons.toHtml []
+                |> Element.html
+    in
+    Element.el
+        ([ Font.color data.color
+         , Element.padding (round data.size // 4)
+         , Border.rounded (round data.size)
+         ]
+            ++ attrs
+        )
+        icon
 
 
 unselectable : Attribute msg

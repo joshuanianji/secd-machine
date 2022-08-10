@@ -23,6 +23,7 @@ import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import Html.Attributes
 import Lib.Colours as Colours
 import Lib.Util as Util exposing (eachZeroBorder)
 import Lib.Views
@@ -460,16 +461,16 @@ viewTypeButtons model =
     let
         attrs : ViewType -> List (Element.Attribute Msg)
         attrs viewType =
-            [ Element.padding 8
-            , Border.color Colours.black
-            , Border.width 1
-            ]
+            [ Element.padding 8 ]
                 |> Util.addIf (model.viewType == viewType) [ Background.color Colours.black, Font.color Colours.white ]
-                |> Util.addIf (viewType == RawView) [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
-                |> Util.addIf (viewType == InteractiveView) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
     in
     Element.row
-        []
+        [ Border.rounded 8
+        , Border.color Colours.black
+        , Border.width 1
+        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
+        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+        ]
         [ Input.button
             (attrs RawView)
             { onPress = Just <| SetViewType RawView
