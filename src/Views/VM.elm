@@ -483,15 +483,6 @@ view model =
 
             Ok _ ->
                 Element.none
-        , Element.row
-            [ Element.width Element.fill
-            , Element.spacing 8
-            ]
-            [ Lib.Views.button First <| Element.text "First"
-            , Lib.Views.button Previous <| Element.text "Previous"
-            , Lib.Views.button Step <| Element.text "Step"
-            , Lib.Views.button Last <| Element.text "Last"
-            ]
         , viewOptions model.options
 
         -- stuff to render when we're at the final VM state
@@ -518,42 +509,76 @@ view model =
 
 viewStateSlider : Model -> Element Msg
 viewStateSlider model =
+    let
+        sliderBtn msg icon tooltip =
+            Input.button
+                [ Element.padding 8
+                , Font.size 20
+                , Border.rounded 8
+                , Element.centerX
+                , Element.mouseOver
+                    [ Background.color Colours.slateGrey ]
+                , Element.htmlAttribute <| Html.Attributes.attribute "title" tooltip
+                ]
+                { onPress = Just msg
+                , label = Util.viewIcon [ Font.size 16 ] icon
+                }
+    in
     Element.column
         [ Element.width Element.fill
         , Element.paddingXY 8 12
+        , Element.spacing 16
         ]
-        [ Input.slider
+        [ Element.row
             [ Element.width Element.fill
-
-            -- same height as the thumb
-            , Element.height (Element.px 24)
-
-            -- establish the "track"
-            , Element.behindContent
-                (Element.el
-                    [ Element.width Element.fill
-                    , Element.height (Element.px 8)
-                    , Element.centerY
-                    , Background.color <| Colours.greyAlpha 0.1
-                    , Border.rounded 4
-                    ]
-                    Element.none
-                )
+            , Element.spacing 6
             ]
-            { onChange = round >> UpdateStateSlider
-            , label = Input.labelAbove [] <| Element.text ("Current State: " ++ String.fromInt (model.index + 1))
-            , min = 0
-            , max = toFloat <| model.totalStates - 1
-            , value = toFloat model.stateSliderIdx
-            , thumb =
-                Input.thumb
-                    [ Element.width (Element.px 24)
-                    , Element.height (Element.px 24)
-                    , Border.rounded 24
-                    , Background.color <| Colours.purple
-                    ]
-            , step = Just 1
-            }
+            [ sliderBtn First FeatherIcons.chevronsLeft "Jump to the first state"
+            , sliderBtn Previous FeatherIcons.chevronLeft "Go to the previous state"
+            , Input.slider
+                [ Element.width Element.fill
+
+                -- same height as the thumb
+                , Element.height (Element.px 24)
+
+                -- establish the "track"
+                , Element.behindContent
+                    (Element.el
+                        [ Element.width Element.fill
+                        , Element.height (Element.px 8)
+                        , Element.centerY
+                        , Background.color <| Colours.greyAlpha 0.1
+                        , Border.rounded 4
+                        ]
+                        Element.none
+                    )
+                ]
+                { onChange = round >> UpdateStateSlider
+                , label = Input.labelHidden "Slider for VM State Index"
+                , min = 0
+                , max = toFloat <| model.totalStates - 1
+                , value = toFloat model.stateSliderIdx
+                , thumb =
+                    Input.thumb
+                        [ Element.width (Element.px 32)
+                        , Element.height (Element.px 32)
+                        , Border.rounded 32
+                        , Background.color <| Colours.purple
+                        , Element.inFront
+                            (Element.el
+                                [ Element.centerX
+                                , Element.centerY
+                                , Font.size 16
+                                , Font.color Colours.white
+                                ]
+                                (Element.text <| String.fromInt (model.index + 1))
+                            )
+                        ]
+                , step = Just 1
+                }
+            , sliderBtn Step FeatherIcons.chevronRight "Go to the next state"
+            , sliderBtn Last FeatherIcons.chevronsRight "Jump to the last state"
+            ]
         , if model.stateSliderIdx /= model.index then
             Lib.Views.button (ToIndex model.stateSliderIdx) <| Element.text ("Go to " ++ ordinal (model.stateSliderIdx + 1) ++ " state")
 
