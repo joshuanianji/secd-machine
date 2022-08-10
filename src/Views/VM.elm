@@ -510,16 +510,21 @@ view model =
 viewStateSlider : Model -> Element Msg
 viewStateSlider model =
     let
-        sliderBtn msg icon tooltip =
+        sliderBtn msg icon isDisabled tooltip =
             Input.button
-                [ Element.padding 8
-                , Font.size 20
-                , Border.rounded 8
-                , Element.centerX
-                , Element.mouseOver
-                    [ Background.color Colours.slateGrey ]
-                , Element.htmlAttribute <| Html.Attributes.attribute "title" tooltip
-                ]
+                ([ Element.padding 8
+                 , Font.size 20
+                 , Border.rounded 8
+                 , Element.centerX
+                 , Element.htmlAttribute <| Html.Attributes.attribute "title" tooltip
+                 ]
+                    |> Util.addIf isDisabled
+                        [ Font.color <| Colours.greyAlpha 0.5
+                        , Element.htmlAttribute <| Html.Attributes.style "cursor" "not-allowed"
+                        ]
+                    |> Util.addIf (not isDisabled)
+                        [ Element.mouseOver [ Background.color Colours.slateGrey ] ]
+                )
                 { onPress = Just msg
                 , label = Util.viewIcon [ Font.size 16 ] icon
                 }
@@ -533,8 +538,8 @@ viewStateSlider model =
             [ Element.width Element.fill
             , Element.spacing 6
             ]
-            [ sliderBtn First FeatherIcons.chevronsLeft "Jump to the first state"
-            , sliderBtn Previous FeatherIcons.chevronLeft "Go to the previous state (←)"
+            [ sliderBtn First FeatherIcons.chevronsLeft (atFirstState model) "Jump to the first state"
+            , sliderBtn Previous FeatherIcons.chevronLeft (atFirstState model) "Go to the previous state (←)"
             , Input.slider
                 [ Element.width Element.fill
 
@@ -576,8 +581,8 @@ viewStateSlider model =
                         ]
                 , step = Just 1
                 }
-            , sliderBtn Step FeatherIcons.chevronRight "Go to the next state (→)"
-            , sliderBtn Last FeatherIcons.chevronsRight "Jump to the last state"
+            , sliderBtn Step FeatherIcons.chevronRight (atLastState model) "Go to the next state (→)"
+            , sliderBtn Last FeatherIcons.chevronsRight (atLastState model) "Jump to the last state"
             ]
         , if model.stateSliderIdx /= model.index then
             Lib.Views.button (ToIndex model.stateSliderIdx) <| Element.text ("Go to " ++ ordinal (model.stateSliderIdx + 1) ++ " state")
@@ -723,11 +728,7 @@ alignToggles options =
 
 finalVMState : Model -> Element Msg
 finalVMState model =
-    let
-        atLastState =
-            Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages && model.fetchStatus == Idle
-    in
-    if atLastState then
+    if atLastState model then
         case model.latestVM of
             Ok (Ok value) ->
                 Element.paragraph
@@ -788,3 +789,13 @@ gotPage ( pageNum, val ) =
 
         Err e ->
             GotPage <| Err (Decode.errorToString e)
+
+
+atLastState : Model -> Bool
+atLastState model =
+    Zipper.isLast model.chunk && Zipper.isLast model.page && Zipper.isLast model.pages && model.fetchStatus == Idle
+
+
+atFirstState : Model -> Bool
+atFirstState model =
+    Zipper.isFirst model.chunk && Zipper.isFirst model.page && Zipper.isFirst model.pages && model.fetchStatus == Idle
