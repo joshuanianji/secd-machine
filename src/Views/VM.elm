@@ -534,7 +534,7 @@ viewStateSlider model =
             , Element.spacing 6
             ]
             [ sliderBtn First FeatherIcons.chevronsLeft "Jump to the first state"
-            , sliderBtn Previous FeatherIcons.chevronLeft "Go to the previous state"
+            , sliderBtn Previous FeatherIcons.chevronLeft "Go to the previous state (←)"
             , Input.slider
                 [ Element.width Element.fill
 
@@ -576,7 +576,7 @@ viewStateSlider model =
                         ]
                 , step = Just 1
                 }
-            , sliderBtn Step FeatherIcons.chevronRight "Go to the next state"
+            , sliderBtn Step FeatherIcons.chevronRight "Go to the next state (→)"
             , sliderBtn Last FeatherIcons.chevronsRight "Jump to the last state"
             ]
         , if model.stateSliderIdx /= model.index then
