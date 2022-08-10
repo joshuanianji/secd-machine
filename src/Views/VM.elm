@@ -16,7 +16,7 @@ import Json.Encode exposing (Value)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Lib.Colours as Colours
-import Lib.Util as Util exposing (eachZero, eachZeroBorder)
+import Lib.Util as Util exposing (eachZero)
 import Lib.Views
 import List.Zipper as Zipper exposing (Zipper)
 import Ordinal exposing (ordinal)
@@ -532,7 +532,7 @@ viewStateSlider model =
     Element.column
         [ Element.width Element.fill
         , Element.paddingXY 8 12
-        , Element.spacing 16
+        , Element.spacing 8
         ]
         [ Element.row
             [ Element.width Element.fill
@@ -588,7 +588,7 @@ viewStateSlider model =
             Lib.Views.button (ToIndex model.stateSliderIdx) <| Element.text ("Go to " ++ ordinal (model.stateSliderIdx + 1) ++ " state")
 
           else
-            Element.none
+            Element.el [ Element.height (Element.px 38) ] Element.none
         ]
 
 
