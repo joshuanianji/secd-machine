@@ -9,6 +9,7 @@ import Element.Input as Input
 import FeatherIcons
 import Html.Attributes
 import Lib.Colours as Colours
+import Lib.Util as Util
 
 
 
@@ -53,6 +54,55 @@ link attrs { url, label } =
         { url = url
         , label = Element.text label
         }
+
+
+toggleButtons : Bool -> List (Attribute msg) -> List { active : Bool, onPress : Maybe msg, label : Element msg } -> Element msg
+toggleButtons enabled inputAttrs btnOpts =
+    let
+        ( onPress, parentColour, attrs ) =
+            if not enabled then
+                -- disable on rowview
+                ( \_ -> Nothing
+                , Colours.greyAlpha 0.3
+                , \_ ->
+                    [ Element.padding 8
+                    , Font.color <| Colours.greyAlpha 0.3
+                    , Element.htmlAttribute <| Html.Attributes.style "cursor" "not-allowed"
+                    ]
+                )
+
+            else
+                ( identity
+                , Colours.black
+                , enabledAttrs
+                )
+
+        enabledAttrs : Bool -> List (Element.Attribute msg)
+        enabledAttrs active =
+            [ Element.padding 8 ]
+                |> Util.addIf active [ Background.color Colours.black, Font.color Colours.white ]
+                |> Util.addIf (not active) [ Element.mouseOver [ Background.color Colours.slateGrey ] ]
+    in
+    List.map
+        (\btn ->
+            Input.button
+                (attrs btn.active)
+                { onPress = onPress btn.onPress
+                , label = btn.label
+                }
+        )
+        btnOpts
+        |> Element.row
+            ([ Border.rounded 8
+             , Border.color parentColour
+             , Border.width 1
+
+             -- hides children's background by this element's border radius
+             , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
+             , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
+             ]
+                ++ inputAttrs
+            )
 
 
 unselectable : Attribute msg

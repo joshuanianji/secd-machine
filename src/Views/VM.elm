@@ -678,28 +678,19 @@ vmViewSlider options =
 rowToggle : Options -> Element Msg
 rowToggle options =
     let
-        attrs : Bool -> List (Element.Attribute Msg)
-        attrs viewRow =
-            [ Element.padding 8 ]
-                |> Util.addIf (options.rowView == viewRow) [ Background.color Colours.black, Font.color Colours.white ]
+        onPress rowView =
+            Just (UpdateOptions <| UpdateRowView rowView)
     in
-    Element.row
-        [ Border.rounded 8
-        , Border.color Colours.black
-        , Border.width 1
-        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
-        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
-        ]
-        [ Input.button
-            (attrs True)
-            { onPress = Just (UpdateOptions <| UpdateRowView True)
-            , label = Element.text "Row View"
-            }
-        , Input.button
-            (attrs False)
-            { onPress = Just (UpdateOptions <| UpdateRowView False)
-            , label = Element.text "Column View"
-            }
+    Lib.Views.toggleButtons True
+        []
+        [ { active = options.rowView
+          , onPress = onPress True
+          , label = Element.text "Row View"
+          }
+        , { active = not options.rowView
+          , onPress = onPress False
+          , label = Element.text "Column View"
+          }
         ]
 
 
@@ -710,52 +701,23 @@ rowToggle options =
 alignToggles : Options -> Element Msg
 alignToggles options =
     let
-        ( onPress, parentColour, attrs ) =
-            if options.rowView then
-                -- disable on rowview
-                ( \_ -> Nothing
-                , Colours.greyAlpha 0.3
-                , \_ ->
-                    [ Element.padding 8
-                    , Font.color <| Colours.greyAlpha 0.3
-                    , Element.htmlAttribute <| Html.Attributes.style "cursor" "not-allowed"
-                    ]
-                )
-
-            else
-                ( \align -> Just (UpdateOptions <| UpdateAlign align)
-                , Colours.black
-                , enabledAttrs
-                )
-
-        enabledAttrs : Align -> List (Element.Attribute Msg)
-        enabledAttrs align =
-            [ Element.padding 8 ]
-                |> Util.addIf (options.align == align) [ Background.color Colours.black, Font.color Colours.white ]
-                |> Util.addIf (options.align /= align) [ Element.mouseOver [ Background.color <| Colours.greyAlpha 0.1 ] ]
+        onPress align =
+            Just (UpdateOptions <| UpdateAlign align)
     in
-    Element.row
-        [ Border.rounded 8
-        , Border.color parentColour
-        , Border.width 1
-        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
-        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
-        ]
-        [ Input.button
-            (attrs Left)
-            { onPress = onPress Left
-            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
-            }
-        , Input.button
-            (attrs Center)
-            { onPress = onPress Center
-            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignCenter
-            }
-        , Input.button
-            (attrs Right)
-            { onPress = onPress Right
-            , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignRight
-            }
+    Lib.Views.toggleButtons (not options.rowView)
+        []
+        [ { active = options.align == Left
+          , onPress = onPress Left
+          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+          }
+        , { active = options.align == Center
+          , onPress = onPress Center
+          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+          }
+        , { active = options.align == Right
+          , onPress = onPress Right
+          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+          }
         ]
 
 

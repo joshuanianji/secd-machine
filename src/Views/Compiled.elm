@@ -459,28 +459,19 @@ viewOk model =
 viewTypeButtons : OkModel -> Element Msg
 viewTypeButtons model =
     let
-        attrs : ViewType -> List (Element.Attribute Msg)
-        attrs viewType =
-            [ Element.padding 8 ]
-                |> Util.addIf (model.viewType == viewType) [ Background.color Colours.black, Font.color Colours.white ]
+        onPress viewType =
+            Just <| SetViewType viewType
     in
-    Element.row
-        [ Border.rounded 8
-        , Border.color Colours.black
-        , Border.width 1
-        , Element.htmlAttribute <| Html.Attributes.style "overflow" "hidden"
-        , Element.htmlAttribute <| Html.Attributes.style "flex-basis" "auto"
-        ]
-        [ Input.button
-            (attrs RawView)
-            { onPress = Just <| SetViewType RawView
-            , label = Element.text "Raw code"
-            }
-        , Input.button
-            (attrs InteractiveView)
-            { onPress = Just <| SetViewType InteractiveView
-            , label = Element.text "Interactive"
-            }
+    Lib.Views.toggleButtons True
+        []
+        [ { active = model.viewType == RawView
+          , onPress = onPress RawView
+          , label = Element.text "Raw View"
+          }
+        , { active = model.viewType == InteractiveView
+          , onPress = onPress InteractiveView
+          , label = Element.text "Interactive"
+          }
         ]
 
 
