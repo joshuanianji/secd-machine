@@ -79,7 +79,7 @@ initOptions : Options
 initOptions =
     { viewDepth = 10
     , rowView = False
-    , align = Center
+    , align = Left
     }
 
 
