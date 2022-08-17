@@ -748,7 +748,7 @@ finalVMState model =
                 Lib.Views.bold "There's more to render! But no renders yet"
 
     else
-        Element.none
+        Element.el [ Element.height (Element.px 20) ] Element.none
 
 
 
