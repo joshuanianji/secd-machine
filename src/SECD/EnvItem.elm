@@ -35,7 +35,7 @@ view viewA item =
                 |> Element.row []
 
         Dummy ->
-            Element.text "W"
+            Element.text "Ω"
 
 
 
