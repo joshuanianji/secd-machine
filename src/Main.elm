@@ -23,15 +23,21 @@ import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
 import Set exposing (Set)
 import Views.Compiled as ViewCompiled
 import Views.VM as ViewVM
+import Url exposing (Url)
+import UrlState exposing (UrlState)
+import Browser.Navigation as Nav
+import Browser exposing (UrlRequest(..))
 
 
 main : Program Decode.Value Model Msg
 main =
-    Browser.element
+    Browser.application
         { init = init
         , update = update
-        , view = view
+        , view = viewApplication
         , subscriptions = subscriptions
+        , onUrlRequest = ClickedLink
+        , onUrlChange = ChangedUrl
         }
 
 
@@ -39,10 +45,15 @@ main =
 ---- MODEL ----
 
 
-type Model
-    = Error Decode.Error
-    | Success SuccessModel
+type alias Model = 
+    { state : UrlState 
+    , navKey : Nav.Key 
+    , data : ModelData
+    }
 
+type ModelData 
+    = Error Decode.Error 
+    | Success SuccessModel
 
 type alias SuccessModel =
     { code : String
@@ -66,25 +77,29 @@ type CompiledState
     | CompileSuccess AST ViewCompiled.Model ViewVM.Model
 
 
-init : Decode.Value -> ( Model, Cmd Msg )
-init flags =
-    case Decode.decodeValue Flags.decoder flags of
-        Err e ->
-            ( Error e, Cmd.none )
+init : Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+    let
+        initialUrlState = UrlState.fromUrl url
 
-        Ok f ->
-            ( Success
-                { code = f.initialCode
-                , openTabs = Set.fromList [ "Complex", "howto" ]
-                , currCodeExample = Ok "Lazy Infinite Lists"
-                , compiled = Idle
-                , codeExamples = f.codeExamples
-                , screen = f.screen
-                }
-            , Ports.initialized f.initialCode
-            )
+        (data, dataCmd) =
+            case Decode.decodeValue Flags.decoder flags of
+                Err e ->
+                    ( Error e, Cmd.none )
 
-
+                Ok f ->
+                    ( Success
+                        { code = f.initialCode
+                        , openTabs = Set.fromList [ "Complex", "howto" ]
+                        , currCodeExample = Ok "Lazy Infinite Lists"
+                        , compiled = Idle
+                        , codeExamples = f.codeExamples
+                        , screen = f.screen
+                        }
+                    , Ports.initialized f.initialCode
+                    )
+    in
+    ( { state = initialUrlState, navKey = key, data = data }, dataCmd )
 
 ---- MSG ----
 
@@ -100,6 +115,9 @@ type Msg
     | Compile
     | ViewVMMsg ViewVM.Msg
     | ViewCompiledMsg ViewCompiled.Msg
+      -- URL
+    | ChangedUrl Url
+    | ClickedLink UrlRequest
       -- other
     | UpdateScreen Screen
 
@@ -110,13 +128,32 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case model of
-        Error _ ->
+    case (model.data, msg) of
+
+        ( _, ChangedUrl url ) ->
+            let
+                newState =
+                    UrlState.fromUrl url
+            in
+            ( { model | state = UrlState.merge model.state newState }, Cmd.none )
+
+        ( _, ClickedLink urlRequest ) ->
+            case urlRequest of
+                Internal url ->
+                    ( model, Nav.pushUrl model.navKey <| Url.toString url )
+
+                External url ->
+                    ( model, Nav.load url )
+
+        (Error _, _) ->
             ( model, Cmd.none )
 
-        Success m ->
-            updateSuccess msg m
-                |> Tuple.mapFirst Success
+        (Success m, _) ->
+            let
+                ( newModel, newCmd ) =
+                    updateSuccess msg m
+            in
+            ( { model | data = Success newModel }, newCmd )
 
 
 updateSuccess : Msg -> SuccessModel -> ( SuccessModel, Cmd Msg )
@@ -200,10 +237,16 @@ updateSuccess msg model =
 
 ---- VIEW ----
 
+viewApplication : Model -> Browser.Document Msg
+viewApplication model =
+    { title = "SECD Machine"
+    , body =
+        [ view model ]
+    }
 
 view : Model -> Html Msg
 view model =
-    case model of
+    case model.data of
         Error e ->
             Html.text <| Decode.errorToString e
 
@@ -554,7 +597,7 @@ codeEditor model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model of
+    case model.data of
         Error _ ->
             Sub.none
 
