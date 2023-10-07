@@ -4,7 +4,7 @@ import * as db from "idb-keyval";
 import CodeMirror from "codemirror";
 import "codemirror/theme/material.css";
 import "codemirror/lib/codemirror.css";
-import "codemirror/mode/commonlisp/commonlisp";
+import "./src/codemirror/pseudolisp";
 import "codemirror/addon/edit/matchbrackets";
 import "codemirror/addon/edit/closebrackets";
 
@@ -36,7 +36,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   app.ports.initialized.subscribe((val) => {
     cm = CodeMirror(document.getElementById("editor"), {
       value: val,
-      mode: "commonlisp",
+      // custom defined mode, derived from commonlisp
+      mode: "pseudolisp",
       lineNumbers: true,
       lineWrapping: true,
       theme: "material",

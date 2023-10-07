@@ -12,7 +12,7 @@ greyAlpha =
 
 slateGrey : Color
 slateGrey =
-    greyAlpha 0.1
+    greyAlpha 0.05
 
 
 lightGrey : Color

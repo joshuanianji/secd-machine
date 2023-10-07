@@ -30,12 +30,12 @@ view viewA item =
     case item of
         ListItem cs ->
             List.map (Cons.view viewA) cs
-                |> List.intersperse (Element.text ",")
+                |> List.intersperse (Element.text " ")
                 |> Util.wrapAdd (Element.text "(") (Element.text ")")
                 |> Element.row []
 
         Dummy ->
-            Element.text "W"
+            Element.text "Ω"
 
 
 

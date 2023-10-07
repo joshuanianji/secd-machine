@@ -22,7 +22,6 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
-import Element.Input as Input
 import Lib.Colours as Colours
 import Lib.Util as Util exposing (eachZeroBorder)
 import Lib.Views
@@ -458,28 +457,19 @@ viewOk model =
 viewTypeButtons : OkModel -> Element Msg
 viewTypeButtons model =
     let
-        attrs : ViewType -> List (Element.Attribute Msg)
-        attrs viewType =
-            [ Element.padding 8
-            , Border.color Colours.black
-            , Border.width 1
-            ]
-                |> Util.addIf (model.viewType == viewType) [ Background.color Colours.black, Font.color Colours.white ]
-                |> Util.addIf (viewType == RawView) [ Border.roundEach { eachZeroBorder | topLeft = 8, bottomLeft = 8 } ]
-                |> Util.addIf (viewType == InteractiveView) [ Border.roundEach { eachZeroBorder | topRight = 8, bottomRight = 8 } ]
+        onPress viewType =
+            Just <| SetViewType viewType
     in
-    Element.row
+    Lib.Views.toggleButtons True
         []
-        [ Input.button
-            (attrs RawView)
-            { onPress = Just <| SetViewType RawView
-            , label = Element.text "Raw code"
-            }
-        , Input.button
-            (attrs InteractiveView)
-            { onPress = Just <| SetViewType InteractiveView
-            , label = Element.text "Interactive"
-            }
+        [ { active = model.viewType == RawView
+          , onPress = onPress RawView
+          , label = Element.text "Raw View"
+          }
+        , { active = model.viewType == InteractiveView
+          , onPress = onPress InteractiveView
+          , label = Element.text "Interactive"
+          }
         ]
 
 
