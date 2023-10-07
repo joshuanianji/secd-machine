@@ -717,11 +717,11 @@ alignToggles options =
           }
         , { active = options.align == Center
           , onPress = onPress Center
-          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignCenter
           }
         , { active = options.align == Right
           , onPress = onPress Right
-          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignLeft
+          , label = Util.viewIcon [ Element.height (Element.px 20) ] FeatherIcons.alignRight
           }
         ]
 
