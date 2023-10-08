@@ -1,4 +1,4 @@
-module UrlState exposing (UrlState, fromUrl, merge, updateTab)
+module UrlState exposing (UrlState, default, fromUrl, merge, navigateTo, updateTab)
 
 import Browser.Navigation as Nav
 import Url exposing (Url)

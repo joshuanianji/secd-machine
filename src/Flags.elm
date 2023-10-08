@@ -1,12 +1,29 @@
-module Flags exposing (CodeExamples, Flags, Screen, decoder, findCodeExample)
+module Flags exposing (CodeExamples, DefaultExample, Flags, Screen, decoder, findCodeExample)
 
+import Html exposing (code)
 import Json.Decode as Decode exposing (Decoder)
 
 
 type alias Flags =
     { codeExamples : CodeExamples
     , screen : Screen
-    , defaultExample : ( String, String )
+    , defaultExample : DefaultExample
+    }
+
+
+type alias CodeExamples =
+    List ( String, List ( String, String ) )
+
+
+type alias Screen =
+    { width : Int
+    , height : Int
+    }
+
+
+type alias DefaultExample =
+    { name : String
+    , code : String
     }
 
 
@@ -15,11 +32,7 @@ decoder =
     Decode.map3 Flags
         (Decode.field "codeExamples" decodeCodeExamples)
         (Decode.field "screen" decodeScreen)
-        (Decode.field "defaultExample" <| decodeTuple Decode.string Decode.string)
-
-
-type alias CodeExamples =
-    List ( String, List ( String, String ) )
+        (Decode.field "defaultExample" decodeDefaultExample)
 
 
 decodeCodeExamples : Decoder CodeExamples
@@ -31,6 +44,20 @@ decodeCodeExamples =
     in
     Decode.map2 Tuple.pair (Decode.field "type" Decode.string) (Decode.field "examples" decodeExample)
         |> Decode.list
+
+
+decodeScreen : Decoder Screen
+decodeScreen =
+    Decode.map2 Screen
+        (Decode.field "width" Decode.int)
+        (Decode.field "height" Decode.int)
+
+
+decodeDefaultExample : Decoder DefaultExample
+decodeDefaultExample =
+    Decode.map2 DefaultExample
+        (Decode.index 0 Decode.string)
+        (Decode.index 1 Decode.string)
 
 
 
@@ -68,19 +95,6 @@ findCodeExample name examples =
                         searchTab rest
     in
     search examples
-
-
-type alias Screen =
-    { width : Int
-    , height : Int
-    }
-
-
-decodeScreen : Decoder Screen
-decodeScreen =
-    Decode.map2 Screen
-        (Decode.field "width" Decode.int)
-        (Decode.field "height" Decode.int)
 
 
 

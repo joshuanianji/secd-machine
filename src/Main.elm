@@ -75,7 +75,7 @@ type alias SuccessModel =
     , screen : Screen
 
     -- default example name, code in case the url doesn't specify
-    , defaultExample : ( String, String )
+    , defaultExample : Flags.DefaultExample
     }
 
 
@@ -92,35 +92,36 @@ init flags url key =
         initialUrlState =
             UrlState.fromUrl url
 
-        ( data, dataCmd ) =
+        ( data, urlState, dataCmd ) =
             case Decode.decodeValue Flags.decoder flags of
                 Err e ->
-                    ( Error e, Cmd.none )
+                    ( Error e, UrlState.default, Cmd.none )
 
                 Ok f ->
                     let
-                        ( initialTab, initialCode ) =
+                        ( initialTab, initialCode, urlState_ ) =
                             case Flags.findCodeExample initialUrlState.exampleName f.codeExamples of
                                 Just ( exampleName, code ) ->
-                                    ( exampleName, code )
+                                    ( exampleName, code, initialUrlState )
 
                                 Nothing ->
-                                    f.defaultExample
+                                    ( "Basics", f.defaultExample.code, UrlState.default )
                     in
                     ( Success
                         { code = initialCode
                         , openExampleTabs = Set.fromList [ initialTab ]
                         , openTabs = Set.fromList [ "howto" ]
-                        , currCodeExample = Ok initialUrlState.exampleName
+                        , currCodeExample = Ok urlState_.exampleName
                         , compiled = Idle
                         , codeExamples = f.codeExamples
                         , screen = f.screen
                         , defaultExample = f.defaultExample
                         }
+                    , urlState_
                     , Ports.initialize initialCode
                     )
     in
-    ( { state = initialUrlState, navKey = key, data = data }, dataCmd )
+    ( { state = urlState, navKey = key, data = data }, dataCmd )
 
 
 
@@ -154,17 +155,17 @@ update msg model =
     case ( model.data, msg ) of
         ( Success m, ChangedUrl url ) ->
             let
-                newState =
+                state =
                     UrlState.fromUrl url
 
-                ( newTab, newCode ) =
-                    case Flags.findCodeExample newState.exampleName m.codeExamples of
-                        Just newData ->
-                            newData
+                ( newTab, newCode, newState ) =
+                    case Flags.findCodeExample state.exampleName m.codeExamples of
+                        Just ( tab, code ) ->
+                            ( tab, code, state )
 
                         -- use default
                         Nothing ->
-                            m.defaultExample
+                            ( "Basics", m.defaultExample.code, UrlState.default )
 
                 newSuccessModel =
                     { m
@@ -173,7 +174,7 @@ update msg model =
                     }
             in
             ( { model
-                | state = UrlState.merge model.state newState
+                | state = UrlState.merge newState model.state
                 , data = Success newSuccessModel
               }
             , Ports.updateCode newCode
