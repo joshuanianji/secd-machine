@@ -28,7 +28,7 @@ type alias RouteParams =
 
 
 type alias Data =
-    { groups : List String
+    { exampleGroups : List Backend.GetExamplesTask.ExampleGroup
     }
 
 
@@ -47,7 +47,7 @@ route =
 data : BackendTask FatalError Data
 data =
     BackendTask.succeed Data
-        |> BackendTask.andMap (Backend.GetExamplesTask.exampleGroups)
+        |> BackendTask.andMap Backend.GetExamplesTask.examples
 
 
 head :
@@ -80,6 +80,27 @@ view app shared =
         Element.column 
             []
             [Element.text "Hello!!!"
-            , Element.row [] (List.map (\group -> Element.text group) app.data.groups)
+            , Element.column 
+                [Element.spacing 10]
+                <|
+                List.map 
+                    (\group -> 
+                        Element.row 
+                            []
+                            [Element.text group.groupName
+                            , Element.column 
+                            []
+                            <| 
+                            List.map 
+                                (\example -> 
+                                    Element.row 
+                                        []
+                                        [Element.text example.name
+                                        , Element.text example.fileName]
+                                )
+                                group.examples
+                            ]
+                    )
+                    app.data.exampleGroups
             ]
     }
