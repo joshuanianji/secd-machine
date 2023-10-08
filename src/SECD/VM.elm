@@ -12,7 +12,7 @@ import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 import List.Zipper as Zipper exposing (Zipper)
 import SECD.EnvItem as EnvItem exposing (EnvItem)
-import SECD.Error as Error exposing (Error)
+import SECD.Error exposing (Error)
 import SECD.Program as Program exposing (Cmp, Func(..), Op(..), Program)
 
 
@@ -963,73 +963,32 @@ getPages { maxPages, pageSize, chunkSize } vm =
 -- VIEW
 
 
-type alias ViewOptions =
-    { depth : Maybe Int
-    , rowView : Bool
-    , aligns : Align
-    }
+view : Int -> VM -> Element msg
+view n (VM ctx s e c d) =
+    Element.column
+        [ Element.width Element.fill
+        , Font.size 18
+        ]
+        [ Element.row
+            [ Element.centerX
 
-
-type Align
-    = Center
-    | Left
-    | Right
-
-
-view : ViewOptions -> VM -> Element msg
-view { rowView, depth, aligns } (VM ctx s e c d) =
-    let
-        getAlign =
-            case aligns of
-                Center ->
-                    Element.centerX
-
-                Left ->
-                    Element.alignLeft
-
-                Right ->
-                    Element.alignRight
-    in
-    if rowView then
-        Element.column
-            [ Font.size 18
-
-            -- fit parent element when content is too small, but grow to scale content
-            , Element.htmlAttribute <| Html.Attributes.style "min-width" "100%"
-            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
+            -- lots of y padding because, somehow, scrollbarX makes the height 0
+            , Element.paddingXY 12 28
+            , Element.spacing 6
+            , Element.width Element.fill
+            , Element.scrollbarX
+            , Element.htmlAttribute <| Html.Attributes.style "overflow-y" "hidden"
             ]
-            [ Element.row
-                [ Element.centerX
-                , Element.padding 8
-                , Element.spacing 6
-                ]
-                [ viewStack depth s
-                , viewEnv depth e
-                , viewControl depth c
-                , viewDump depth d
-                ]
-            , Element.el [ Element.centerX, Element.padding 8 ] <| viewContext depth ctx
+            [ viewStack n s
+            , viewEnv n e
+            , viewControl n c
+            , viewDump n d
             ]
-
-    else
-        Element.column
-            [ Element.paddingXY 0 8
-            , Element.spacing 8
-            , Font.size 18
-            , Element.htmlAttribute <| Html.Attributes.style "min-width" "100%"
-            , Element.htmlAttribute <| Html.Attributes.style "width" "fit-content"
-            ]
-            (List.map (Element.el [ getAlign ])
-                [ viewStack depth s
-                , viewEnv depth e
-                , viewControl depth c
-                , viewDump depth d
-                , Element.el [ Element.paddingXY 8 0 ] <| viewContext depth ctx
-                ]
-            )
+        , Element.el [ Element.centerX ] <| viewContext n ctx
+        ]
 
 
-viewContext : Maybe Int -> Context -> Element msg
+viewContext : Int -> Context -> Element msg
 viewContext n ctx =
     let
         dummyVal =
@@ -1050,16 +1009,15 @@ viewContext n ctx =
 -- generic stack view
 
 
-viewVMStack : { n : Maybe Int, viewStackChunk : List a -> List (Element msg), stack : List a, stackName : String } -> Element msg
+viewVMStack : { n : Int, viewStackChunk : List a -> List (Element msg), stack : List a, stackName : String } -> Element msg
 viewVMStack { n, viewStackChunk, stack, stackName } =
     let
         take =
-            case n of
-                Nothing ->
-                    identity
+            if n == 0 then
+                identity
 
-                Just m ->
-                    List.take m
+            else
+                List.take n
 
         -- instead of having an opinionated view of the entire stack, we have a "view stack chunk" input
         -- this allows the stack view function to dictate how to view a list of elements
@@ -1070,14 +1028,8 @@ viewVMStack { n, viewStackChunk, stack, stackName } =
                 |> Util.addIf (List.length stack > 0) [ Element.text "." ]
                 |> Util.addIf True [ trailingS ]
 
-        -- if we're viewing the whole stack, obviously the trailing stack name will be lighted out (since it is empty)
         trailingS =
-            case n of
-                Nothing ->
-                    viewStackName stackName []
-
-                Just m ->
-                    viewStackName stackName (List.drop m stack)
+            viewStackName stackName (List.drop n stack)
     in
     Element.row
         ([ Element.spacing 2
@@ -1092,7 +1044,7 @@ viewVMStack { n, viewStackChunk, stack, stackName } =
 -- view a VM value
 
 
-viewValue : Maybe Int -> Value -> Element msg
+viewValue : Int -> Value -> Element msg
 viewValue n val =
     case val of
         Integer i ->
@@ -1141,7 +1093,7 @@ viewValue n val =
                 ]
 
 
-viewStack : Maybe Int -> Stack -> Element msg
+viewStack : Int -> Stack -> Element msg
 viewStack n s =
     viewVMStack
         { n = n
@@ -1153,7 +1105,7 @@ viewStack n s =
         }
 
 
-viewEnv : Maybe Int -> Environment -> Element msg
+viewEnv : Int -> Environment -> Element msg
 viewEnv n e =
     viewVMStack
         { n = n
@@ -1165,7 +1117,7 @@ viewEnv n e =
         }
 
 
-viewControl : Maybe Int -> Control -> Element msg
+viewControl : Int -> Control -> Element msg
 viewControl n c =
     viewVMStack
         { n = n
@@ -1180,7 +1132,7 @@ viewControl n c =
         }
 
 
-viewDump : Maybe Int -> Dump -> Element msg
+viewDump : Int -> Dump -> Element msg
 viewDump n d =
     viewVMStack
         { n = n
@@ -1192,7 +1144,7 @@ viewDump n d =
         }
 
 
-viewDumpVal : Maybe Int -> DumpValue -> Element msg
+viewDumpVal : Int -> DumpValue -> Element msg
 viewDumpVal n dv =
     case dv of
         Control c ->
