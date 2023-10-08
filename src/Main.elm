@@ -139,8 +139,6 @@ type Msg
       -- URL
     | ChangedUrl Url
     | ClickedLink UrlRequest
-      -- other
-    | UpdateScreen Screen
 
 
 
