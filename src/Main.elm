@@ -1,7 +1,6 @@
 module Main exposing (main)
 
 import Browser exposing (UrlRequest(..))
-import Browser.Events
 import Browser.Navigation as Nav
 import Element exposing (Element)
 import Element.Background as Background
@@ -72,7 +71,6 @@ type alias SuccessModel =
     , currCodeExample : Result String String
     , compiled : CompiledState
     , codeExamples : CodeExamples
-    , screen : Screen
 
     -- default example name, code in case the url doesn't specify
     , defaultExample : Flags.DefaultExample
@@ -114,7 +112,6 @@ init flags url key =
                         , currCodeExample = Ok urlState_.exampleName
                         , compiled = Idle
                         , codeExamples = f.codeExamples
-                        , screen = f.screen
                         , defaultExample = f.defaultExample
                         }
                     , urlState_
@@ -278,9 +275,6 @@ updateSuccess msg model =
             in
             ( { model | compiled = CompileSuccess ast newCompiledModel vmModel }, Cmd.map ViewCompiledMsg newCompiledMsg )
 
-        ( _, UpdateScreen newScreen ) ->
-            ( { model | screen = newScreen }, Cmd.none )
-
         ( _, _ ) ->
             ( model, Cmd.none )
 
@@ -310,20 +304,6 @@ view model =
 viewSuccess : SuccessModel -> Html Msg
 viewSuccess model =
     let
-        contentWidth =
-            case Util.classifyDevice model.screen.width of
-                Element.Desktop ->
-                    Element.px <| model.screen.width * 8 // 10
-
-                Element.Phone ->
-                    Element.fill
-
-                Element.Tablet ->
-                    Element.px <| model.screen.width * 16 // 17
-
-                Element.BigDesktop ->
-                    Element.px <| model.screen.width * 3 // 5
-
         title =
             Element.el
                 [ Font.size 36
@@ -404,9 +384,8 @@ viewSuccess model =
                 ]
     in
     Element.column
-        -- forced 80% width
-        [ Element.width contentWidth
-        , Element.height Element.fill
+        [ Element.height Element.fill
+        , Element.htmlAttribute <| Html.Attributes.id "main-content"
         , Element.spacing 8
         , Element.paddingXY 24 0
         , Element.centerX
@@ -670,5 +649,4 @@ subscriptions model =
             Sub.batch
                 [ subModelSubscriptions
                 , Ports.updatedEditor CodeChanged
-                , Browser.Events.onResize (\w h -> UpdateScreen <| Screen w h)
                 ]

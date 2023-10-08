@@ -21,10 +21,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const app = Elm.Main.init({
         node: root,
         flags: {
-            screen: {
-                width: window.innerWidth,
-                height: window.innerHeight,
-            },
             codeExamples: codeExamples,
             // default example to load
             defaultExample: {

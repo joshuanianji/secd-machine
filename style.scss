@@ -1,37 +1,62 @@
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin: 0 auto;
-  margin-top: 60px;
+    font-family: Avenir, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-align: center;
+    color: #2c3e50;
+    margin: 0 auto;
+    margin-top: 60px;
 }
 
 #editor {
-  width: 100%;
-  font-size: 16px;
+    width: 100%;
+    font-size: 16px;
 }
 
 #editor,
 .CodeMirror {
-  height: 100%;
-  font-family: "Fira Code", monospace;
+    height: 100%;
+    font-family: "Fira Code", monospace;
 
-  .CodeMirror-line {
-    line-height: 1.66;
-  }
-  .CodeMirror-gutter-wrapper {
-    line-height: 1.66;
-  }
+    .CodeMirror-line {
+        line-height: 1.66;
+    }
+    .CodeMirror-gutter-wrapper {
+        line-height: 1.66;
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    #main-content {
+        width: 100%;
+    }
+}
+
+@media only screen and (min-width: 600px) {
+    #main-content {
+        width: 93%;
+    }
+}
+
+@media only screen and (min-width: 1200px) {
+    #main-content {
+        width: 80%;
+    }
+}
+
+@media only screen and (min-width: 1920px) {
+    // big desktops
+    #main-content {
+        width: 60%;
+    }
 }
 
 // UNIVERSAL
 .unselectable {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }

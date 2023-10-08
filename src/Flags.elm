@@ -6,7 +6,6 @@ import Json.Decode as Decode exposing (Decoder)
 
 type alias Flags =
     { codeExamples : CodeExamples
-    , screen : Screen
     , defaultExample : DefaultExample
     }
 
@@ -30,9 +29,8 @@ type alias DefaultExample =
 
 decoder : Decoder Flags
 decoder =
-    Decode.map3 Flags
+    Decode.map2 Flags
         (Decode.field "codeExamples" decodeCodeExamples)
-        (Decode.field "screen" decodeScreen)
         (Decode.field "defaultExample" decodeDefaultExample)
 
 
@@ -45,13 +43,6 @@ decodeCodeExamples =
     in
     Decode.map2 Tuple.pair (Decode.field "type" Decode.string) (Decode.field "examples" decodeExample)
         |> Decode.list
-
-
-decodeScreen : Decoder Screen
-decodeScreen =
-    Decode.map2 Screen
-        (Decode.field "width" Decode.int)
-        (Decode.field "height" Decode.int)
 
 
 decodeDefaultExample : Decoder DefaultExample
