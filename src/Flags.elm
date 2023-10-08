@@ -1,4 +1,4 @@
-module Flags exposing (CodeExamples, Flags, Screen, decoder)
+module Flags exposing (CodeExamples, Flags, Screen, decoder, findCodeExample)
 
 import Json.Decode as Decode exposing (Decoder)
 
@@ -32,6 +32,43 @@ decodeCodeExamples =
     in
     Decode.map2 Tuple.pair (Decode.field "type" Decode.string) (Decode.field "examples" decodeExample)
         |> Decode.list
+
+
+
+-- given a name, find the example code and tab
+
+
+findCodeExample : String -> CodeExamples -> Maybe ( String, String )
+findCodeExample name examples =
+    let
+        search : CodeExamples -> Maybe ( String, String )
+        search exs =
+            case exs of
+                [] ->
+                    Nothing
+
+                ( tab, exsGroup ) :: rest ->
+                    case searchTab exsGroup of
+                        Nothing ->
+                            search rest
+
+                        Just code ->
+                            Just ( tab, code )
+
+        searchTab : List ( String, String ) -> Maybe String
+        searchTab exsGroup =
+            case exsGroup of
+                [] ->
+                    Nothing
+
+                ( exName, code ) :: rest ->
+                    if name == exName then
+                        Just code
+
+                    else
+                        searchTab rest
+    in
+    search examples
 
 
 type alias Screen =

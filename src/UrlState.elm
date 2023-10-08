@@ -1,14 +1,14 @@
-module UrlState exposing (UrlState, fromUrl, merge, navigateTo)
+module UrlState exposing (UrlState, fromUrl, merge, updateTab)
 
 import Browser.Navigation as Nav
-import Dict
 import Url exposing (Url)
+import Url.Builder
 import Url.Parser exposing ((<?>), Parser)
 import Url.Parser.Query as Query
 
 
 
--- | A dirt-simple strategy for encoding and decoding global state
+-- | A dirt-simple strategy for encoding and decoding global state (across page refreshes)
 -- | Right now, we just have the tab we are on
 
 
@@ -27,9 +27,9 @@ default =
 -- PUBLIC HELPERS
 
 
-navigateTo : Nav.Key -> UrlState -> Cmd msg
-navigateTo key route =
-    Nav.pushUrl key (toUrlString route)
+updateTab : String -> Nav.Key -> UrlState -> ( UrlState, Cmd msg )
+updateTab tab key route =
+    ( { route | tab = tab }, navigateTo key { route | tab = tab } )
 
 
 fromUrl : Url -> UrlState
@@ -66,4 +66,13 @@ queryParsers =
 
 toUrlString : UrlState -> String
 toUrlString route =
-    "?tab=" ++ route.tab
+    Url.Builder.relative [] [ Url.Builder.string "tab" route.tab ]
+
+
+
+-- Private helper
+
+
+navigateTo : Nav.Key -> UrlState -> Cmd msg
+navigateTo key route =
+    Nav.pushUrl key (toUrlString route)

@@ -133,12 +133,21 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( model.data, msg ) of
-        ( _, ChangedUrl url ) ->
+        ( Success m, ChangedUrl url ) ->
             let
                 newState =
                     UrlState.fromUrl url
+
+                ( newTab, newCode ) =
+                    case Flags.findCodeExample newState.tab m.codeExamples of
+                        Just newData ->
+                            newData
+
+                        -- use old code
+                        Nothing ->
+                            ( model.state.tab, m.code )
             in
-            ( { model | state = UrlState.merge model.state newState }, Cmd.none )
+            ( { model | state = UrlState.merge model.state newState }, Ports.updateCode newCode )
 
         ( _, ClickedLink urlRequest ) ->
             case urlRequest of
@@ -147,6 +156,14 @@ update msg model =
 
                 External url ->
                     ( model, Nav.load url )
+
+        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
+        ( _, UpdateCodeExample name newCode ) ->
+            let
+                ( newUrlState, cmd ) =
+                    UrlState.updateTab name model.navKey model.state
+            in
+            ( { model | state = newUrlState }, cmd )
 
         ( Error _, _ ) ->
             ( model, Cmd.none )
@@ -189,10 +206,6 @@ updateSuccess msg model =
                       }
                     , Cmd.none
                     )
-
-        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
-        ( _, UpdateCodeExample name newCode ) ->
-            ( { model | currCodeExample = Ok name }, Ports.updateCode newCode )
 
         ( _, Compile ) ->
             case AST.parse model.code of
