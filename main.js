@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let cm = null;
 
     // wait for Elm to load in #editor for us to initialize code mirror
-    app.ports.initialized.subscribe((val) => {
+    app.ports.initialize.subscribe((val) => {
         cm = CodeMirror(document.getElementById("editor"), {
             value: val,
             // custom defined mode, derived from commonlisp

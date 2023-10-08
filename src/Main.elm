@@ -117,7 +117,7 @@ init flags url key =
                         , screen = f.screen
                         , defaultExample = f.defaultExample
                         }
-                    , Ports.initialized initialCode
+                    , Ports.initialize initialCode
                     )
     in
     ( { state = initialUrlState, navKey = key, data = data }, dataCmd )
@@ -210,7 +210,7 @@ updateSuccess : Msg -> SuccessModel -> ( SuccessModel, Cmd Msg )
 updateSuccess msg model =
     case ( model.compiled, msg ) of
         ( _, Remonke ) ->
-            ( model, Ports.initialized model.code )
+            ( model, Ports.initialize model.code )
 
         ( _, ToggleTab tab ) ->
             if Set.member tab model.openTabs then
@@ -290,7 +290,7 @@ updateSuccess msg model =
 
 viewApplication : Model -> Browser.Document Msg
 viewApplication model =
-    { title = "SECD Machine"
+    { title = "SECD Machine: " ++ model.state.exampleName
     , body =
         [ view model ]
     }
