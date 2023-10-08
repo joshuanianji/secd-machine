@@ -1,7 +1,8 @@
 module Main exposing (main)
 
-import Browser
+import Browser exposing (UrlRequest(..))
 import Browser.Events
+import Browser.Navigation as Nav
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
@@ -21,12 +22,10 @@ import Ports
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
 import Set exposing (Set)
-import Views.Compiled as ViewCompiled
-import Views.VM as ViewVM
 import Url exposing (Url)
 import UrlState exposing (UrlState)
-import Browser.Navigation as Nav
-import Browser exposing (UrlRequest(..))
+import Views.Compiled as ViewCompiled
+import Views.VM as ViewVM
 
 
 main : Program Decode.Value Model Msg
@@ -45,15 +44,17 @@ main =
 ---- MODEL ----
 
 
-type alias Model = 
-    { state : UrlState 
-    , navKey : Nav.Key 
+type alias Model =
+    { state : UrlState
+    , navKey : Nav.Key
     , data : ModelData
     }
 
-type ModelData 
-    = Error Decode.Error 
+
+type ModelData
+    = Error Decode.Error
     | Success SuccessModel
+
 
 type alias SuccessModel =
     { code : String
@@ -80,9 +81,10 @@ type CompiledState
 init : Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
-        initialUrlState = UrlState.fromUrl url
+        initialUrlState =
+            UrlState.fromUrl url
 
-        (data, dataCmd) =
+        ( data, dataCmd ) =
             case Decode.decodeValue Flags.decoder flags of
                 Err e ->
                     ( Error e, Cmd.none )
@@ -100,6 +102,8 @@ init flags url key =
                     )
     in
     ( { state = initialUrlState, navKey = key, data = data }, dataCmd )
+
+
 
 ---- MSG ----
 
@@ -128,8 +132,7 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case (model.data, msg) of
-
+    case ( model.data, msg ) of
         ( _, ChangedUrl url ) ->
             let
                 newState =
@@ -145,10 +148,10 @@ update msg model =
                 External url ->
                     ( model, Nav.load url )
 
-        (Error _, _) ->
+        ( Error _, _ ) ->
             ( model, Cmd.none )
 
-        (Success m, _) ->
+        ( Success m, _ ) ->
             let
                 ( newModel, newCmd ) =
                     updateSuccess msg m
@@ -237,12 +240,14 @@ updateSuccess msg model =
 
 ---- VIEW ----
 
+
 viewApplication : Model -> Browser.Document Msg
 viewApplication model =
     { title = "SECD Machine"
     , body =
         [ view model ]
     }
+
 
 view : Model -> Html Msg
 view model =
