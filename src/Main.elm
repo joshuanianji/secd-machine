@@ -1,7 +1,8 @@
 module Main exposing (main)
 
-import Browser
+import Browser exposing (UrlRequest(..))
 import Browser.Events
+import Browser.Navigation as Nav
 import Element exposing (Element)
 import Element.Background as Background
 import Element.Border as Border
@@ -21,17 +22,21 @@ import Ports
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
 import Set exposing (Set)
+import Url exposing (Url)
+import UrlState exposing (UrlState)
 import Views.Compiled as ViewCompiled
 import Views.VM as ViewVM
 
 
 main : Program Decode.Value Model Msg
 main =
-    Browser.element
+    Browser.application
         { init = init
         , update = update
-        , view = view
+        , view = viewApplication
         , subscriptions = subscriptions
+        , onUrlRequest = ClickedLink
+        , onUrlChange = ChangedUrl
         }
 
 
@@ -39,13 +44,25 @@ main =
 ---- MODEL ----
 
 
-type Model
+type alias Model =
+    { state : UrlState
+    , navKey : Nav.Key
+    , data : ModelData
+    }
+
+
+type ModelData
     = Error Decode.Error
     | Success SuccessModel
 
 
 type alias SuccessModel =
     { code : String
+
+    -- open tabs in the code editor
+    , openExampleTabs : Set String
+
+    -- open tabs for the description
     , openTabs : Set String
 
     -- making this a result (super weird) so i can know when the code change
@@ -56,6 +73,9 @@ type alias SuccessModel =
     , compiled : CompiledState
     , codeExamples : CodeExamples
     , screen : Screen
+
+    -- default example name, code in case the url doesn't specify
+    , defaultExample : Flags.DefaultExample
     }
 
 
@@ -66,23 +86,42 @@ type CompiledState
     | CompileSuccess AST ViewCompiled.Model ViewVM.Model
 
 
-init : Decode.Value -> ( Model, Cmd Msg )
-init flags =
-    case Decode.decodeValue Flags.decoder flags of
-        Err e ->
-            ( Error e, Cmd.none )
+init : Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+    let
+        initialUrlState =
+            UrlState.fromUrl url
 
-        Ok f ->
-            ( Success
-                { code = f.initialCode
-                , openTabs = Set.fromList [ "Complex", "howto" ]
-                , currCodeExample = Ok "Lazy Infinite Lists"
-                , compiled = Idle
-                , codeExamples = f.codeExamples
-                , screen = f.screen
-                }
-            , Ports.initialized f.initialCode
-            )
+        ( data, urlState, dataCmd ) =
+            case Decode.decodeValue Flags.decoder flags of
+                Err e ->
+                    ( Error e, UrlState.default, Cmd.none )
+
+                Ok f ->
+                    let
+                        ( initialTab, initialCode, urlState_ ) =
+                            case Flags.findCodeExample initialUrlState.exampleName f.codeExamples of
+                                Just ( exampleName, code ) ->
+                                    ( exampleName, code, initialUrlState )
+
+                                Nothing ->
+                                    ( f.defaultExample.tab, f.defaultExample.code, UrlState.default )
+                    in
+                    ( Success
+                        { code = initialCode
+                        , openExampleTabs = Set.fromList [ initialTab ]
+                        , openTabs = Set.fromList [ "howto" ]
+                        , currCodeExample = Ok urlState_.exampleName
+                        , compiled = Idle
+                        , codeExamples = f.codeExamples
+                        , screen = f.screen
+                        , defaultExample = f.defaultExample
+                        }
+                    , urlState_
+                    , Ports.initialize initialCode
+                    )
+    in
+    ( { state = urlState, navKey = key, data = data }, dataCmd )
 
 
 
@@ -92,14 +131,17 @@ init flags =
 type Msg
     = Remonke
     | ToggleTab String
+    | ToggleExampleTab String
       -- code changed from JS side
     | CodeChanged String
-      -- code changed from Elm side
-      -- first arg is name, second is the code
-    | UpdateCodeExample String String
+      -- code changed from Elm side, arg is the example name
+    | UpdateCodeExample String
     | Compile
     | ViewVMMsg ViewVM.Msg
     | ViewCompiledMsg ViewCompiled.Msg
+      -- URL
+    | ChangedUrl Url
+    | ClickedLink UrlRequest
       -- other
     | UpdateScreen Screen
 
@@ -110,20 +152,66 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case model of
-        Error _ ->
+    case ( model.data, msg ) of
+        ( Success m, ChangedUrl url ) ->
+            let
+                state =
+                    UrlState.fromUrl url
+
+                ( newTab, newCode, newState ) =
+                    case Flags.findCodeExample state.exampleName m.codeExamples of
+                        Just ( tab, code ) ->
+                            ( tab, code, state )
+
+                        -- use default
+                        Nothing ->
+                            ( m.defaultExample.tab, m.defaultExample.code, UrlState.default )
+
+                newSuccessModel =
+                    { m
+                        | openExampleTabs = Set.fromList [ newTab ]
+                        , currCodeExample = Ok newState.exampleName
+                    }
+            in
+            ( { model
+                | state = UrlState.merge newState model.state
+                , data = Success newSuccessModel
+              }
+            , Ports.updateCode newCode
+            )
+
+        ( _, ClickedLink urlRequest ) ->
+            case urlRequest of
+                Internal url ->
+                    ( model, Nav.pushUrl model.navKey <| Url.toString url )
+
+                External url ->
+                    ( model, Nav.load url )
+
+        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
+        ( _, UpdateCodeExample name ) ->
+            let
+                ( newUrlState, cmd ) =
+                    UrlState.updateTab name model.navKey model.state
+            in
+            ( { model | state = newUrlState }, cmd )
+
+        ( Error _, _ ) ->
             ( model, Cmd.none )
 
-        Success m ->
-            updateSuccess msg m
-                |> Tuple.mapFirst Success
+        ( Success m, _ ) ->
+            let
+                ( newModel, newCmd ) =
+                    updateSuccess msg m
+            in
+            ( { model | data = Success newModel }, newCmd )
 
 
 updateSuccess : Msg -> SuccessModel -> ( SuccessModel, Cmd Msg )
 updateSuccess msg model =
     case ( model.compiled, msg ) of
         ( _, Remonke ) ->
-            ( model, Ports.initialized model.code )
+            ( model, Ports.initialize model.code )
 
         ( _, ToggleTab tab ) ->
             if Set.member tab model.openTabs then
@@ -132,13 +220,17 @@ updateSuccess msg model =
             else
                 ( { model | openTabs = Set.insert tab model.openTabs }, Cmd.none )
 
+        ( _, ToggleExampleTab tab ) ->
+            if Set.member tab model.openExampleTabs then
+                ( { model | openExampleTabs = Set.remove tab model.openExampleTabs }, Cmd.none )
+
+            else
+                ( { model | openExampleTabs = Set.insert tab model.openExampleTabs }, Cmd.none )
+
         ( _, CodeChanged newCode ) ->
             case model.currCodeExample of
-                Ok codeChangedExample ->
-                    ( { model
-                        | currCodeExample = Err codeChangedExample
-                        , code = newCode
-                      }
+                Ok _ ->
+                    ( { model | code = newCode }
                     , Cmd.none
                     )
 
@@ -149,10 +241,6 @@ updateSuccess msg model =
                       }
                     , Cmd.none
                     )
-
-        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
-        ( _, UpdateCodeExample name newCode ) ->
-            ( { model | currCodeExample = Ok name }, Ports.updateCode newCode )
 
         ( _, Compile ) ->
             case AST.parse model.code of
@@ -201,9 +289,17 @@ updateSuccess msg model =
 ---- VIEW ----
 
 
+viewApplication : Model -> Browser.Document Msg
+viewApplication model =
+    { title = "SECD Machine: " ++ model.state.exampleName
+    , body =
+        [ view model ]
+    }
+
+
 view : Model -> Html Msg
 view model =
-    case model of
+    case model.data of
         Error e ->
             Html.text <| Decode.errorToString e
 
@@ -461,7 +557,7 @@ codeEditor model =
                     (\( name, progTuples ) ->
                         let
                             ( icon, content ) =
-                                if Set.member name model.openTabs then
+                                if Set.member name model.openExampleTabs then
                                     ( FeatherIcons.chevronUp
                                     , Element.column
                                         [ Element.paddingEach { eachZero | left = 16 }
@@ -478,7 +574,7 @@ codeEditor model =
                             [ Element.row
                                 [ Element.width Element.fill
                                 , Element.paddingXY 16 12
-                                , Events.onClick <| ToggleTab name
+                                , Events.onClick <| ToggleExampleTab name
                                 , Element.pointer
                                 , Element.spacing 4
                                 , Lib.Views.unselectable
@@ -521,7 +617,7 @@ codeEditor model =
                     , Element.mouseOver
                         [ Font.color Colours.lightGrey ]
                     ]
-                    { onPress = Just <| UpdateCodeExample name prog
+                    { onPress = Just <| UpdateCodeExample name
                     , label = Element.text name
                     }
                 ]
@@ -554,7 +650,7 @@ codeEditor model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model of
+    case model.data of
         Error _ ->
             Sub.none
 

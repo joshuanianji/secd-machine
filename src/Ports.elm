@@ -17,7 +17,7 @@ port updatedEditor : (String -> msg) -> Sub msg
 port updateCode : String -> Cmd msg
 
 
-port initialized : String -> Cmd msg
+port initialize : String -> Cmd msg
 
 
 

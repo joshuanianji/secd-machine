@@ -1,12 +1,8 @@
 module SECD.EnvItem exposing (..)
 
 import Element exposing (Element)
-import Element.Border as Border
-import Html exposing (Html)
-import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
-import Lib.Colours as Colours
 import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 
