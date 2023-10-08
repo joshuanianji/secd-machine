@@ -58,6 +58,11 @@ type ModelData
 
 type alias SuccessModel =
     { code : String
+
+    -- open tabs in the code editor
+    , openExampleTabs : Set String
+
+    -- open tabs for the description
     , openTabs : Set String
 
     -- making this a result (super weird) so i can know when the code change
@@ -68,6 +73,9 @@ type alias SuccessModel =
     , compiled : CompiledState
     , codeExamples : CodeExamples
     , screen : Screen
+
+    -- default example name, code in case the url doesn't specify
+    , defaultExample : ( String, String )
     }
 
 
@@ -90,15 +98,26 @@ init flags url key =
                     ( Error e, Cmd.none )
 
                 Ok f ->
+                    let
+                        ( initialTab, initialCode ) =
+                            case Flags.findCodeExample initialUrlState.exampleName f.codeExamples of
+                                Just ( exampleName, code ) ->
+                                    ( exampleName, code )
+
+                                Nothing ->
+                                    f.defaultExample
+                    in
                     ( Success
-                        { code = f.initialCode
-                        , openTabs = Set.fromList [ "Complex", "howto" ]
-                        , currCodeExample = Ok "Lazy Infinite Lists"
+                        { code = initialCode
+                        , openExampleTabs = Set.fromList [ initialTab ]
+                        , openTabs = Set.fromList [ "howto" ]
+                        , currCodeExample = Ok initialUrlState.exampleName
                         , compiled = Idle
                         , codeExamples = f.codeExamples
                         , screen = f.screen
+                        , defaultExample = f.defaultExample
                         }
-                    , Ports.initialized f.initialCode
+                    , Ports.initialized initialCode
                     )
     in
     ( { state = initialUrlState, navKey = key, data = data }, dataCmd )
@@ -111,11 +130,11 @@ init flags url key =
 type Msg
     = Remonke
     | ToggleTab String
+    | ToggleExampleTab String
       -- code changed from JS side
     | CodeChanged String
-      -- code changed from Elm side
-      -- first arg is name, second is the code
-    | UpdateCodeExample String String
+      -- code changed from Elm side, arg is the example name
+    | UpdateCodeExample String
     | Compile
     | ViewVMMsg ViewVM.Msg
     | ViewCompiledMsg ViewCompiled.Msg
@@ -139,15 +158,26 @@ update msg model =
                     UrlState.fromUrl url
 
                 ( newTab, newCode ) =
-                    case Flags.findCodeExample newState.tab m.codeExamples of
+                    case Flags.findCodeExample newState.exampleName m.codeExamples of
                         Just newData ->
                             newData
 
-                        -- use old code
+                        -- use default
                         Nothing ->
-                            ( model.state.tab, m.code )
+                            m.defaultExample
+
+                newSuccessModel =
+                    { m
+                        | openExampleTabs = Set.fromList [ newTab ]
+                        , currCodeExample = Ok newState.exampleName
+                    }
             in
-            ( { model | state = UrlState.merge model.state newState }, Ports.updateCode newCode )
+            ( { model
+                | state = UrlState.merge model.state newState
+                , data = Success newSuccessModel
+              }
+            , Ports.updateCode newCode
+            )
 
         ( _, ClickedLink urlRequest ) ->
             case urlRequest of
@@ -158,7 +188,7 @@ update msg model =
                     ( model, Nav.load url )
 
         -- javascript will send us a codeChanged msg when CodeMirror changes their code.
-        ( _, UpdateCodeExample name newCode ) ->
+        ( _, UpdateCodeExample name ) ->
             let
                 ( newUrlState, cmd ) =
                     UrlState.updateTab name model.navKey model.state
@@ -189,13 +219,17 @@ updateSuccess msg model =
             else
                 ( { model | openTabs = Set.insert tab model.openTabs }, Cmd.none )
 
+        ( _, ToggleExampleTab tab ) ->
+            if Set.member tab model.openExampleTabs then
+                ( { model | openExampleTabs = Set.remove tab model.openExampleTabs }, Cmd.none )
+
+            else
+                ( { model | openExampleTabs = Set.insert tab model.openExampleTabs }, Cmd.none )
+
         ( _, CodeChanged newCode ) ->
             case model.currCodeExample of
-                Ok codeChangedExample ->
-                    ( { model
-                        | currCodeExample = Err codeChangedExample
-                        , code = newCode
-                      }
+                Ok _ ->
+                    ( { model | code = newCode }
                     , Cmd.none
                     )
 
@@ -522,7 +556,7 @@ codeEditor model =
                     (\( name, progTuples ) ->
                         let
                             ( icon, content ) =
-                                if Set.member name model.openTabs then
+                                if Set.member name model.openExampleTabs then
                                     ( FeatherIcons.chevronUp
                                     , Element.column
                                         [ Element.paddingEach { eachZero | left = 16 }
@@ -539,7 +573,7 @@ codeEditor model =
                             [ Element.row
                                 [ Element.width Element.fill
                                 , Element.paddingXY 16 12
-                                , Events.onClick <| ToggleTab name
+                                , Events.onClick <| ToggleExampleTab name
                                 , Element.pointer
                                 , Element.spacing 4
                                 , Lib.Views.unselectable
@@ -582,7 +616,7 @@ codeEditor model =
                     , Element.mouseOver
                         [ Font.color Colours.lightGrey ]
                     ]
-                    { onPress = Just <| UpdateCodeExample name prog
+                    { onPress = Just <| UpdateCodeExample name
                     , label = Element.text name
                     }
                 ]

@@ -9,18 +9,18 @@ import Url.Parser.Query as Query
 
 
 -- | A dirt-simple strategy for encoding and decoding global state (across page refreshes)
--- | Right now, we just have the tab we are on
+-- | Right now, we just keep track of the example we are on
 
 
 type alias UrlState =
     { -- which "example" tab we are on
-      tab : String
+      exampleName : String
     }
 
 
 default : UrlState
 default =
-    { tab = "Arithmetic" }
+    { exampleName = "Arithmetic" }
 
 
 
@@ -28,8 +28,12 @@ default =
 
 
 updateTab : String -> Nav.Key -> UrlState -> ( UrlState, Cmd msg )
-updateTab tab key route =
-    ( { route | tab = tab }, navigateTo key { route | tab = tab } )
+updateTab tab key state =
+    let
+        newState =
+            { state | exampleName = tab }
+    in
+    ( newState, navigateTo key newState )
 
 
 fromUrl : Url -> UrlState
@@ -45,8 +49,8 @@ fromUrl url =
 
 
 merge : UrlState -> UrlState -> UrlState
-merge newRoute currentRoute =
-    { currentRoute | tab = newRoute.tab }
+merge newState currentState =
+    { currentState | exampleName = newState.exampleName }
 
 
 
@@ -65,8 +69,8 @@ queryParsers =
 
 
 toUrlString : UrlState -> String
-toUrlString route =
-    Url.Builder.relative [] [ Url.Builder.string "tab" route.tab ]
+toUrlString state =
+    Url.Builder.relative [] [ Url.Builder.string "tab" state.exampleName ]
 
 
 

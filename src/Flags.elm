@@ -6,7 +6,7 @@ import Json.Decode as Decode exposing (Decoder)
 type alias Flags =
     { codeExamples : CodeExamples
     , screen : Screen
-    , initialCode : String
+    , defaultExample : ( String, String )
     }
 
 
@@ -15,7 +15,7 @@ decoder =
     Decode.map3 Flags
         (Decode.field "codeExamples" decodeCodeExamples)
         (Decode.field "screen" decodeScreen)
-        (Decode.field "initialCode" Decode.string)
+        (Decode.field "defaultExample" <| decodeTuple Decode.string Decode.string)
 
 
 type alias CodeExamples =
@@ -27,8 +27,7 @@ decodeCodeExamples =
     let
         decodeExample : Decoder (List ( String, String ))
         decodeExample =
-            Decode.list <|
-                Decode.map2 Tuple.pair (Decode.index 0 Decode.string) (Decode.index 1 Decode.string)
+            Decode.list <| decodeTuple Decode.string Decode.string
     in
     Decode.map2 Tuple.pair (Decode.field "type" Decode.string) (Decode.field "examples" decodeExample)
         |> Decode.list
@@ -82,3 +81,13 @@ decodeScreen =
     Decode.map2 Screen
         (Decode.field "width" Decode.int)
         (Decode.field "height" Decode.int)
+
+
+
+-- | Helpers
+-- decode a JS two-element list into a tuple
+
+
+decodeTuple : Decoder a -> Decoder b -> Decoder ( a, b )
+decodeTuple a b =
+    Decode.map2 Tuple.pair (Decode.index 0 a) (Decode.index 1 b)
