@@ -1,5 +1,5 @@
 ---
-name: Length of a List - Recursion
+title: Length of a List - Recursion
 ---
 (letrec
     ((f (lambda (x m) (if (null x) m (f (cdr x) (+ m 1))))))

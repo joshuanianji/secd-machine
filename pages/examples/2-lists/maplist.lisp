@@ -1,5 +1,5 @@
 ---
-name: List Map
+title: List Map
 ---
 ; here, we're defining a higher order function maplist, which takes in a function to apply to the elements
 ; the function is a lambda that adds 1 to a number
