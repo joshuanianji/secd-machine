@@ -105,7 +105,7 @@ init flags url key =
                                     ( exampleName, code, initialUrlState )
 
                                 Nothing ->
-                                    ( "Basics", f.defaultExample.code, UrlState.default )
+                                    ( f.defaultExample.tab, f.defaultExample.code, UrlState.default )
                     in
                     ( Success
                         { code = initialCode
@@ -165,7 +165,7 @@ update msg model =
 
                         -- use default
                         Nothing ->
-                            ( "Basics", m.defaultExample.code, UrlState.default )
+                            ( m.defaultExample.tab, m.defaultExample.code, UrlState.default )
 
                 newSuccessModel =
                     { m

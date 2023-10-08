@@ -27,7 +27,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             },
             codeExamples: codeExamples,
             // default example to load
-            defaultExample: codeExamples[0].examples[0],
+            defaultExample: {
+                name: codeExamples[0].examples[0][0],
+                code: codeExamples[0].examples[0][1],
+                tab: codeExamples[0].type,
+            },
         },
     });
 

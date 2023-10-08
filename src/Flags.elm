@@ -24,6 +24,7 @@ type alias Screen =
 type alias DefaultExample =
     { name : String
     , code : String
+    , tab : String
     }
 
 
@@ -55,9 +56,10 @@ decodeScreen =
 
 decodeDefaultExample : Decoder DefaultExample
 decodeDefaultExample =
-    Decode.map2 DefaultExample
-        (Decode.index 0 Decode.string)
-        (Decode.index 1 Decode.string)
+    Decode.map3 DefaultExample
+        (Decode.field "name" Decode.string)
+        (Decode.field "code" Decode.string)
+        (Decode.field "tab" Decode.string)
 
 
 
