@@ -12,7 +12,8 @@ import Route
 import RouteBuilder exposing (App, StatelessRoute)
 import Shared
 import View exposing (View)
-
+import Element exposing (Element)
+import Backend.GetExamplesTask
 
 type alias Model =
     {}
@@ -27,7 +28,7 @@ type alias RouteParams =
 
 
 type alias Data =
-    { message : String
+    { groups : List String
     }
 
 
@@ -43,12 +44,10 @@ route =
         }
         |> RouteBuilder.buildNoState { view = view }
 
-
 data : BackendTask FatalError Data
 data =
     BackendTask.succeed Data
-        |> BackendTask.andMap
-            (BackendTask.succeed "Hello!")
+        |> BackendTask.andMap (Backend.GetExamplesTask.exampleGroups)
 
 
 head :
@@ -57,16 +56,16 @@ head :
 head app =
     Seo.summary
         { canonicalUrlOverride = Nothing
-        , siteName = "elm-pages"
+        , siteName = "secd-machine"
         , image =
             { url = [ "images", "icon-png.png" ] |> UrlPath.join |> Pages.Url.fromPath
             , alt = "elm-pages logo"
             , dimensions = Nothing
             , mimeType = Nothing
             }
-        , description = "Welcome to elm-pages!"
+        , description = "SECD Machine on the web"
         , locale = Nothing
-        , title = "elm-pages is running"
+        , title = "SECD Machine"
         }
         |> Seo.website
 
@@ -76,13 +75,11 @@ view :
     -> Shared.Model
     -> View (PagesMsg Msg)
 view app shared =
-    { title = "elm-pages is running"
+    { title = "SECD Machine"
     , body =
-        [ Html.h1 [] [ Html.text "elm-pages is up and running!" ]
-        , Html.p []
-            [ Html.text <| "The message is: " ++ app.data.message
+        Element.column 
+            []
+            [Element.text "Hello!!!"
+            , Element.row [] (List.map (\group -> Element.text group) app.data.groups)
             ]
-        , Route.Blog__Slug_ { slug = "hello" }
-            |> Route.link [] [ Html.text "My blog post" ]
-        ]
     }

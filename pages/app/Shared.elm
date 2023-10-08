@@ -11,6 +11,8 @@ import UrlPath exposing (UrlPath)
 import Route exposing (Route)
 import SharedTemplate exposing (SharedTemplate)
 import View exposing (View)
+import Element exposing (Element)
+import Element.Font as Font 
 
 
 template : SharedTemplate Msg Model Data msg
@@ -93,28 +95,28 @@ view :
     -> { body : List (Html msg), title : String }
 view sharedData page model toMsg pageView =
     { body =
-        [ Html.nav []
-            [ Html.button
-                [ Html.Events.onClick MenuClicked ]
-                [ Html.text
-                    (if model.showMenu then
-                        "Close Menu"
-
-                     else
-                        "Open Menu"
-                    )
-                ]
-            , if model.showMenu then
-                Html.ul []
-                    [ Html.li [] [ Html.text "Menu item 1" ]
-                    , Html.li [] [ Html.text "Menu item 2" ]
-                    ]
-
-              else
-                Html.text ""
-            ]
-            |> Html.map toMsg
-        , Html.main_ [] pageView.body
-        ]
+        [Html.main_ [] [viewBody pageView] ]
     , title = pageView.title
     }
+
+viewBody : View msg -> Html msg 
+viewBody pageView = 
+    Element.layoutWith
+        { options =
+            [ Element.focusStyle
+                { borderColor = Nothing
+                , backgroundColor = Nothing
+                , shadow = Nothing
+                }
+            ]
+        }
+        [ Font.family
+            [ Font.typeface "Avenir"
+            , Font.typeface "Helvetica"
+            , Font.typeface "Arial"
+            , Font.sansSerif
+            ]
+        , Element.width Element.fill
+        , Element.height Element.fill
+        ]
+        pageView.body 

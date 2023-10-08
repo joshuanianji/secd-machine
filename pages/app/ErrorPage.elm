@@ -5,29 +5,27 @@ import Head
 import Html exposing (Html)
 import Html.Events exposing (onClick)
 import View exposing (View)
+import Element exposing (Element)
 
 
 type Msg
-    = Increment
+    = NoOp
 
 
 type alias Model =
-    { count : Int
-    }
+    { }
 
 
 init : ErrorPage -> ( Model, Effect Msg )
 init errorPage =
-    ( { count = 0 }
+    ( { }
     , Effect.none
     )
 
 
 update : ErrorPage -> Msg -> Model -> ( Model, Effect Msg )
 update errorPage msg model =
-    case msg of
-        Increment ->
-            ( { model | count = model.count + 1 }, Effect.none )
+    (model, Effect.none)
 
 
 head : ErrorPage -> List Head.Tag
@@ -52,22 +50,8 @@ internalError =
 
 view : ErrorPage -> Model -> View Msg
 view error model =
-    { body =
-        [ Html.div []
-            [ Html.p [] [ Html.text "Page not found. Maybe try another URL?" ]
-            , Html.div []
-                [ Html.button
-                    [ onClick Increment
-                    ]
-                    [ Html.text
-                        (model.count
-                            |> String.fromInt
-                        )
-                    ]
-                ]
-            ]
-        ]
-    , title = "This is a NotFound Error"
+    { body = Element.text "Page not found. Maybe try another URL?" 
+    , title = "Page Not Found"
     }
 
 
