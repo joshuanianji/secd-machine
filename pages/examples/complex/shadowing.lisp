@@ -1,3 +1,6 @@
+---
+title: Shadowing
+---
 ; Shadowing is generally discouraged as a programming practice, but it works in this language!
 ; It means a variable can be redefined in an inner scope.
 ; When executing, we look at the innermost scope when we look up the value of a variable.

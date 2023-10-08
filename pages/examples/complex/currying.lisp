@@ -1,3 +1,6 @@
+---
+title: Currying 
+---
 ; currying does not work natively, so we have to use lambdas
 ; here, curry2 "creates" a curried version of a 2-ary function
 (let

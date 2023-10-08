@@ -1,3 +1,6 @@
+---
+title: Mutual Recursion
+---
 ; Even and odd reference each other!
 ; NOTE: This is quite an inefficient way to determine if a number is even or odd.
 (letrec

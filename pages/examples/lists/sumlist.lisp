@@ -1,3 +1,6 @@
+---
+name: Summing a List
+---
 ; here, we're summing a list using two different methods
 ; One directly, and one using foldr as a helper function
 (letrec 

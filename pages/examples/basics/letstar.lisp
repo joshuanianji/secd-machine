@@ -1,3 +1,6 @@
+---
+title: Simulating Let*
+---
 ; Our language does not support Lisp's let*
 ; In a let* binding, the variables are evaluated sequentially, so variables further down the list can reference variables earlier on.
 ; 

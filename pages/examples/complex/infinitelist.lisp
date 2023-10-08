@@ -1,3 +1,6 @@
+---
+title: Lazy Infinite Lists
+---
 ; Using lazy evaluation, we can create a an "infinite list" generator
 (letrec 
     ((add1 (lambda (x) (+ x 1)))
