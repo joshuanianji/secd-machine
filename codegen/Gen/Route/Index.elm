@@ -15,7 +15,7 @@ moduleName_ =
     [ "Route", "Index" ]
 
 
-{-| route: StatelessRoute RouteParams Data ActionData -}
+{-| route: RouteBuilder.StatefulRoute RouteParams Data ActionData Model Msg -}
 route : Elm.Expression
 route =
     Elm.value
@@ -24,11 +24,13 @@ route =
         , annotation =
             Just
                 (Type.namedWith
-                    []
-                    "StatelessRoute"
+                    [ "RouteBuilder" ]
+                    "StatefulRoute"
                     [ Type.namedWith [] "RouteParams" []
                     , Type.namedWith [] "Data" []
                     , Type.namedWith [] "ActionData" []
+                    , Type.namedWith [] "Model" []
+                    , Type.namedWith [] "Msg" []
                     ]
                 )
         }
@@ -37,8 +39,9 @@ route =
 annotation_ :
     { actionData : Type.Annotation
     , data : Type.Annotation
-    , msg : Type.Annotation
+    , routeParams : Type.Annotation
     , model : Type.Annotation
+    , msg : Type.Annotation
     }
 annotation_ =
     { actionData = Type.alias moduleName_ "ActionData" [] (Type.record [])
@@ -60,7 +63,7 @@ annotation_ =
                   )
                 ]
             )
-    , msg = Type.alias moduleName_ "Msg" [] Type.unit
+    , routeParams = Type.alias moduleName_ "RouteParams" [] (Type.record [])
     , model =
         Type.alias
             moduleName_
@@ -76,12 +79,14 @@ annotation_ =
                 , ( "compiled", Type.namedWith [] "CompiledState" [] )
                 ]
             )
+    , msg = Type.namedWith [ "Route", "Index" ] "Msg" []
     }
 
 
 make_ :
     { actionData : actionData -> Elm.Expression
     , data : { exampleGroups : Elm.Expression } -> Elm.Expression
+    , routeParams : routeParams -> Elm.Expression
     , model :
         { code : Elm.Expression
         , openExampleTabs : Elm.Expression
@@ -126,6 +131,16 @@ make_ =
                 (Elm.record
                     [ Tuple.pair "exampleGroups" data_args.exampleGroups ]
                 )
+    , routeParams =
+        \routeParams_args ->
+            Elm.withType
+                (Type.alias
+                    [ "Route", "Index" ]
+                    "RouteParams"
+                    []
+                    (Type.record [])
+                )
+                (Elm.record [])
     , model =
         \model_args ->
             Elm.withType
@@ -171,11 +186,13 @@ values_ =
             , annotation =
                 Just
                     (Type.namedWith
-                        []
-                        "StatelessRoute"
+                        [ "RouteBuilder" ]
+                        "StatefulRoute"
                         [ Type.namedWith [] "RouteParams" []
                         , Type.namedWith [] "Data" []
                         , Type.namedWith [] "ActionData" []
+                        , Type.namedWith [] "Model" []
+                        , Type.namedWith [] "Msg" []
                         ]
                     )
             }

@@ -6,7 +6,8 @@ module Route.Index exposing (Model, Msg, RouteParams, route, Data, ActionData)
 
 -}
 
-import BackendTask
+import Backend.GetExamplesTask
+import BackendTask exposing (BackendTask)
 import Dict
 import Effect
 import Element exposing (Element)
@@ -16,7 +17,7 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import ErrorPage
-import FatalError
+import FatalError exposing (FatalError)
 import Head
 import Html
 import Html.Attributes
@@ -24,6 +25,7 @@ import Lib.Colours as Colours
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
+import List.Nonempty as Nonempty exposing (Nonempty)
 import Pages.PageUrl
 import PagesMsg
 import Ports
@@ -84,7 +86,11 @@ type alias RouteParams =
 
 route : RouteBuilder.StatefulRoute RouteParams Data ActionData Model Msg
 route =
-    RouteBuilder.serverRender { data = data, action = action, head = head }
+    RouteBuilder.preRender
+        { data = \_ -> data
+        , head = head
+        , pages = BackendTask.succeed [ {} ]
+        }
         |> RouteBuilder.buildWithLocalState
             { view = view
             , init = init
@@ -134,19 +140,18 @@ subscriptions routeParams path shared model =
 
 
 type alias Data =
-    {}
+    { exampleGroups : Nonempty Backend.GetExamplesTask.ExampleGroup
+    }
 
 
 type alias ActionData =
     {}
 
 
-data :
-    RouteParams
-    -> Server.Request.Request
-    -> BackendTask.BackendTask FatalError.FatalError (Server.Response.Response Data ErrorPage.ErrorPage)
-data routeParams request =
-    BackendTask.succeed (Server.Response.render {})
+data : BackendTask FatalError Data
+data =
+    BackendTask.succeed Data
+        |> BackendTask.andMap Backend.GetExamplesTask.examples
 
 
 head : RouteBuilder.App Data ActionData RouteParams -> List Head.Tag
