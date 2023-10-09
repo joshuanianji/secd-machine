@@ -407,7 +407,7 @@ testRecursiveFuncs =
         , Test.test "Factorial function" <|
             \_ ->
                 vmExpectSuccess (factorial 6) (VM.Integer 720)
-        , Test.fuzzWith { runs = 5 } (Fuzz.intRange 0 10) "Mutually recursive isEven" <|
+        , Test.fuzzWith { runs = 5, distribution = Test.noDistribution } (Fuzz.intRange 0 10) "Mutually recursive isEven" <|
             \n ->
                 let
                     expected =
@@ -653,7 +653,7 @@ testValueDecoder =
 testWithPrograms : Test
 testWithPrograms =
     Test.describe "VM Decoder/encoder with real programs"
-        [ Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Recursive list length function" <|
+        [ Test.fuzzWith { runs = 5, distribution = Test.noDistribution } (Fuzz.intRange 5 10) "Recursive list length function" <|
             \steps ->
                 let
                     stepped =
@@ -669,7 +669,7 @@ testWithPrograms =
 
                     VM.Error _ _ ->
                         Expect.fail <| "Rec. Length program errored out!"
-        , Test.fuzzWith { runs = 5 } (Fuzz.intRange 5 10) "Factorial Function" <|
+        , Test.fuzzWith { runs = 5, distribution = Test.noDistribution } (Fuzz.intRange 5 10) "Factorial Function" <|
             \steps ->
                 let
                     stepped =
@@ -747,7 +747,7 @@ testLocateInEnv =
 
 fuzzIntPairRange : Int -> Int -> Fuzzer ( Int, Int )
 fuzzIntPairRange start end =
-    Fuzz.tuple ( Fuzz.intRange start end, Fuzz.intRange start end )
+    Fuzz.map2 Tuple.pair (Fuzz.intRange start end) (Fuzz.intRange start end)
 
 
 vmExpectSuccess : Program -> Value -> Expectation
