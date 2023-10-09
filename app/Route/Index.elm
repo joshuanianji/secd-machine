@@ -108,6 +108,7 @@ init app shared =
         openedExample =
             Maybe.map .query app.url
                 |> Maybe.andThen (Dict.get "example")
+                |> Maybe.andThen List.head
 
         _ =
             Debug.log "openedExample" openedExample
