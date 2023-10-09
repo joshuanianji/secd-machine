@@ -6,7 +6,7 @@ module Route.Index exposing (Model, Msg, RouteParams, route, Data, ActionData)
 
 -}
 
-import Backend.GetExamplesTask
+import Backend.GetExamplesTask exposing (Example, ExampleGroup)
 import BackendTask exposing (BackendTask)
 import Dict
 import Effect
@@ -18,6 +18,7 @@ import Element.Font as Font
 import Element.Input as Input
 import ErrorPage
 import FatalError exposing (FatalError)
+import FeatherIcons
 import Head
 import Html
 import Html.Attributes
@@ -25,7 +26,7 @@ import Lib.Colours as Colours
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
-import List.Nonempty as Nonempty exposing (Nonempty)
+import List.Nonempty exposing (Nonempty)
 import Pages.PageUrl
 import PagesMsg
 import Ports
@@ -130,24 +131,73 @@ update :
     -> Model
     -> ( Model, Effect.Effect Msg )
 update app shared msg model =
-    case msg of
-        Remonke ->
+    case ( model.compiled, msg ) of
+        ( _, Remonke ) ->
             ( model, Effect.fromCmd <| Ports.initialize model.code )
 
-        ToggleTab tab ->
+        ( _, ToggleTab tab ) ->
             if Set.member tab model.openTabs then
                 ( { model | openTabs = Set.remove tab model.openTabs }, Effect.None )
 
             else
                 ( { model | openTabs = Set.insert tab model.openTabs }, Effect.None )
 
-        _ ->
+        ( _, Compile ) ->
+            case AST.parse model.code of
+                Err deadends ->
+                    ( { model | compiled = ParseError <| Util.deadEndsToString deadends }, Effect.none )
+
+                Ok ast ->
+                    case Prog.compile ast of
+                        Err err ->
+                            ( { model | compiled = CompileError ast err }, Effect.none )
+
+                        Ok prog ->
+                            let
+                                ( viewVMModel, viewVMMsg ) =
+                                    ViewVM.init { maxPages = 15, pageSize = 10, chunkSize = 10 } prog
+
+                                ( viewCompiledModel, viewCompiledMsg ) =
+                                    ViewCompiled.init prog
+                            in
+                            ( { model | compiled = CompileSuccess ast viewCompiledModel viewVMModel }
+                            , [ Cmd.map ViewVMMsg viewVMMsg, Cmd.map ViewCompiledMsg viewCompiledMsg ]
+                                |> Cmd.batch
+                                |> Effect.fromCmd
+                            )
+
+        ( CompileSuccess ast compiledModel vmModel, ViewVMMsg subMsg ) ->
+            let
+                ( newVMModel, newVMMsg ) =
+                    ViewVM.update subMsg vmModel
+            in
+            ( { model | compiled = CompileSuccess ast compiledModel newVMModel }
+            , Cmd.map ViewVMMsg newVMMsg
+                |> Effect.fromCmd
+            )
+
+        ( CompileSuccess ast compiledModel vmModel, ViewCompiledMsg subMsg ) ->
+            let
+                ( newCompiledModel, newCompiledMsg ) =
+                    ViewCompiled.update subMsg compiledModel
+            in
+            ( { model | compiled = CompileSuccess ast newCompiledModel vmModel }
+            , Cmd.map ViewCompiledMsg newCompiledMsg
+                |> Effect.fromCmd
+            )
+
+        ( _, UpdateCodeExample name ) ->
+            let
+                -- ( newUrlState, cmd ) =
+                --     UrlState.updateTab name model.navKey model.state
+                _ =
+                    Debug.log "Updated code example: " name
+            in
+            -- ( { model | state = newUrlState }, cmd )
             ( model, Effect.none )
 
-
-subscriptions : RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
-subscriptions routeParams path shared model =
-    Sub.none
+        _ ->
+            ( model, Effect.none )
 
 
 type alias Data =
@@ -275,8 +325,7 @@ viewApp app model =
         [ title
         , subtitle
         , description model
-
-        -- , codeEditor model
+        , codeEditor model app.data.exampleGroups
         , parseBtns
         , vmEditor
         , footer
@@ -382,9 +431,128 @@ descriptionHowto =
         ]
 
 
-action :
-    RouteParams
-    -> Server.Request.Request
-    -> BackendTask.BackendTask FatalError.FatalError (Server.Response.Response ActionData ErrorPage.ErrorPage)
-action routeParams request =
-    BackendTask.succeed (Server.Response.render {})
+
+-- contains the code editor and the code editor tabs
+
+
+codeEditor : Model -> Nonempty ExampleGroup -> Element Msg
+codeEditor model exampleGroups =
+    let
+        viewCodeExamples : Nonempty ExampleGroup -> Element Msg
+        viewCodeExamples =
+            List.Nonempty.map
+                (\exGroup ->
+                    let
+                        ( icon, content ) =
+                            if Set.member exGroup.groupName model.openExampleTabs then
+                                ( FeatherIcons.chevronUp
+                                , Element.column
+                                    [ Element.paddingEach { eachZero | left = 16 }
+                                    , Element.width Element.fill
+                                    ]
+                                    (List.Nonempty.map viewCodeExampleTab exGroup.examples
+                                        |> List.Nonempty.toList
+                                    )
+                                )
+
+                            else
+                                ( FeatherIcons.chevronDown, Element.none )
+                    in
+                    Element.column
+                        [ Element.width Element.fill ]
+                        [ Element.row
+                            [ Element.width Element.fill
+                            , Element.paddingXY 16 12
+                            , Events.onClick <| ToggleExampleTab exGroup.groupName
+                            , Element.pointer
+                            , Element.spacing 4
+                            , Lib.Views.unselectable
+                            , Element.mouseOver
+                                [ Background.color Colours.slateGrey ]
+                            ]
+                            [ Element.text exGroup.groupName
+                            , Util.viewIcon [ Element.alignRight ] icon
+                            ]
+                        , content
+                        ]
+                )
+                >> List.Nonempty.toList
+                >> Element.column
+                    [ Element.height Element.fill
+                    , Element.width Element.fill
+                    , Element.paddingXY 0 12
+                    ]
+
+        viewCodeExampleTab : Example -> Element Msg
+        viewCodeExampleTab { fileName, name } =
+            let
+                dotColor =
+                    if name == Util.foldResult model.currCodeExample then
+                        Colours.purple
+
+                    else
+                        Colours.white
+            in
+            Element.row
+                [ Element.width Element.fill
+                , Element.spacing 4
+                ]
+                [ Element.el
+                    [ Element.height <| Element.px 10
+                    , Element.width <| Element.px 10
+                    , Background.color dotColor
+                    , Element.centerY
+                    , Border.rounded 16
+                    ]
+                    Element.none
+                , Input.button
+                    [ Element.padding 12
+                    , Element.width Element.fill
+                    , Element.mouseOver
+                        [ Font.color Colours.lightGrey ]
+                    ]
+                    { onPress = Just <| UpdateCodeExample fileName
+                    , label = Element.text name
+                    }
+                ]
+    in
+    Element.row
+        [ Element.width Element.fill ]
+        [ Element.el
+            [ Element.width <| Element.fillPortion 5
+            , Element.height <| Element.px 500
+            , Border.roundEach { eachZeroBorder | topLeft = 16, bottomLeft = 16 }
+            , Background.color Colours.grey
+            , Element.padding 16
+            ]
+            (Element.html <| Html.div [ Html.Attributes.id "editor" ] [])
+        , Element.el
+            [ Element.width <| Element.fillPortion 2
+            , Element.height <| Element.px 500
+            , Element.scrollbars
+            , Border.width 2
+            , Border.roundEach { eachZeroBorder | topRight = 16, bottomRight = 16 }
+            , Border.color Colours.grey
+            ]
+            (viewCodeExamples exampleGroups)
+        ]
+
+
+subscriptions : RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
+subscriptions routeParams path shared model =
+    let
+        subModelSubscriptions =
+            case model.compiled of
+                CompileSuccess _ compiledModel vmModel ->
+                    Sub.batch
+                        [ Sub.map ViewVMMsg <| ViewVM.subscriptions vmModel
+                        , Sub.map ViewCompiledMsg <| ViewCompiled.subscriptions compiledModel
+                        ]
+
+                _ ->
+                    Sub.none
+    in
+    Sub.batch
+        [ subModelSubscriptions
+        , Ports.updatedEditor CodeChanged
+        ]
