@@ -197,13 +197,13 @@ update app shared msg model =
             )
 
         ( _, UpdateCodeExample name ) ->
-            let
-                -- ( newUrlState, cmd ) =
-                --     UrlState.updateTab name model.navKey model.state
-                _ =
-                    Debug.log "Updated code example: " name
-            in
-            -- ( { model | state = newUrlState }, cmd )
+            -- let
+            --     -- ( newUrlState, cmd ) =
+            --     --     UrlState.updateTab name model.navKey model.state
+            --     -- _ =
+            --         -- Debug.log "Updated code example: " name
+            -- in
+            -- -- ( { model | state = newUrlState }, cmd )
             ( model, Effect.none )
 
         _ ->
