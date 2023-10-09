@@ -67,19 +67,6 @@ type CompiledState
     | CompileSuccess AST ViewCompiled.Model ViewVM.Model
 
 
-type Msg
-    = Remonke
-    | ToggleTab String
-    | ToggleExampleTab String
-      -- code changed from JS side
-    | CodeChanged String
-      -- code changed from Elm side, arg is the example name
-    | UpdateCodeExample String
-    | Compile
-    | ViewVMMsg ViewVM.Msg
-    | ViewCompiledMsg ViewCompiled.Msg
-
-
 type alias RouteParams =
     {}
 
@@ -123,6 +110,19 @@ init app shared =
     )
 
 
+type Msg
+    = Remonke
+    | ToggleTab String
+    | ToggleExampleTab String
+      -- code changed from JS side
+    | CodeChanged String
+      -- code changed from Elm side, arg is the example name
+    | UpdateCodeExample String
+    | Compile
+    | ViewVMMsg ViewVM.Msg
+    | ViewCompiledMsg ViewCompiled.Msg
+
+
 update :
     RouteBuilder.App Data ActionData RouteParams
     -> Shared.Model
@@ -131,6 +131,16 @@ update :
     -> ( Model, Effect.Effect Msg )
 update app shared msg model =
     case msg of
+        Remonke ->
+            ( model, Effect.fromCmd <| Ports.initialize model.code )
+
+        ToggleTab tab ->
+            if Set.member tab model.openTabs then
+                ( { model | openTabs = Set.remove tab model.openTabs }, Effect.None )
+
+            else
+                ( { model | openTabs = Set.insert tab model.openTabs }, Effect.None )
+
         _ ->
             ( model, Effect.none )
 
@@ -268,8 +278,7 @@ viewApp app model =
 
         -- , codeEditor model
         , parseBtns
-
-        -- , vmEditor
+        , vmEditor
         , footer
         ]
 
