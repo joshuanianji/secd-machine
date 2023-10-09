@@ -9,7 +9,7 @@ body {
 }
 
 #editor,
-.CodeMirror {
+.CodeMirror.CodeMirror-wrap {
     height: 100%;
     font-family: "Fira Code", monospace;
 

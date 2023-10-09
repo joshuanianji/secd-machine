@@ -17,7 +17,8 @@
     },
     "dependencies": {
         "@netlify/functions": "^1.4.0",
-        "codemirror": "^6.0.1",
+        "@types/codemirror": "^5.60.10",
+        "codemirror": "^5.65.15",
         "idb-keyval": "^6.2.1"
     }
 }
