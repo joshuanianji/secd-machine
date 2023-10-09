@@ -17,6 +17,14 @@ type alias ExampleGroup =
     , examples : Nonempty Example
     }
 
+-- Get default example (first example in first group)
+getDefault : Nonempty ExampleGroup -> (String, Example)
+getDefault groups =
+    let
+        firstGroup = Nonempty.head groups
+        firstExample = Nonempty.head firstGroup.examples
+    in
+    (firstGroup.groupName, firstExample)
 
 type alias Example =
     { -- used as a unique identifier
@@ -37,7 +45,7 @@ type alias ExampleGroupRaw =
 
 -- For groupings, I start off the folder naming with a number so I have control over the order
 -- I remove the numbers when I parse through the files.
-examples : BackendTask FatalError (List ExampleGroup)
+examples : BackendTask FatalError (Nonempty ExampleGroup)
 examples =
     Glob.succeed ExampleGroupRaw
         |> Glob.captureFilePath
@@ -52,7 +60,7 @@ examples =
         |> BackendTask.andThen transformExampleGroupRaw
 
 
-transformExampleGroupRaw : List ExampleGroupRaw -> BackendTask FatalError (List ExampleGroup)
+transformExampleGroupRaw : List ExampleGroupRaw -> BackendTask FatalError (Nonempty ExampleGroup)
 transformExampleGroupRaw raws =
     List.Extra.groupWhile (\a b -> a.groupName == b.groupName) raws
         |> List.map (\(raw, rest) ->
@@ -71,6 +79,11 @@ transformExampleGroupRaw raws =
                 |> BackendTask.andMap readFiles
         )
         |> BackendTask.combine
+        |> BackendTask.andThen (\l ->
+            case Nonempty.fromList l of 
+                Nothing -> BackendTask.fail (FatalError.fromString "No examples found")
+                Just nonempty -> BackendTask.succeed nonempty
+            )
 
 
 

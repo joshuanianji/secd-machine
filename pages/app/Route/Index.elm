@@ -14,7 +14,7 @@ import Shared
 import View exposing (View)
 import Element exposing (Element)
 import Backend.GetExamplesTask
-import List.Nonempty as Nonempty
+import List.Nonempty as Nonempty exposing (Nonempty)
 
 type alias Model =
     {}
@@ -29,7 +29,7 @@ type alias RouteParams =
 
 
 type alias Data =
-    { exampleGroups : List Backend.GetExamplesTask.ExampleGroup
+    { exampleGroups : Nonempty Backend.GetExamplesTask.ExampleGroup
     }
 
 
@@ -102,6 +102,6 @@ view app shared =
                                 (Nonempty.toList group.examples)
                             ]
                     )
-                    app.data.exampleGroups
+                    (Nonempty.toList app.data.exampleGroups)
             ]
     }
