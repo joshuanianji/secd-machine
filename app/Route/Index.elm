@@ -512,13 +512,13 @@ codeEditor model exampleGroups =
                     , Border.rounded 16
                     ]
                     Element.none
-                , Input.button
+                , Element.link
                     [ Element.padding 12
                     , Element.width Element.fill
                     , Element.mouseOver
                         [ Font.color Colours.lightGrey ]
                     ]
-                    { onPress = Just <| UpdateCodeExample fileName
+                    { url = "/?example=" ++ fileName
                     , label = Element.text name
                     }
                 ]
