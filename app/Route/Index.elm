@@ -137,10 +137,17 @@ update app shared msg model =
 
         ( _, ToggleTab tab ) ->
             if Set.member tab model.openTabs then
-                ( { model | openTabs = Set.remove tab model.openTabs }, Effect.None )
+                ( { model | openTabs = Set.remove tab model.openTabs }, Effect.none )
 
             else
-                ( { model | openTabs = Set.insert tab model.openTabs }, Effect.None )
+                ( { model | openTabs = Set.insert tab model.openTabs }, Effect.none )
+
+        ( _, ToggleExampleTab tab ) ->
+            if Set.member tab model.openExampleTabs then
+                ( { model | openExampleTabs = Set.remove tab model.openExampleTabs }, Effect.none )
+
+            else
+                ( { model | openExampleTabs = Set.insert tab model.openExampleTabs }, Effect.none )
 
         ( _, Compile ) ->
             case AST.parse model.code of
