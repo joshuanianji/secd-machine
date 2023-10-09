@@ -3,3 +3,4 @@ elm-stuff/
 dist/
 .elm-pages/
 functions/render/elm-pages-cli.js
+codegen
