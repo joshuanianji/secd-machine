@@ -1,4 +1,57 @@
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+        sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+#editor {
+    width: 100%;
+    font-size: 16px;
+}
+
+#editor,
+.CodeMirror {
+    height: 100%;
+    font-family: "Fira Code", monospace;
+
+    .CodeMirror-line {
+        line-height: 1.66;
+    }
+    .CodeMirror-gutter-wrapper {
+        line-height: 1.66;
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    #main-content {
+        width: 100%;
+    }
+}
+
+@media only screen and (min-width: 600px) {
+    #main-content {
+        width: 93%;
+    }
+}
+
+@media only screen and (min-width: 1200px) {
+    #main-content {
+        width: 80%;
+    }
+}
+
+@media only screen and (min-width: 1920px) {
+    // big desktops
+    #main-content {
+        width: 60%;
+    }
+}
+
+// UNIVERSAL
+.unselectable {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }

@@ -15,13 +15,52 @@ import View exposing (View)
 import Element exposing (Element)
 import Backend.GetExamplesTask
 import List.Nonempty as Nonempty exposing (Nonempty)
+import Lib.Colours as Colours
+import Lib.LispAST as AST exposing (AST)
+import Lib.Util as Util exposing (eachZero, eachZeroBorder)
+import Lib.Views
+import Ports
+import SECD.Error exposing (Error)
+import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
+import UrlState exposing (UrlState)
+import Views.Compiled as ViewCompiled
+import Views.VM as ViewVM
+import Set
 
 type alias Model =
-    {}
+    { code : String
 
+    -- open tabs in the code editor
+    , openExampleTabs : Set String
 
-type alias Msg =
-    ()
+    -- open tabs for the description
+    , openTabs : Set String
+
+    -- making this a result (super weird) so i can know when the code change
+    -- is codemirror updating the code after the user clicks a new code example,
+    -- or when the user edits the code
+    -- when the user edits, we make the currCodeExample an empty string
+    , currCodeExample : Result String String
+    , compiled : CompiledState
+    }
+
+type CompiledState
+    = Idle
+    | ParseError Error
+    | CompileError AST Error
+    | CompileSuccess AST ViewCompiled.Model ViewVM.Model
+
+type Msg
+    = Remonke
+    | ToggleTab String
+    | ToggleExampleTab String
+      -- code changed from JS side
+    | CodeChanged String
+      -- code changed from Elm side, arg is the example name
+    | UpdateCodeExample String
+    | Compile
+    | ViewVMMsg ViewVM.Msg
+    | ViewCompiledMsg ViewCompiled.Msg
 
 
 type alias RouteParams =
