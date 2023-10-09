@@ -1,7 +1,6 @@
 module Views.CompiledSpec exposing (suite)
 
 import Expect
-import FatalError
 import Lib.LispAST as AST
 import Lib.Util as Util
 import List.Extra

@@ -1,7 +1,6 @@
 module Lib.LispASTSpec exposing (suite)
 
 import Expect
-import FatalError
 import Fuzz
 import Lib.Cons as Cons
 import Lib.LispAST exposing (..)

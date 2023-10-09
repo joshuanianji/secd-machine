@@ -1,4 +1,4 @@
-module Programs exposing (..)
+module Programs exposing (factorial, fibonacci, mutuallyRecursiveIsEven, recursiveLength)
 
 -- | List of programs that test suites can use.
 

@@ -3,7 +3,6 @@ module SECD.SECDSpec exposing (suite)
 -- testing the ENTIRE SECD machine - from compile to execution
 
 import Expect exposing (Expectation)
-import FatalError
 import Lib.Cons as Cons
 import Lib.LispAST as AST
 import Lib.Util as Util

@@ -1,7 +1,6 @@
 module SECD.ProgramSpec exposing (suite)
 
 import Expect
-import FatalError
 import Fuzz
 import Json.Decode as Decode
 import Lib.Cons as Cons
