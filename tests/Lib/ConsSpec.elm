@@ -1,6 +1,7 @@
 module Lib.ConsSpec exposing (suite)
 
 import Expect
+import FatalError
 import Fuzz
 import Json.Decode as Decode
 import Json.Encode as Encode
