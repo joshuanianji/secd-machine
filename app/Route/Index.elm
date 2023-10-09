@@ -93,21 +93,24 @@ init :
     -> ( Model, Effect.Effect Msg )
 init app shared =
     let
-        openedExample =
+        openedExampleName =
             Maybe.map .query app.url
                 |> Maybe.andThen (Dict.get "example")
                 |> Maybe.andThen List.head
 
-        _ =
-            Debug.log "openedExample" openedExample
+        -- find example in app.data.exampleGroups
+        ( currExampleTab, currExample ) =
+            openedExampleName
+                |> Maybe.andThen (\name -> Backend.GetExamplesTask.findExample name app.data.exampleGroups)
+                |> Maybe.withDefault (Backend.GetExamplesTask.getDefault app.data.exampleGroups)
     in
-    ( { code = ""
-      , openExampleTabs = Set.fromList []
+    ( { code = currExample.code
+      , openExampleTabs = Set.fromList [ currExampleTab ]
       , openTabs = Set.fromList [ "howto" ]
-      , currCodeExample = Result.Err ""
+      , currCodeExample = Ok currExample.name
       , compiled = Idle
       }
-    , Effect.none
+    , Effect.fromCmd <| Ports.initialize currExample.code
     )
 
 
@@ -491,7 +494,7 @@ codeEditor model exampleGroups =
                     ]
 
         viewCodeExampleTab : Example -> Element Msg
-        viewCodeExampleTab { fileName, name } =
+        viewCodeExampleTab { id, name } =
             let
                 dotColor =
                     if name == Util.foldResult model.currCodeExample then
@@ -518,7 +521,7 @@ codeEditor model exampleGroups =
                     , Element.mouseOver
                         [ Font.color Colours.lightGrey ]
                     ]
-                    { url = "/?example=" ++ fileName
+                    { url = "/?example=" ++ id
                     , label = Element.text name
                     }
                 ]
