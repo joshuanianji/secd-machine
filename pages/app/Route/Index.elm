@@ -14,6 +14,7 @@ import Shared
 import View exposing (View)
 import Element exposing (Element)
 import Backend.GetExamplesTask
+import List.Nonempty as Nonempty
 
 type alias Model =
     {}
@@ -98,7 +99,7 @@ view app shared =
                                         [Element.text example.name
                                         , Element.text example.fileName]
                                 )
-                                group.examples
+                                (Nonempty.toList group.examples)
                             ]
                     )
                     app.data.exampleGroups

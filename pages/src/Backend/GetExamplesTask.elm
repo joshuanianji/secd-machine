@@ -6,14 +6,15 @@ import BackendTask.Glob as Glob
 import BackendTask.File as File
 import List.Extra
 import Json.Decode
-
+import List.Nonempty as Nonempty exposing (Nonempty)
+import FatalError
 
 
 -- parse all files in examples/
 
 type alias ExampleGroup =
     { groupName : String 
-    , examples : List Example
+    , examples : Nonempty Example
     }
 
 
@@ -56,10 +57,15 @@ transformExampleGroupRaw raws =
     List.Extra.groupWhile (\a b -> a.groupName == b.groupName) raws
         |> List.map (\(raw, rest) ->
             let
-                readFiles : BackendTask FatalError (List Example)
+                readFiles : BackendTask FatalError (Nonempty Example)
                 readFiles = raw :: rest 
                     |> List.map (\r -> exampleFile r.path r.fileName )
                     |> BackendTask.combine
+                    |> BackendTask.andThen (\l -> 
+                        case Nonempty.fromList l of 
+                            Nothing -> BackendTask.fail (FatalError.fromString <| "No examples found in group " ++ raw.groupName)
+                            Just nonempty -> BackendTask.succeed nonempty
+                    )
             in
             BackendTask.succeed (ExampleGroup raw.groupName)
                 |> BackendTask.andMap readFiles
