@@ -40,13 +40,13 @@ body {
 }
 
 @media only screen and (min-width: 1920px) {
-    // big desktops
+    /* big desktops */
     #main-content {
         width: 60%;
     }
 }
 
-// UNIVERSAL
+/* UNIVERSAL */
 .unselectable {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
