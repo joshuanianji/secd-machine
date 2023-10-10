@@ -1,6 +1,7 @@
 module SECD.VMSpec exposing (suite)
 
 import Expect exposing (Expectation)
+import FatalError
 import Fuzz exposing (Fuzzer)
 import Json.Decode as Decode
 import Lib.Cons as Cons

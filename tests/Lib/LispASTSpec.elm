@@ -1,12 +1,13 @@
 module Lib.LispASTSpec exposing (suite)
 
 import Expect
+import FatalError
 import Fuzz
 import Lib.Cons as Cons
 import Lib.LispAST exposing (..)
 import Parser exposing (Parser)
-import Programs
 import Test exposing (Test)
+import TestPrograms
 
 
 suite : Test
@@ -134,7 +135,7 @@ integrationGeneral =
                     expected =
                         Letrec [ ( token "f", Lambda [ token "x", token "m" ] (If (FuncApp (var "null") [ var "x" ]) (var "m") (FuncApp (var "f") [ FuncApp (var "cdr") [ var "x" ], FuncApp (var "+") [ var "m", Val 1 ] ])) ) ] (FuncApp (var "f") [ Quote <| Cons.fromList [ 1, 2, 3 ], Val 0 ])
                 in
-                parse Programs.recursiveLength
+                parse TestPrograms.recursiveLength
                     |> Expect.equal (Ok expected)
         , Test.test "Mutually recursive isEven" <|
             \_ ->
@@ -148,7 +149,7 @@ integrationGeneral =
                     expected =
                         Letrec [ ( Token "odd", oddFunc ), ( Token "even", evenFunc ) ] (FuncApp (var "even") [ Val 4 ])
                 in
-                parse (Programs.mutuallyRecursiveIsEven 4)
+                parse (TestPrograms.mutuallyRecursiveIsEven 4)
                     |> Expect.equal (Ok expected)
         ]
 
@@ -162,7 +163,7 @@ integrationSpacing =
                     programWithSpacing =
                         "(letrec\n\n((f    (\t\tlambda (x m) (if (\n\nnull \t\t\tx) m (f(\t\tcdr x)(+ m 1)))\t\t)))(f'(1 2 3)0)\t\t)"
                 in
-                parse Programs.recursiveLength
+                parse TestPrograms.recursiveLength
                     |> Expect.equal (parse programWithSpacing)
         , Test.test "Comments" <|
             \_ ->

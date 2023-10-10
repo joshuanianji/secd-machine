@@ -1,6 +1,7 @@
 module SECD.EnvironmentSpec exposing (suite)
 
 import Expect
+import FatalError
 import Fuzz exposing (Fuzzer)
 import Json.Decode as Decode
 import Json.Encode as Encode
