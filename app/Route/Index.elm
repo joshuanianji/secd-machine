@@ -22,6 +22,7 @@ import FeatherIcons
 import Head
 import Html
 import Html.Attributes
+import LanguageTag.Country exposing (n_001)
 import Lib.Colours as Colours
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
@@ -119,7 +120,6 @@ type Msg
       -- code changed from JS side
     | CodeChanged String
       -- code changed from Elm side, arg is the example name
-    | UpdateCodeExample String
     | Compile
     | ViewVMMsg ViewVM.Msg
     | ViewCompiledMsg ViewCompiled.Msg
@@ -131,7 +131,7 @@ update :
     -> Msg
     -> Model
     -> ( Model, Effect.Effect Msg )
-update app shared msg model =
+update _ _ msg model =
     case ( model.compiled, msg ) of
         ( _, Remonke ) ->
             ( model, Effect.fromCmd <| Ports.initialize model.code )
@@ -149,6 +149,21 @@ update app shared msg model =
 
             else
                 ( { model | openExampleTabs = Set.insert tab model.openExampleTabs }, Effect.none )
+
+        ( _, CodeChanged newCode ) ->
+            case model.currCodeExample of
+                Ok _ ->
+                    ( { model | code = newCode }
+                    , Effect.none
+                    )
+
+                Err _ ->
+                    ( { model
+                        | currCodeExample = Ok ""
+                        , code = newCode
+                      }
+                    , Effect.none
+                    )
 
         ( _, Compile ) ->
             case AST.parse model.code of
@@ -193,16 +208,6 @@ update app shared msg model =
             , Cmd.map ViewCompiledMsg newCompiledMsg
                 |> Effect.fromCmd
             )
-
-        ( _, UpdateCodeExample name ) ->
-            -- let
-            --     -- ( newUrlState, cmd ) =
-            --     --     UrlState.updateTab name model.navKey model.state
-            --     -- _ =
-            --         -- Debug.log "Updated code example: " name
-            -- in
-            -- -- ( { model | state = newUrlState }, cmd )
-            ( model, Effect.none )
 
         _ ->
             ( model, Effect.none )
@@ -547,7 +552,7 @@ codeEditor model exampleGroups =
 
 
 subscriptions : RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
-subscriptions routeParams path shared model =
+subscriptions _ _ _ model =
     let
         subModelSubscriptions =
             case model.compiled of
