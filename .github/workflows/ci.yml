@@ -31,6 +31,12 @@ jobs:
       - name: Run Tests
         run: npm test
       
+      # https://github.com/dillonkearns/elm-pages/issues/404
+      # a workaround for `elm-pages --base` command
+      - name: Move 
+        run: |
+          mv ./dist/secd-machine/* ./dist
+      
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

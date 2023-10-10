@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 
 export default {
     vite: defineConfig({
-        base: "https://joshuaji.com/secd-machine/",
+        base: "/secd-machine/",
     }),
     headTagsTemplate(context) {
         return `
