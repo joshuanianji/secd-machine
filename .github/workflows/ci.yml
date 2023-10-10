@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build-test-deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 
@@ -30,16 +30,54 @@ jobs:
 
       - name: Run Tests
         run: npm test
-      
-      # https://github.com/dillonkearns/elm-pages/issues/404
-      # a workaround for `elm-pages --base` command
-      - name: Move 
-        run: |
-          mv ./dist/secd-machine/* ./dist
-      
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  
+  # https://github.com/South-Paw/action-netlify-cli
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          env: production
+          step: start
+
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Use Node 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      - name: Download lamdera
+        run: curl https://static.lamdera.com/bin/linux/lamdera-next-alpine-musl -o /usr/local/bin/lamdera && chmod a+x /usr/local/bin/lamdera
+
+      - name: Install dependencies
+        run: npm ci
+      
+      # so we have the .elm-pages folder 
+      - name: Build 
+        run: npm run build
+      
+      - name: Deploy to Netlify
+        uses: South-Paw/action-netlify-cli@v2
+        id: netlify
+        with:
+          # note that the --json flag has been passed so we can parse outputs
+          args: deploy --json --prod --dir './dist' --message 'production [${{ github.sha }}]'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Finish deployment
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          env: ${{ steps.deployment.outputs.env }}
+          step: finish
+          status: ${{ job.status }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: ${{ fromJson(steps.netlify.outputs.NETLIFY_OUTPUT).url }}
