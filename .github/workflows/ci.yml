@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  build-test-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 
@@ -30,32 +30,10 @@ jobs:
 
       - name: Run Tests
         run: npm test
-
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout 
-        uses: actions/checkout@v4
-
-      - name: Use Node 18
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
       
-      - name: Download lamdera
-        run: curl https://static.lamdera.com/bin/linux/lamdera-next-alpine-musl -o /usr/local/bin/lamdera && chmod a+x /usr/local/bin/lamdera
-
-      - name: Install dependencies
-        run: npm ci
-      
-      # so we have the .elm-pages folder 
-      - name: Build 
-        run: npm run build
-
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
