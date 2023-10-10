@@ -1,9 +1,7 @@
 import { defineConfig } from "vite";
 
 export default {
-    vite: defineConfig({
-        base: "/secd-machine/",
-    }),
+    vite: defineConfig({}),
     headTagsTemplate(context) {
         return `
 <link rel="stylesheet" href="/style.css" />
