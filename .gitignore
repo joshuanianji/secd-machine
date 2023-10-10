@@ -1,6 +1,7 @@
-node_modules
-elm-stuff
-.DS_Store
-dist
-dist-ssr
-*.local
+node_modules/
+elm-stuff/
+dist/
+.elm-pages/
+functions/render/elm-pages-cli.js
+codegen
+functions

@@ -1,6 +1,7 @@
 module Lib.UtilSpec exposing (suite)
 
 import Expect
+import FatalError
 import Fuzz
 import Lib.Util exposing (..)
 import Test exposing (Test)
