@@ -34,6 +34,7 @@ import Ports
 import RouteBuilder
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
+import Scaffold.Route exposing (Type(..))
 import Set exposing (Set)
 import Shared
 import UrlPath
@@ -50,14 +51,38 @@ type alias Model =
 
     -- open tabs for the description
     , openTabs : Set String
-
-    -- making this a result (super weird) so i can know when the code change
-    -- is codemirror updating the code after the user clicks a new code example,
-    -- or when the user edits the code
-    -- when the user edits, we make the currCodeExample an empty string
-    , currCodeExample : Result String String
+    , currCodeExample : CodeExample
     , compiled : CompiledState
     }
+
+
+
+-- When we get a code change from JS, it can be in one of three states:
+--  * User edits the code - the code example should now be none!
+--  * User just clicked a new code example tab, and CodeMirror is telling us the code finished updating
+-- In the second example, we want to remember that the code example is still the same!
+
+
+type
+    CodeExample
+    -- If we get a `CodeChanged` msg, we know this is just CodeMirror updating
+    = Updating String
+      -- if we get a `CodeChanged` msg, we know the user has changed the code
+    | Stable String
+    | CustomUserCode
+
+
+getCurrentCodeExample : CodeExample -> String
+getCurrentCodeExample codeExample =
+    case codeExample of
+        Updating name ->
+            name
+
+        Stable name ->
+            name
+
+        CustomUserCode ->
+            "Custom User Code"
 
 
 type CompiledState
@@ -90,26 +115,19 @@ init :
     RouteBuilder.App Data ActionData RouteParams
     -> Shared.Model
     -> ( Model, Effect.Effect Msg )
-init app shared =
+init app _ =
     let
-        openedExampleName =
-            Maybe.map .query app.url
-                |> Maybe.andThen (Dict.get "example")
-                |> Maybe.andThen List.head
-
         -- find example in app.data.exampleGroups
-        ( currExampleTab, currExample ) =
-            openedExampleName
-                |> Maybe.andThen (\name -> Backend.GetExamplesTask.findExample name app.data.exampleGroups)
-                |> Maybe.withDefault (Backend.GetExamplesTask.getDefault app.data.exampleGroups)
+        ( defaultExampleTab, defaultExample ) =
+            Backend.GetExamplesTask.getDefault app.data.exampleGroups
     in
-    ( { code = currExample.code
-      , openExampleTabs = Set.fromList [ currExampleTab ]
+    ( { code = defaultExample.code
+      , openExampleTabs = Set.fromList [ defaultExampleTab ]
       , openTabs = Set.fromList [ "howto" ]
-      , currCodeExample = Ok currExample.name
+      , currCodeExample = Updating defaultExample.name
       , compiled = Idle
       }
-    , Effect.fromCmd <| Ports.initialize currExample.code
+    , Effect.fromCmd <| Ports.initialize defaultExample.code
     )
 
 
@@ -117,6 +135,9 @@ type Msg
     = Remonke
     | ToggleTab String
     | ToggleExampleTab String
+      -- User changed code example
+      -- arg is the `id` `code`
+    | ChangeCodeExample String String
       -- code changed from JS side
     | CodeChanged String
       -- code changed from Elm side, arg is the example name
@@ -152,18 +173,28 @@ update _ _ msg model =
 
         ( _, CodeChanged newCode ) ->
             case model.currCodeExample of
-                Ok _ ->
-                    ( { model | code = newCode }
-                    , Effect.none
-                    )
-
-                Err _ ->
+                Updating id ->
                     ( { model
-                        | currCodeExample = Ok ""
+                        | currCodeExample = Stable id
                         , code = newCode
                       }
                     , Effect.none
                     )
+
+                Stable _ ->
+                    ( { model
+                        | currCodeExample = CustomUserCode
+                        , code = newCode
+                      }
+                    , Effect.none
+                    )
+
+                CustomUserCode ->
+                    ( { model | code = newCode }, Effect.none )
+
+        -- javascript will send us a codeChanged msg when CodeMirror changes their code.
+        ( _, ChangeCodeExample id code ) ->
+            ( { model | currCodeExample = Updating id }, Effect.fromCmd <| Ports.updateCode code )
 
         ( _, Compile ) ->
             case AST.parse model.code of
@@ -497,10 +528,10 @@ codeEditor model exampleGroups =
                     ]
 
         viewCodeExampleTab : Example -> Element Msg
-        viewCodeExampleTab { id, name } =
+        viewCodeExampleTab { id, name, code } =
             let
                 dotColor =
-                    if name == Util.foldResult model.currCodeExample then
+                    if id == getCurrentCodeExample model.currCodeExample then
                         Colours.purple
 
                     else
@@ -518,13 +549,13 @@ codeEditor model exampleGroups =
                     , Border.rounded 16
                     ]
                     Element.none
-                , Element.link
+                , Input.button
                     [ Element.padding 12
                     , Element.width Element.fill
                     , Element.mouseOver
                         [ Font.color Colours.lightGrey ]
                     ]
-                    { url = "/?example=" ++ id
+                    { onPress = Just <| ChangeCodeExample id code
                     , label = Element.text name
                     }
                 ]
