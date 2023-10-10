@@ -33,8 +33,6 @@ import Ports
 import RouteBuilder
 import SECD.Error exposing (Error)
 import SECD.Program as Prog exposing (Cmp(..), Func(..), Op(..))
-import Server.Request
-import Server.Response
 import Set exposing (Set)
 import Shared
 import UrlPath
