@@ -116,20 +116,24 @@ unselectable =
 
 togglableTitle : List (Attribute msg) -> { label : String, activeWhen : Bool, onClick : msg } -> Element msg
 togglableTitle attrs { label, activeWhen, onClick } =
-    Element.el
-        ([ Font.size 32
-         , Font.color <|
+    let
+        ( fontColor, icon ) =
             if activeWhen then
-                Colours.grey
+                ( Colours.grey, FeatherIcons.chevronDown )
 
             else
-                Colours.greyAlpha 0.5
+                ( Colours.greyAlpha 0.5, FeatherIcons.chevronRight )
+    in
+    Element.el
+        ([ Font.size 32
+         , Font.color fontColor
          , Font.bold
          , Events.onClick onClick
          , unselectable
          , Element.pointer
          , Element.mouseOver
             [ Font.color <| Colours.lightGrey ]
+         , Element.onLeft (Util.viewIcon [ Element.scale 1.25, Font.bold, Element.centerY, Element.paddingXY 8 0 ] icon)
          ]
             ++ attrs
         )

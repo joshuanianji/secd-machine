@@ -435,12 +435,13 @@ view : Model -> Element Msg
 view model =
     let
         title =
-            Lib.Views.togglableTitle
-                [ Element.paddingEach { eachZero | bottom = 16 } ]
-                { label = "Execute Program on VM"
-                , activeWhen = True
-                , onClick = NoOp
-                }
+            Element.el
+                [ Font.size 32
+                , Font.color Colours.grey
+                , Font.bold
+                , Element.paddingEach { eachZero | bottom = 16 }
+                ]
+                (Element.text "Execute Program on VM")
 
         totalSize =
             Element.paragraph
