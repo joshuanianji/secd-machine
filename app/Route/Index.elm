@@ -125,7 +125,7 @@ init app _ =
     ( { code = defaultExample.code
       , openExampleTabs = Set.fromList [ defaultExampleTab ]
       , openTabs = Set.fromList [ "howto" ]
-      , currCodeExample = Updating defaultExample.name
+      , currCodeExample = Updating defaultExample.id
       , compiled = Idle
       }
     , Effect.fromCmd <| Ports.initialize defaultExample.code
