@@ -124,7 +124,7 @@ init app _ =
     in
     ( { code = defaultExample.code
       , openExampleTabs = Set.fromList [ defaultExampleTab ]
-      , openTabs = Set.fromList [ "howto" ]
+      , openTabs = Set.fromList [ "whatis", "howto" ]
       , currCodeExample = Updating defaultExample.id
       , compiled = Idle
       }
