@@ -42,9 +42,9 @@ const config: ElmPagesInit = {
                 app.ports.updatedEditor.send(cm.getValue());
             });
 
-            // app.ports.updateCode.subscribe((val) => {
-            //     cm.setValue(val);
-            // });
+            app.ports.updateCode.subscribe((val) => {
+                cm.setValue(val);
+            });
 
             // Elm gives us a page to store
             app.ports.sendPages.subscribe(async (pages) => {
