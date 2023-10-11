@@ -1,12 +1,13 @@
 module Views.CompiledSpec exposing (suite)
 
 import Expect
+import FatalError
 import Lib.LispAST as AST
 import Lib.Util as Util
 import List.Extra
-import Programs
 import SECD.Program as Prog
 import Test exposing (Test)
+import TestPrograms
 import Views.Compiled exposing (..)
 
 
@@ -106,8 +107,8 @@ testTranspilerIndices =
                                 Expect.fail <| "Transpiler index failed somewhere: " ++ err
             )
             [ ( "simple", "((lambda (x) (+ x 1)) 1)" )
-            , ( "Mut Rec 4", Programs.mutuallyRecursiveIsEven 4 )
-            , ( "Recursive Length", Programs.recursiveLength )
-            , ( "Factorial 5", Programs.factorial 5 )
-            , ( "fib 10", Programs.fibonacci 10 )
+            , ( "Mut Rec 4", TestPrograms.mutuallyRecursiveIsEven 4 )
+            , ( "Recursive Length", TestPrograms.recursiveLength )
+            , ( "Factorial 5", TestPrograms.factorial 5 )
+            , ( "fib 10", TestPrograms.fibonacci 10 )
             ]

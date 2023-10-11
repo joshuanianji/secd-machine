@@ -1,12 +1,8 @@
 module SECD.EnvItem exposing (..)
 
 import Element exposing (Element)
-import Element.Border as Border
-import Html exposing (Html)
-import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
-import Lib.Colours as Colours
 import Lib.Cons as Cons exposing (Cons)
 import Lib.Util as Util
 
@@ -30,12 +26,12 @@ view viewA item =
     case item of
         ListItem cs ->
             List.map (Cons.view viewA) cs
-                |> List.intersperse (Element.text ",")
+                |> List.intersperse (Element.text " ")
                 |> Util.wrapAdd (Element.text "(") (Element.text ")")
                 |> Element.row []
 
         Dummy ->
-            Element.text "W"
+            Element.text "Ω"
 
 
 
