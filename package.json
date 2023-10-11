@@ -3,8 +3,8 @@
     "type": "module",
     "scripts": {
         "postinstall": "elm-tooling install",
-        "dev": "elm-pages dev",
-        "build": "elm-pages build",
+        "dev": "ENV=prod elm-pages dev",
+        "build": "ENV=prod elm-pages build",
         "test": "elm-test-rs",
         "serve": "npm run build && http-server ./dist -a localhost -p 3000 -c-1"
     },

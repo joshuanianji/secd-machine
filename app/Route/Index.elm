@@ -6,6 +6,7 @@ module Route.Index exposing (Model, Msg, RouteParams, route, Data, ActionData)
 
 -}
 
+import Backend.GetEnv
 import Backend.GetExamplesTask exposing (Example, ExampleGroup)
 import BackendTask exposing (BackendTask)
 import Dict
@@ -246,6 +247,7 @@ update _ _ msg model =
 
 type alias Data =
     { exampleGroups : Nonempty Backend.GetExamplesTask.ExampleGroup
+    , env : Backend.GetEnv.Env
     }
 
 
@@ -257,6 +259,7 @@ data : BackendTask FatalError Data
 data =
     BackendTask.succeed Data
         |> BackendTask.andMap Backend.GetExamplesTask.examples
+        |> BackendTask.andMap Backend.GetEnv.retrieve
 
 
 head : RouteBuilder.App Data ActionData RouteParams -> List Head.Tag
@@ -303,7 +306,11 @@ viewApp app model =
                 [ Element.spacing 8
                 , Element.centerX
                 ]
-                [ Lib.Views.button Remonke <| Element.text "Rerun Monkey"
+                [ if app.data.env.mode == Backend.GetEnv.Prod then
+                    Element.none
+
+                  else
+                    Lib.Views.button Remonke <| Element.text "Rerun Monkey"
                 , Lib.Views.button Compile <| Element.text "Parse + Compile"
                 ]
 
@@ -346,7 +353,7 @@ viewApp app model =
             Element.column
                 [ Element.centerX
                 , Element.paddingXY 0 96
-                , Element.spacing 32
+                , Element.spacing 24
                 ]
                 -- mimic an <hr />
                 [ Element.el
@@ -356,7 +363,14 @@ viewApp app model =
                     , Border.color <| Colours.greyAlpha 0.2
                     ]
                     Element.none
-                , Element.el [ Element.centerX ] <| Element.text "Made with ♥ by Joshua Ji"
+                , Element.paragraph
+                    []
+                    [ Element.text "Source code is on "
+                    , Lib.Views.link []
+                        { url = "https://github.com/joshuanianji/secd-machine"
+                        , label = "GitHub"
+                        }
+                    ]
                 ]
     in
     Element.column
