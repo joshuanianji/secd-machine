@@ -454,7 +454,7 @@ descriptionWhatis =
                   , "SECD Notes from UAlberta CMPUT 325 - November 2004"
                   )
                 , ( "https://en.wikipedia.org/wiki/SECD_machine", "Wikipedia Article" )
-                , ( "https://github.com/zachallaun/secd", "Zachallaun's implementation" )
+                , ( "https://github.com/zachallaun/secd", "Zachallaun's Clojure implementation of an SECD Machine" )
                 ]
         ]
 
