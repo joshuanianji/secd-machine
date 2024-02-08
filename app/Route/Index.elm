@@ -9,7 +9,6 @@ module Route.Index exposing (Model, Msg, RouteParams, route, Data, ActionData)
 import Backend.GetEnv
 import Backend.GetExamplesTask exposing (Example, ExampleGroup)
 import BackendTask exposing (BackendTask)
-import Dict
 import Effect
 import Element exposing (Element)
 import Element.Background as Background
@@ -17,19 +16,16 @@ import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
-import ErrorPage
 import FatalError exposing (FatalError)
 import FeatherIcons
 import Head
 import Html
 import Html.Attributes
-import LanguageTag.Country exposing (n_001)
 import Lib.Colours as Colours
 import Lib.LispAST as AST exposing (AST)
 import Lib.Util as Util exposing (eachZero, eachZeroBorder)
 import Lib.Views
 import List.Nonempty exposing (Nonempty)
-import Pages.PageUrl
 import PagesMsg
 import Ports
 import RouteBuilder
